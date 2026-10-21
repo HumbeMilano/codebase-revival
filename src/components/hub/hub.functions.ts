@@ -21,6 +21,7 @@ export const verifyPin = createServerFn({ method: "POST" })
     const supabase = createClient<Database>(url, key, {
       auth: { persistSession: false },
       global: { fetch: (input, init) => {
+        console.log("[verifyPin fetch]", typeof input === "string" ? input : input.url);
         const h = new Headers(init?.headers);
         if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`) h.delete("Authorization");
         h.set("apikey", key);
