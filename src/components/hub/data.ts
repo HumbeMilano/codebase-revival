@@ -10,10 +10,10 @@ export interface Member {
 }
 
 export const MEMBERS: Member[] = [
-  { id: "papa", name: "Papá", role: "admin", color: "member-1", pin: "1234" },
-  { id: "mama", name: "Mamá", role: "admin", color: "member-2", pin: "5678" },
-  { id: "lucas", name: "Lucas", role: "member", color: "member-3", pin: "1111" },
-  { id: "sofia", name: "Sofía", role: "member", color: "member-4", pin: "2222" },
+  { id: "papa", name: "Papá", role: "admin", color: "member-1", pin: "1111" },
+  { id: "mama", name: "Mamá", role: "admin", color: "member-2", pin: "2222" },
+  { id: "lucas", name: "Lucas", role: "member", color: "member-3", pin: "3333" },
+  { id: "sofia", name: "Sofía", role: "member", color: "member-4", pin: "4444" },
 ];
 
 export const memberBg: Record<string, string> = {

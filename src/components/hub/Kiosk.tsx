@@ -23,44 +23,51 @@ export function Avatar({ m, size = "md" }: { m: Member; size?: "sm" | "md" | "lg
   );
 }
 
+/** PIN-only entry: the PIN itself identifies who is logging in (PINs are unique). */
+export function findByPin(pin: string, adminOnly = false): Member | undefined {
+  return MEMBERS.find((m) => m.pin === pin && (!adminOnly || m.role === "admin"));
+}
+
 export function PinPad({
-  member,
   title,
+  adminOnly,
   onSuccess,
   onCancel,
 }: {
-  member: Member;
   title?: string;
-  onSuccess: () => void;
-  onCancel: () => void;
+  adminOnly?: boolean;
+  onSuccess: (m: Member) => void;
+  onCancel?: () => void;
 }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
+  const [who, setWho] = useState<Member | null>(null);
 
   useEffect(() => {
     if (pin.length < 4) return;
-    if (pin === member.pin) onSuccess();
-    else {
-      setError(true);
-      setTimeout(() => {
-        setPin("");
-        setError(false);
-      }, 600);
+    const m = findByPin(pin, adminOnly);
+    if (m) {
+      setWho(m);
+      const t = setTimeout(() => onSuccess(m), 350);
+      return () => clearTimeout(t);
     }
-  }, [pin, member, onSuccess]);
+    setError(true);
+    const t = setTimeout(() => { setPin(""); setError(false); }, 600);
+    return () => clearTimeout(t);
+  }, [pin, adminOnly, onSuccess]);
 
   const press = (d: string) => setPin((p) => (p.length < 4 ? p + d : p));
 
   return (
     <div className="absolute inset-0 z-30 grid place-items-center bg-foreground/20 backdrop-blur-md animate-in fade-in">
       <div className="relative w-[300px] rounded-[2rem] bg-card p-6 shadow-card">
-        <button onClick={onCancel} aria-label="Cerrar" className="absolute right-4 top-4 text-muted-foreground hover:text-foreground">
+        {onCancel && <button onClick={onCancel} aria-label="Cerrar" className="absolute right-4 top-4 text-muted-foreground hover:text-foreground">
           <X className="size-5" />
-        </button>
+        </button>}
         <div className="flex flex-col items-center gap-2">
-          <Avatar m={member} size="lg" />
-          <p className="font-display text-lg font-semibold">{title ?? `Hola, ${member.name}`}</p>
-          <p className="text-xs text-muted-foreground">PIN demo: {member.pin}</p>
+          {who ? <Avatar m={who} size="lg" /> : <span className="grid size-16 place-items-center rounded-full bg-secondary"><Lock className="size-6" /></span>}
+          <p className="font-display text-lg font-semibold">{who ? `Hola, ${who.name}` : title ?? "Escribe tu PIN"}</p>
+          <p className="text-xs text-muted-foreground">{error ? "PIN incorrecto" : "Tu PIN dice quién eres"}</p>
         </div>
         <div className={cn("my-5 flex justify-center gap-3", error && "animate-[shake_0.4s]")}>
           {[0, 1, 2, 3].map((i) => (
@@ -94,7 +101,7 @@ export function PinPad({
 
 export function Kiosk({ compact, onUnlock }: { compact: boolean; onUnlock: (m: Member) => void }) {
   const now = useClock();
-  const [picked, setPicked] = useState<Member | null>(null);
+  const [entering, setEntering] = useState(false);
   const time = now?.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }) ?? "--:--";
   const date = now?.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" }) ?? "";
   const next = [
@@ -120,27 +127,20 @@ export function Kiosk({ compact, onUnlock }: { compact: boolean; onUnlock: (m: M
         </div>
 
         <div className={cn("flex gap-3", compact ? "flex-col" : "items-end justify-between")}>
-          <div className="flex gap-2 overflow-x-auto">
+          <div className={cn("grid gap-2", compact ? "grid-cols-1" : "grid-cols-3")}>
             {next.map((n) => (
-              <div key={n.label} className="min-w-[140px] rounded-2xl bg-primary-foreground/15 px-4 py-3 backdrop-blur-xl">
-                <p className="font-display text-sm font-bold tabular opacity-70">{n.t}</p>
-                <p className="text-sm font-semibold">{n.label}</p>
+              <div key={n.label} className="rounded-2xl bg-primary-foreground/15 px-4 py-3 backdrop-blur-xl">
+                <p className="truncate text-sm font-semibold"><span className="mr-2 font-display font-bold tabular opacity-70">{n.t}</span>{n.label}</p>
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-3 rounded-full bg-card p-2 pl-5 text-foreground shadow-card">
-            <span className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"><Lock className="size-4" /> Entrar</span>
-            <div className="flex -space-x-2">
-              {MEMBERS.map((m) => (
-                <button key={m.id} onClick={() => setPicked(m)} aria-label={m.name} className="rounded-full ring-4 ring-card transition hover:z-10 hover:-translate-y-1 hover:scale-110">
-                  <Avatar m={m} size={compact ? "md" : "lg"} />
-                </button>
-              ))}
-            </div>
-          </div>
+          <button onClick={() => setEntering(true)} className="flex shrink-0 items-center justify-between gap-3 rounded-full bg-card p-2 pl-6 text-foreground shadow-card transition active:scale-95">
+            <span className="font-display font-bold">Entrar con PIN</span>
+            <span className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground"><Lock className="size-5" /></span>
+          </button>
         </div>
       </div>
-      {picked && <PinPad member={picked} onCancel={() => setPicked(null)} onSuccess={() => onUnlock(picked)} />}
+      {entering && <PinPad onCancel={() => setEntering(false)} onSuccess={onUnlock} />}
     </div>
   );
 }
