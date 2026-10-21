@@ -1,0 +1,2 @@
+- [ ] Simplify dashboard with visual counters and a compact agenda.
+- [ ] Hide financial content and shortcuts for children until adult authorization; verify authorization and logout.
