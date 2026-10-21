@@ -1,4 +1,6 @@
 - [x] Research free GitHub Whisper implementations: recommend Transformers.js with multilingual Whisper Tiny running in a browser worker; device testing required before claiming compatibility.
+- [ ] Add local bilingual microphones to shopping, calendar and notes.
+- [ ] Verify real Spanish/English audio transcription and input preservation.
 - [x] Simplify dashboard with visual counters and a compact agenda.
 - [x] Hide financial content and shortcuts for children until adult authorization; verify authorization and logout.
 - [x] Simplify shopping into one uncategorized checklist.
