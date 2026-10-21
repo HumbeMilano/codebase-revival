@@ -48,7 +48,7 @@ export function useHubState(): HubState {
 function ChoreRow({ c, onToggle }: { c: Chore; onToggle: () => void }) {
   const m = byId(c.memberId);
   return (
-    <button onClick={onToggle} className="flex w-full items-center gap-3 rounded-2xl bg-secondary/60 p-3 text-left transition hover:bg-secondary active:scale-[0.99]">
+    <button onClick={onToggle} className="flex w-full items-center gap-3 rounded-2xl bg-secondary p-3 text-left transition hover:bg-secondary active:scale-[0.99]">
       <Avatar m={m} size="sm" />
       <div className="min-w-0 flex-1">
         <p className={cn("truncate text-sm font-semibold", c.done && "text-muted-foreground line-through")}>{c.title}</p>
@@ -124,7 +124,7 @@ export function Dashboard({ s, user, compact, openFinance }: { s: HubState; user
             </div>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${total ? (paid / total) * 100 : 0}%` }} />
+            <div className="h-full rounded-full bg-success-strong transition-all" style={{ width: `${total ? (paid / total) * 100 : 0}%` }} />
           </div>
         </Card>
       </button>
@@ -188,7 +188,7 @@ export function Shopping({ s, compact }: { s: HubState; compact: boolean }) {
             <Card key={a} title={a}>
               <ul className="space-y-1">
                 {list.map((i) => (
-                  <li key={i.id} className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-secondary/60">
+                  <li key={i.id} className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-secondary">
                     <button
                       onClick={() => s.setItems((xs) => xs.map((x) => (x.id === i.id ? { ...x, done: !x.done } : x)))}
                       className="flex flex-1 items-center gap-3 text-left text-sm"

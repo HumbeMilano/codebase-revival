@@ -17,7 +17,7 @@ export function useClock() {
 export function Avatar({ m, size = "md" }: { m: Member; size?: "sm" | "md" | "lg" }) {
   const s = size === "lg" ? "size-20 text-2xl" : size === "sm" ? "size-7 text-xs" : "size-10 text-sm";
   return (
-    <span className={cn("grid place-items-center rounded-full font-display font-bold text-background", s, memberBg[m.color])}>
+    <span className={cn("grid place-items-center rounded-full font-display font-bold text-foreground", s, memberBg[m.color])}>
       {m.name[0]}
     </span>
   );

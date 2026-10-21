@@ -38,7 +38,7 @@ function Sheet({ title, subtitle, onClose, children }: { title: string; subtitle
 
 function SheetAction({ icon: Icon, title, hint, danger, onClick }: { icon: typeof X; title: string; hint?: string; danger?: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={cn("flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition active:scale-[0.99]", danger ? "border-destructive/40 bg-destructive/10 hover:bg-destructive/15" : "bg-secondary/40 hover:bg-secondary")}>
+    <button onClick={onClick} className={cn("flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition active:scale-[0.99]", danger ? "border-destructive/40 bg-destructive/10 hover:bg-destructive/15" : "bg-secondary/70 hover:bg-secondary")}>
       <div className="flex-1">
         <p className={cn("font-semibold", danger && "text-destructive")}>{title}</p>
         {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
@@ -52,8 +52,8 @@ function Donut({ paid, total }: { paid: number; total: number }) {
   const r = 42, c = 2 * Math.PI * r, pct = total ? paid / total : 0;
   return (
     <svg viewBox="0 0 100 100" className="size-32 shrink-0 -rotate-90">
-      <circle cx="50" cy="50" r={r} fill="none" strokeWidth="14" className="stroke-destructive" />
-      <circle cx="50" cy="50" r={r} fill="none" strokeWidth="14" strokeDasharray={`${c * pct} ${c}`} className="stroke-primary transition-all duration-700" />
+      <circle cx="50" cy="50" r={r} fill="none" strokeWidth="14" className="stroke-accent" />
+      <circle cx="50" cy="50" r={r} fill="none" strokeWidth="14" strokeDasharray={`${c * pct} ${c}`} className="stroke-success-strong transition-all duration-700" />
     </svg>
   );
 }
@@ -71,7 +71,7 @@ function BillRow({ b, mk, today, onClick }: { b: LedgerBill; mk: string; today: 
   const paid = billStatus(b, mk, today) === "paid";
   const explicit = b.overrides[mk]?.status;
   return (
-    <button onClick={onClick} className="flex w-full items-center gap-3 border-t px-4 py-3.5 text-left transition first:border-t-0 hover:bg-secondary/40">
+    <button onClick={onClick} className="flex w-full items-center gap-3 border-t px-4 py-3.5 text-left transition first:border-t-0 hover:bg-secondary/70">
       <DayBadge day={b.dueDay} />
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold">{b.name}</p>
@@ -84,7 +84,7 @@ function BillRow({ b, mk, today, onClick }: { b: LedgerBill; mk: string; today: 
       </div>
       <div className="shrink-0 text-right">
         <p className="font-display font-bold tabular">{money(billAmount(b, mk))}</p>
-        <span className={cn("mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold", paid ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive")}>
+        <span className={cn("mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold", paid ? "bg-success text-success-foreground" : "bg-destructive-soft text-destructive")}>
           {paid ? (b.autoPay && !explicit ? "Auto pagado" : "Pagado") : "Pendiente"}
         </span>
       </div>
@@ -246,7 +246,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
               </div>
             </div>
             <div className="mt-5 grid grid-cols-3 divide-x border-t pt-4">
-              {[["Aportado", sum.contributed, "text-member-1"], ["Pagado", sum.paid, "text-primary"], ["Pendiente", sum.pending, "text-destructive"]].map(([l, v, c]) => (
+              {[["Aportado", sum.contributed, "text-foreground"], ["Pagado", sum.paid, "text-success-foreground"], ["Pendiente", sum.pending, "text-destructive"]].map(([l, v, c]) => (
                 <div key={l as string} className="px-3 first:pl-0">
                   <p className="text-xs text-muted-foreground">{l}</p>
                   <p className={cn("font-display text-lg font-bold tabular", c as string)}>{money(v as number)}</p>
@@ -267,15 +267,15 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
                   <div key={p.personId} className={cn("rounded-3xl border bg-card p-4 shadow-card", compact && "w-[85%] shrink-0 snap-start")}>
                     <div className="flex items-center gap-3"><Avatar m={m} /><span className="flex-1 font-semibold">{m.name}</span><span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] font-bold text-destructive">{p.billCount} bills</span></div>
                     <p className="mt-3 font-display text-2xl font-bold tabular">{money(p.assigned)} <span className="text-xs font-medium text-muted-foreground">asignado</span></p>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${p.assigned ? (p.paid / p.assigned) * 100 : 0}%` }} /></div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-success-strong" style={{ width: `${p.assigned ? (p.paid / p.assigned) * 100 : 0}%` }} /></div>
                     <div className="mt-1.5 flex justify-between text-xs text-muted-foreground tabular"><span>Pagado {money(p.paid)}</span><span>Pendiente {money(p.pending)}</span></div>
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <div className="rounded-2xl border p-2.5"><p className="text-[11px] text-muted-foreground">Aportó</p><p className="font-bold text-member-1 tabular">{money(p.contributed)}</p></div>
-                      <div className="rounded-2xl border p-2.5"><p className="text-[11px] text-muted-foreground">Disponible</p><p className={cn("font-bold tabular", p.available < 0 ? "text-destructive" : "text-primary")}>{money(p.available)}</p></div>
+                      <div className="rounded-2xl border p-2.5"><p className="text-[11px] text-muted-foreground">Aportó</p><p className="font-bold text-foreground tabular">{money(p.contributed)}</p></div>
+                      <div className="rounded-2xl border p-2.5"><p className="text-[11px] text-muted-foreground">Disponible</p><p className={cn("font-bold tabular", p.available < 0 ? "text-destructive" : "text-success-foreground")}>{money(p.available)}</p></div>
                     </div>
                     <div className="mt-2 flex items-center justify-between rounded-2xl border p-2.5 text-sm">
                       <span className="text-muted-foreground">Aún debe aportar</span>
-                      <span className={cn("font-bold tabular", p.stillOwes > 0 ? "text-destructive" : "text-primary")}>{p.stillOwes > 0 ? money(p.stillOwes) : "Al día ✓"}</span>
+                      <span className={cn("font-bold tabular", p.stillOwes > 0 ? "text-destructive" : "text-success-foreground")}>{p.stillOwes > 0 ? money(p.stillOwes) : "Al día ✓"}</span>
                     </div>
                   </div>
                 );
@@ -308,12 +308,12 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
           </label>
           <div className="flex gap-2">
             {([["all", "Todos"], ["pending", "Pendientes"], ["paid", "Pagados"]] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setFilter(k)} className={cn("rounded-full border px-4 py-1.5 text-sm font-semibold", filter === k ? "border-primary bg-primary/15 text-primary" : "text-muted-foreground")}>{l}</button>
+              <button key={k} onClick={() => setFilter(k)} className={cn("rounded-full border px-4 py-1.5 text-sm font-semibold", filter === k ? "border-primary bg-success text-success-foreground" : "text-muted-foreground")}>{l}</button>
             ))}
           </div>
           {groups.map(({ c, list }) => (
             <div key={c} className="overflow-hidden rounded-3xl border bg-card shadow-card">
-              <div className="flex justify-between bg-secondary/40 px-4 py-2.5 text-sm font-semibold text-muted-foreground">
+              <div className="flex justify-between bg-secondary/70 px-4 py-2.5 text-sm font-semibold text-muted-foreground">
                 <span>{CATEGORIES[c]} {c}</span><span className="tabular">{money(list.reduce((a, b) => a + billAmount(b, mk), 0))}</span>
               </div>
               {list.map((b) => <BillRow key={b.id} b={b} mk={mk} today={today} onClick={() => setSelected(b)} />)}
@@ -334,7 +334,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
               <div key={c.id} className="flex items-center gap-3 border-t px-4 py-3 first:border-t-0">
                 <Avatar m={byId(c.personId)} />
                 <div className="flex-1"><p className="font-semibold">{byId(c.personId).name}</p><p className="text-xs text-muted-foreground">{c.note || "Aporte"}</p></div>
-                <span className="font-display font-bold text-member-1 tabular">{money(c.amount)}</span>
+                <span className="font-display font-bold text-foreground tabular">{money(c.amount)}</span>
                 <button aria-label="Eliminar aporte" onClick={() => {
                   f.setContributions((cs) => cs.filter((x) => x.id !== c.id));
                   toast("Aporte eliminado", { action: { label: "Deshacer", onClick: () => f.setContributions((cs) => [...cs, c]) } });
