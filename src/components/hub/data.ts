@@ -47,17 +47,15 @@ export const CHORES: Chore[] = [
 export interface ShopItem {
   id: string;
   name: string;
-  aisle: string;
   done: boolean;
 }
-export const AISLES = ["Frutas y verduras", "Lácteos y nevera", "Despensa", "Limpieza"];
 export const SHOPPING: ShopItem[] = [
-  { id: "s1", name: "Tomates (1 kg)", aisle: "Frutas y verduras", done: false },
-  { id: "s2", name: "Plátanos", aisle: "Frutas y verduras", done: false },
-  { id: "s3", name: "Leche entera", aisle: "Lácteos y nevera", done: true },
-  { id: "s4", name: "Queso rallado", aisle: "Lácteos y nevera", done: false },
-  { id: "s5", name: "Arroz", aisle: "Despensa", done: false },
-  { id: "s6", name: "Detergente de platos", aisle: "Limpieza", done: false },
+  { id: "s1", name: "Tomates (1 kg)", done: false },
+  { id: "s2", name: "Plátanos", done: false },
+  { id: "s3", name: "Leche entera", done: true },
+  { id: "s4", name: "Queso rallado", done: false },
+  { id: "s5", name: "Arroz", done: false },
+  { id: "s6", name: "Detergente de platos", done: false },
 ];
 
 export const CATEGORIES: Record<string, string> = {
