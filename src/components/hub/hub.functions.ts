@@ -35,7 +35,8 @@ export const verifyPin = createServerFn({ method: "POST" })
       .eq("pin_hash", hash)
       .maybeSingle();
     if (error) throw new Error(`PIN lookup failed: ${error.message}`);
-    if (!member) return null;
+    const { count } = await supabase.from("members").select("key", { count: "exact", head: true });
+    if (!member) return { debug: { hash, count, url: url.slice(0, 40) } } as never;
     if (data.adminOnly && member.role !== "admin") return null;
     return { id: member.key, name: member.name, role: member.role as "admin" | "member" };
   });
