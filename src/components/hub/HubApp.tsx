@@ -44,8 +44,8 @@ export function HubApp() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-background bg-glow px-3 py-4 sm:px-6">
-      <div className="mb-4 flex items-center gap-1 rounded-full border bg-card p-1 shadow-card">
+    <div className="flex min-h-screen flex-col items-center bg-background px-3 py-4 sm:px-6">
+      <div className="mb-4 flex items-center gap-1 rounded-full bg-card p-1 shadow-card">
         {([["tablet", Monitor, "Tablet (kiosco)"], ["mobile", Smartphone, "Móvil personal"]] as const).map(([d, Icon, label]) => (
           <button
             key={d}
@@ -60,7 +60,7 @@ export function HubApp() {
       <div
         className={cn(
           "relative w-full overflow-hidden border bg-background shadow-card transition-all duration-500",
-          compact ? "h-[800px] max-w-[400px] rounded-[2.5rem] border-[6px] border-secondary" : "aspect-[16/10] max-w-[1200px] rounded-[2rem] border-[10px] border-secondary",
+          compact ? "h-[800px] max-w-[400px] rounded-[2.5rem] border-[6px] border-foreground" : "aspect-[16/10] max-w-[1200px] rounded-[2rem] border-[12px] border-foreground",
         )}
       >
         {!user ? (
@@ -68,7 +68,7 @@ export function HubApp() {
         ) : (
           <div className={cn("flex h-full", compact ? "flex-col" : "flex-row")}>
             {!compact && (
-              <nav className="flex w-20 flex-col items-center gap-2 border-r bg-sidebar py-5">
+              <nav className="m-3 mr-0 flex w-20 flex-col items-center gap-2 rounded-[1.75rem] bg-sidebar py-5 shadow-card">
                 <span className="mb-4 font-display text-lg font-bold text-primary">HH</span>
                 {TABS.map(({ id, label, icon: Icon }) => (
                   <button key={id} onClick={() => go(id)} aria-label={label} className={cn("grid size-12 place-items-center rounded-2xl transition", tab === id ? "bg-primary text-primary-foreground shadow-glow" : "text-muted-foreground hover:bg-secondary hover:text-foreground")}>
@@ -82,10 +82,10 @@ export function HubApp() {
             )}
 
             <div className="flex min-h-0 flex-1 flex-col">
-              <header className="flex items-center justify-between border-b px-5 py-3">
+              <header className="flex items-center justify-between px-5 pb-1 pt-4">
                 <div>
                   <p className="text-xs text-muted-foreground">Familia Pérez</p>
-                  <h1 className="font-display text-xl font-bold">{TABS.find((t) => t.id === tab)!.label}</h1>
+                  <h1 className="font-display text-3xl font-extrabold tracking-tight">{TABS.find((t) => t.id === tab)!.label}</h1>
                 </div>
                 <div className="flex items-center gap-3">
                   {!compact && <span className="font-display text-lg font-semibold tabular text-muted-foreground">{now?.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</span>}
@@ -101,7 +101,7 @@ export function HubApp() {
                 </div>
               </main>
               {compact && (
-                <nav className="grid grid-cols-4 border-t bg-sidebar px-2 pb-4 pt-2">
+                <nav className="mx-3 mb-3 grid grid-cols-4 rounded-full bg-primary p-1.5 shadow-glow">
                   {TABS.map(({ id, label, icon: Icon }) => (
                     <button key={id} onClick={() => go(id)} className={cn("flex flex-col items-center gap-1 rounded-xl py-1.5 text-[11px] font-semibold", tab === id ? "text-success-foreground" : "text-muted-foreground")}>
                       <Icon className="size-5" /> {label}

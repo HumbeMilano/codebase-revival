@@ -20,8 +20,8 @@ export interface FinanceState {
 
 function Sheet({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 z-40 flex items-end justify-center bg-background/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="max-h-[88%] w-full max-w-xl overflow-y-auto rounded-t-[2rem] border bg-card p-5 shadow-card animate-in slide-in-from-bottom-10 duration-300">
+    <div className="absolute inset-0 z-40 flex items-end justify-center bg-foreground/20 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="max-h-[88%] w-full max-w-xl overflow-y-auto rounded-t-[2rem] bg-card p-5 shadow-card animate-in slide-in-from-bottom-10 duration-300">
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
@@ -60,8 +60,8 @@ function Donut({ paid, total }: { paid: number; total: number }) {
 
 function DayBadge({ day }: { day: number }) {
   return (
-    <div className="w-12 shrink-0 overflow-hidden rounded-xl border bg-background text-center">
-      <div className="h-2 bg-primary" />
+    <div className="w-12 shrink-0 overflow-hidden rounded-2xl bg-secondary text-center">
+      <div className="h-1.5 bg-accent" />
       <p className="py-1 font-display text-lg font-bold tabular">{day}</p>
     </div>
   );
@@ -228,20 +228,20 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
         </div>
       </div>
 
-      <div className="flex gap-1 rounded-2xl border bg-card p-1">
+      <div className="flex gap-1 rounded-full bg-card p-1 shadow-card">
         {(["resumen", "bills", "aportes"] as const).map((v) => (
-          <button key={v} onClick={() => setView(v)} className={cn("flex-1 rounded-xl py-2 text-sm font-semibold capitalize", view === v ? "bg-secondary" : "text-muted-foreground")}>{v}</button>
+          <button key={v} onClick={() => setView(v)} className={cn("flex-1 rounded-full py-2 text-sm font-semibold capitalize transition", view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{v}</button>
         ))}
       </div>
 
       {view === "resumen" && (
         <>
-          <section className="rounded-3xl border bg-card bg-glow p-5 shadow-card">
+          <section className="rounded-[1.75rem] bg-card bg-glow p-5 shadow-card">
             <div className="flex items-center gap-5">
               <Donut paid={sum.paid} total={sum.total} />
               <div>
                 <p className="text-sm text-muted-foreground">Bills del mes</p>
-                <p className="font-display text-3xl font-bold tabular">{money(sum.total)}</p>
+                <p className="font-display text-4xl font-extrabold tracking-tight tabular">{money(sum.total)}</p>
                 <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground"><span className="size-2.5 rounded-full bg-destructive" />{sum.pendingCount} pendientes</p>
               </div>
             </div>
@@ -264,7 +264,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
               {sum.persons.filter((p) => p.billCount).map((p) => {
                 const m = byId(p.personId);
                 return (
-                  <div key={p.personId} className={cn("rounded-3xl border bg-card p-4 shadow-card", compact && "w-[85%] shrink-0 snap-start")}>
+                  <div key={p.personId} className={cn("rounded-[1.75rem] bg-card p-4 shadow-card", compact && "w-[85%] shrink-0 snap-start")}>
                     <div className="flex items-center gap-3"><Avatar m={m} /><span className="flex-1 font-semibold">{m.name}</span><span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] font-bold text-destructive">{p.billCount} bills</span></div>
                     <p className="mt-3 font-display text-2xl font-bold tabular">{money(p.assigned)} <span className="text-xs font-medium text-muted-foreground">asignado</span></p>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-success-strong" style={{ width: `${p.assigned ? (p.paid / p.assigned) * 100 : 0}%` }} /></div>
@@ -288,7 +288,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
               <h3 className="font-display text-lg font-bold">Bills del mes</h3>
               <button onClick={() => setView("bills")} className="text-sm font-semibold text-primary">Ver todos</button>
             </div>
-            <div className="overflow-hidden rounded-3xl border bg-card shadow-card">
+            <div className="overflow-hidden rounded-[1.75rem] bg-card shadow-card">
               {visible.filter((b) => b.dueDay >= (mk === monthKey(today.getFullYear(), today.getMonth()) ? today.getDate() : 0)).slice(0, 5)
                 .map((b) => <BillRow key={b.id} b={b} mk={mk} today={today} onClick={() => setSelected(b)} />)}
             </div>
@@ -312,7 +312,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
             ))}
           </div>
           {groups.map(({ c, list }) => (
-            <div key={c} className="overflow-hidden rounded-3xl border bg-card shadow-card">
+            <div key={c} className="overflow-hidden rounded-[1.75rem] bg-card shadow-card">
               <div className="flex justify-between bg-secondary/70 px-4 py-2.5 text-sm font-semibold text-muted-foreground">
                 <span>{CATEGORIES[c]} {c}</span><span className="tabular">{money(list.reduce((a, b) => a + billAmount(b, mk), 0))}</span>
               </div>
@@ -329,7 +329,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
             <p className="text-sm text-muted-foreground">Dinero que cada persona pone en el fondo común este mes.</p>
             <button onClick={() => setAddingAporte(true)} className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-glow"><Plus className="size-4" />Aporte</button>
           </div>
-          <div className="overflow-hidden rounded-3xl border bg-card shadow-card">
+          <div className="overflow-hidden rounded-[1.75rem] bg-card shadow-card">
             {f.contributions.filter((c) => c.month === mk).map((c) => (
               <div key={c.id} className="flex items-center gap-3 border-t px-4 py-3 first:border-t-0">
                 <Avatar m={byId(c.personId)} />

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { monthKey, monthSummary, type Contribution, type LedgerBill } from "@/lib/ledger";
 import { Avatar } from "./Kiosk";
 import {
-  AISLES, BILLS, CHORES, CONTRIBUTIONS, EVENTS, MEMBERS, SHOPPING, memberBg, memberText,
+  AISLES, BILLS, CHORES, CONTRIBUTIONS, EVENTS, MEMBERS, SHOPPING, memberBg,
   type Chore, type Member, type ShopItem,
 } from "./data";
 
@@ -14,10 +14,10 @@ const byId = (id: string): Member => MEMBERS.find((m) => m.id === id) ?? MEMBERS
 
 export function Card({ title, action, children, className }: { title?: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={cn("rounded-3xl border bg-card p-5 shadow-card", className)}>
+    <section className={cn("rounded-[1.75rem] bg-card p-5 shadow-card", className)}>
       {title && (
         <header className="mb-4 flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">{title}</h3>
+          <h3 className="font-display text-base font-bold">{title}</h3>
           {action}
         </header>
       )}
@@ -72,42 +72,59 @@ export function Dashboard({ s, user, compact, openFinance }: { s: HubState; user
   const { total, paid } = sum;
   const mine = s.chores.filter((c) => c.memberId === user.id && !c.done);
 
+  const doneToday = today.filter((c) => c.done).length;
+  const pct = total ? Math.round((paid / total) * 100) : 0;
+
   return (
-    <div className={cn("grid gap-4", compact ? "grid-cols-1" : "grid-cols-3")}>
-      <div className={cn("rounded-3xl border bg-card bg-glow p-6 shadow-card", !compact && "col-span-3")}>
-        <p className="text-sm text-muted-foreground">Buenas tardes</p>
-        <h2 className="font-display text-3xl font-bold">Hola, {user.name} 👋</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Tienes <span className="font-semibold text-primary">{mine.length} tareas</span> pendientes y faltan{" "}
-          <span className="font-semibold text-accent">{pending.length} cosas</span> por comprar.
+    <div className={cn("grid gap-3", compact ? "grid-cols-2" : "grid-cols-4 auto-rows-[minmax(0,auto)]")}>
+      <div className={cn("relative overflow-hidden rounded-[1.75rem] bg-card bg-glow p-6 shadow-card", compact ? "col-span-2" : "col-span-2 row-span-2 flex flex-col justify-between")}>
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">Buenas tardes</p>
+          <h2 className={cn("font-display font-extrabold leading-none tracking-tight", compact ? "text-4xl" : "text-6xl")}>Hola, {user.name}</h2>
+        </div>
+        <p className={cn("mt-4 font-medium text-foreground/70", compact ? "text-base" : "text-xl")}>
+          Hoy te tocan <b className="text-foreground">{mine.length} tareas</b> y faltan <b className="text-foreground">{pending.length} cosas</b> en la lista.
         </p>
       </div>
 
-      <Card title="Tareas de hoy">
+      <div className="flex flex-col justify-between rounded-[1.75rem] bg-success p-5 text-success-foreground shadow-card">
+        <p className="text-sm font-semibold">Tareas de hoy</p>
+        <p className="font-display text-5xl font-extrabold tabular">{doneToday}<span className="text-2xl opacity-60">/{today.length}</span></p>
+      </div>
+
+      <div className="flex flex-col justify-between rounded-[1.75rem] bg-accent p-5 text-accent-foreground shadow-card">
+        <p className="text-sm font-semibold">Por comprar</p>
+        <p className="font-display text-5xl font-extrabold tabular">{pending.length}</p>
+      </div>
+
+      <button onClick={openFinance} className={cn("rounded-[1.75rem] bg-primary p-5 text-left text-primary-foreground shadow-card transition active:scale-[0.99]", "col-span-2")}>
+        <div className="flex items-center justify-between text-sm font-semibold opacity-80">
+          <span>Bills del mes</span>{user.role !== "admin" && <Lock className="size-4" />}
+        </div>
+        <div className="mt-2 flex items-end justify-between gap-3">
+          <p className="font-display text-4xl font-extrabold tabular">{money(paid)}</p>
+          <p className="pb-1 text-sm opacity-70 tabular">de {money(total)}</p>
+        </div>
+        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-primary-foreground/15">
+          <div className="h-full rounded-full bg-success transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="mt-2 text-xs opacity-70">{pct}% pagado · {sum.pendingCount} pendientes · aportado {money(sum.contributed)}</p>
+      </button>
+
+      <Card title="Tareas de hoy" className={compact ? "col-span-2" : "col-span-2"}>
         <div className="space-y-2">{today.map((c) => <ChoreRow key={c.id} c={c} onToggle={() => toggleChore(s, c.id)} />)}</div>
       </Card>
 
-      <Card title={`Compras · ${pending.length} pendientes`}>
-        <ul className="space-y-2">
-          {pending.slice(0, 5).map((i) => (
-            <li key={i.id} className="flex items-center gap-3 text-sm">
-              <span className="size-2 rounded-full bg-accent" /> {i.name}
-              <span className="ml-auto text-xs text-muted-foreground">{i.aisle.split(" ")[0]}</span>
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      <Card title="Próximos días">
+      <Card title="Próximos días" className={cn("bg-sky", compact ? "col-span-2" : "col-span-1")}>
         <ul className="space-y-3">
           {EVENTS.map((e) => {
             const m = byId(e.memberId);
             return (
               <li key={e.id} className="flex gap-3">
-                <span className={cn("w-1 rounded-full", memberBg[m.color])} />
+                <span className={cn("w-1.5 rounded-full", memberBg[m.color])} />
                 <div>
                   <p className="text-sm font-semibold">{e.title}</p>
-                  <p className={cn("text-xs", memberText[m.color])}>{e.when}</p>
+                  <p className="text-xs text-muted-foreground">{e.when}</p>
                 </div>
               </li>
             );
@@ -115,19 +132,15 @@ export function Dashboard({ s, user, compact, openFinance }: { s: HubState; user
         </ul>
       </Card>
 
-      <button onClick={openFinance} className={cn("text-left", !compact && "col-span-3")}>
-        <Card title="Finanzas del mes" action={user.role !== "admin" && <Lock className="size-4 text-muted-foreground" />}>
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="font-display text-3xl font-bold tabular">{money(paid)} <span className="text-base font-medium text-muted-foreground">/ {money(total)}</span></p>
-              <p className="text-xs text-muted-foreground">pagado este mes · {sum.pendingCount} bills pendientes · aportado {money(sum.contributed)}</p>
-            </div>
-          </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-success-strong transition-all" style={{ width: `${total ? (paid / total) * 100 : 0}%` }} />
-          </div>
-        </Card>
-      </button>
+      <Card title="Lista de compras" className={cn("bg-lilac", compact ? "col-span-2" : "col-span-1")}>
+        <ul className="space-y-2">
+          {pending.slice(0, 5).map((i) => (
+            <li key={i.id} className="flex items-center gap-2.5 text-sm font-medium">
+              <span className="size-1.5 rounded-full bg-foreground/40" /> {i.name}
+            </li>
+          ))}
+        </ul>
+      </Card>
     </div>
   );
 }
@@ -169,7 +182,7 @@ export function Shopping({ s, compact }: { s: HubState; compact: boolean }) {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={add} className="flex gap-2 rounded-3xl border bg-card p-2 shadow-card">
+      <form onSubmit={add} className="flex gap-2 rounded-[1.75rem] bg-card p-2 shadow-card">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Añadir producto…" className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground" />
         {!compact && (
           <select value={aisle} onChange={(e) => setAisle(e.target.value)} className="rounded-xl bg-secondary px-3 text-sm outline-none">
