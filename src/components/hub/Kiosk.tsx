@@ -134,7 +134,7 @@ export function Kiosk({ compact, onUnlock }: { compact: boolean; onUnlock: (m: M
               </div>
             ))}
           </div>
-          <button onClick={() => setEntering(true)} className="flex shrink-0 items-center gap-3 rounded-full bg-card p-2 pl-6 text-foreground shadow-card transition active:scale-95">
+          <button onClick={() => setEntering(true)} className="flex shrink-0 items-center justify-between gap-3 rounded-full bg-card p-2 pl-6 text-foreground shadow-card transition active:scale-95">
             <span className="font-display font-bold">Entrar con PIN</span>
             <span className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground"><Lock className="size-5" /></span>
           </button>
