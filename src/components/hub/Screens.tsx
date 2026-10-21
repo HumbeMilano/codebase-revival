@@ -71,7 +71,7 @@ export function Ring({ pct, size = 64, stroke = 6, className, children }: { pct:
   const c = 2 * Math.PI * r;
   return (
     <div className={cn("relative grid shrink-0 place-items-center", className)} style={{ width: size, height: size }}>
-      <svg className="absolute inset-0 -rotate-90" width={size} height={size}>
+      <svg className="absolute inset-0 size-full! -rotate-90" width={size} height={size}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={stroke} className="opacity-15" />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, Math.max(0, pct)))} className="transition-all duration-700" />
       </svg>
