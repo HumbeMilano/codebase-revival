@@ -71,7 +71,8 @@ function BillRow({ b, mk, today, onClick }: { b: LedgerBill; mk: string; today: 
   const paid = billStatus(b, mk, today) === "paid";
   const explicit = b.overrides[mk]?.status;
   return (
-    <button onClick={onClick} className="flex w-full items-center gap-3 border-t px-4 py-3.5 text-left transition first:border-t-0 hover:bg-secondary/70">
+    <button onClick={onClick} className="relative flex w-full items-center gap-3 overflow-hidden rounded-[1.25rem] bg-card py-3 pl-5 pr-4 text-left shadow-card transition hover:-translate-y-0.5">
+      <span className={cn("absolute inset-y-0 left-0 w-1.5", paid ? "bg-success-strong" : "bg-accent")} />
       <DayBadge day={b.dueDay} />
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold">{b.name}</p>
@@ -189,7 +190,6 @@ function BillForm({ initial, onSave, onClose }: { initial?: LedgerBill | undefin
 export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
   const today = useMemo(() => new Date(), []);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
-  const [view, setView] = useState<"resumen" | "bills" | "aportes">("resumen");
   const [filter, setFilter] = useState<"all" | "pending" | "paid">("all");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<LedgerBill | null>(null);
@@ -217,134 +217,151 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
 
   const sel = selected && f.bills.find((b) => b.id === selected.id);
 
+  const isCurrent = mk === monthKey(today.getFullYear(), today.getMonth());
+  const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate();
+  const inPot = sum.contributed - sum.paid;
+  const segTotal = Math.max(sum.contributed, sum.total) || 1;
+  const monthLabel = (d: number) => new Date(cursor.y, cursor.m + d, 1).toLocaleDateString("es", { month: "short" });
+
   return (
-    <div className="space-y-5 pb-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display text-2xl font-extrabold tracking-tight first-letter:uppercase">{label}</h2>
-        <div className="flex gap-2">
-          <button onClick={() => setCursor({ y: today.getFullYear(), m: today.getMonth() })} className="rounded-2xl border px-4 py-2 text-sm font-semibold hover:bg-secondary">Hoy</button>
-          <button onClick={() => shift(-1)} aria-label="Mes anterior" className="grid size-10 place-items-center rounded-2xl border hover:bg-secondary"><ChevronLeft className="size-4" /></button>
-          <button onClick={() => shift(1)} aria-label="Mes siguiente" className="grid size-10 place-items-center rounded-2xl border hover:bg-secondary"><ChevronRight className="size-4" /></button>
+    <div className="space-y-6 pb-4">
+      {/* Month rail */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => shift(-1)} aria-label="Mes anterior" className="grid size-10 shrink-0 place-items-center rounded-full bg-card shadow-card"><ChevronLeft className="size-4" /></button>
+        <div className="flex flex-1 items-center justify-center gap-1 overflow-hidden">
+          {[-2, -1, 0, 1, 2].filter((d) => !compact || Math.abs(d) < 2).map((d) => (
+            <button key={d} onClick={() => d && shift(d)} className={cn("rounded-full px-4 py-2 font-display font-bold capitalize transition", d === 0 ? "bg-primary text-lg text-primary-foreground" : "text-sm text-muted-foreground hover:text-foreground")}>
+              {d === 0 ? label : monthLabel(d)}
+            </button>
+          ))}
         </div>
+        <button onClick={() => shift(1)} aria-label="Mes siguiente" className="grid size-10 shrink-0 place-items-center rounded-full bg-card shadow-card"><ChevronRight className="size-4" /></button>
+        {!isCurrent && <button onClick={() => setCursor({ y: today.getFullYear(), m: today.getMonth() })} className="rounded-full bg-card px-4 py-2 text-sm font-semibold shadow-card">Hoy</button>}
       </div>
 
-      <div className="flex gap-1 rounded-full bg-card p-1 shadow-card">
-        {(["resumen", "bills", "aportes"] as const).map((v) => (
-          <button key={v} onClick={() => setView(v)} className={cn("flex-1 rounded-full py-2 text-sm font-semibold capitalize transition", view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{v}</button>
-        ))}
-      </div>
-
-      {view === "resumen" && (
-        <>
-          <section className="rounded-[1.75rem] bg-card bg-glow p-5 shadow-card">
-            <div className="flex items-center gap-5">
-              <Donut paid={sum.paid} total={sum.total} />
-              <div>
-                <p className="text-sm text-muted-foreground">Bills del mes</p>
-                <p className="font-display text-4xl font-extrabold tracking-tight tabular">{money(sum.total)}</p>
-                <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground"><span className="size-2.5 rounded-full bg-destructive" />{sum.pendingCount} pendientes</p>
-              </div>
+      <div className={cn("grid gap-6", compact ? "grid-cols-1" : "grid-cols-[1fr_1.15fr]")}>
+        {/* LEFT: the pot */}
+        <div className="space-y-6">
+          <section>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">En el fondo común</p>
+            <p className={cn("font-display font-extrabold leading-none tracking-[-0.05em] tabular", compact ? "text-6xl" : "text-7xl", inPot < 0 && "text-destructive")}>{money(inPot)}</p>
+            <div className="mt-4 flex h-4 overflow-hidden rounded-full bg-muted">
+              <span className="bg-success-strong transition-all" style={{ width: `${(sum.paid / segTotal) * 100}%` }} />
+              <span className="bg-accent transition-all" style={{ width: `${(sum.pending / segTotal) * 100}%` }} />
             </div>
-            <div className="mt-5 grid grid-cols-3 divide-x border-t pt-4">
-              {[["Aportado", sum.contributed, "text-foreground"], ["Pagado", sum.paid, "text-success-foreground"], ["Pendiente", sum.pending, "text-destructive"]].map(([l, v, c]) => (
-                <div key={l as string} className="px-3 first:pl-0">
-                  <p className="text-xs text-muted-foreground">{l}</p>
-                  <p className={cn("font-display text-lg font-bold tabular", c as string)}>{money(v as number)}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+              {([["Aportado", sum.contributed, "bg-foreground"], ["Pagado", sum.paid, "bg-success-strong"], ["Pendiente", sum.pending, "bg-accent"]] as const).map(([l, v, dot]) => (
+                <div key={l}>
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className={cn("size-2 rounded-full", dot)} />{l}</p>
+                  <p className="font-display text-lg font-bold tabular">{money(v)}</p>
                 </div>
               ))}
             </div>
           </section>
 
-          <div>
+          {/* People ledger */}
+          <section>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-lg font-bold">Aportes y bills por persona</h3>
-              <button onClick={() => setView("aportes")} className="text-sm font-semibold text-primary">Administrar</button>
+              <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Quién pone qué</h3>
+              <button onClick={() => setAddingAporte(true)} className="flex items-center gap-1 rounded-full bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground"><Plus className="size-3.5" />Aporte</button>
             </div>
-            <div className={cn("gap-3", compact ? "-mx-4 flex snap-x overflow-x-auto px-4 pb-2" : "grid grid-cols-3")}>
-              {sum.persons.filter((p) => p.billCount).map((p) => {
+            <div className="space-y-2">
+              {sum.persons.filter((p) => p.billCount || p.contributed).map((p) => {
                 const m = byId(p.personId);
+                const fill = p.assigned ? Math.min(1, p.contributed / p.assigned) : 1;
                 return (
-                  <div key={p.personId} className={cn("rounded-[1.75rem] bg-card p-4 shadow-card", compact && "w-[85%] shrink-0 snap-start")}>
-                    <div className="flex items-center gap-3"><Avatar m={m} /><span className="flex-1 font-semibold">{m.name}</span><span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] font-bold text-destructive">{p.billCount} bills</span></div>
-                    <p className="mt-3 font-display text-2xl font-bold tabular">{money(p.assigned)} <span className="text-xs font-medium text-muted-foreground">asignado</span></p>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-success-strong" style={{ width: `${p.assigned ? (p.paid / p.assigned) * 100 : 0}%` }} /></div>
-                    <div className="mt-1.5 flex justify-between text-xs text-muted-foreground tabular"><span>Pagado {money(p.paid)}</span><span>Pendiente {money(p.pending)}</span></div>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <div className="rounded-2xl border p-2.5"><p className="text-[11px] text-muted-foreground">Aportó</p><p className="font-bold text-foreground tabular">{money(p.contributed)}</p></div>
-                      <div className="rounded-2xl border p-2.5"><p className="text-[11px] text-muted-foreground">Disponible</p><p className={cn("font-bold tabular", p.available < 0 ? "text-destructive" : "text-success-foreground")}>{money(p.available)}</p></div>
+                  <div key={p.personId} className="rounded-[1.5rem] bg-card p-4 shadow-card">
+                    <div className="flex items-center gap-3">
+                      <Avatar m={m} />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold">{m.name}</p>
+                        <p className="text-xs text-muted-foreground tabular">{p.billCount} bills · asignado {money(p.assigned)}</p>
+                      </div>
+                      <span className={cn("rounded-full px-3 py-1 text-xs font-bold tabular", p.stillOwes > 0 ? "bg-destructive-soft text-destructive" : "bg-success text-success-foreground")}>
+                        {p.stillOwes > 0 ? `Debe ${money(p.stillOwes)}` : "Al día ✓"}
+                      </span>
                     </div>
-                    <div className="mt-2 flex items-center justify-between rounded-2xl border p-2.5 text-sm">
-                      <span className="text-muted-foreground">Aún debe aportar</span>
-                      <span className={cn("font-bold tabular", p.stillOwes > 0 ? "text-destructive" : "text-success-foreground")}>{p.stillOwes > 0 ? money(p.stillOwes) : "Al día ✓"}</span>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-foreground transition-all" style={{ width: `${fill * 100}%` }} /></div>
+                    <div className="mt-2 flex justify-between text-xs text-muted-foreground tabular">
+                      <span>Aportó <b className="text-foreground">{money(p.contributed)}</b></span>
+                      <span>Pagado {money(p.paid)} · Pend. {money(p.pending)}</span>
+                      <span>Disponible <b className={p.available < 0 ? "text-destructive" : "text-success-foreground"}>{money(p.available)}</b></span>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </section>
 
-          <div>
+          {/* Contribution feed */}
+          <section>
+            <h3 className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Aportes del mes</h3>
+            <div className="flex flex-wrap gap-2">
+              {f.contributions.filter((c) => c.month === mk).map((c) => (
+                <div key={c.id} className="flex items-center gap-2 rounded-full bg-card py-1 pl-1 pr-2 shadow-card">
+                  <Avatar m={byId(c.personId)} size="sm" />
+                  <span className="text-sm font-bold tabular">{money(c.amount)}</span>
+                  {c.note && <span className="max-w-[120px] truncate text-xs text-muted-foreground">{c.note}</span>}
+                  <button aria-label="Eliminar aporte" onClick={() => {
+                    f.setContributions((cs) => cs.filter((x) => x.id !== c.id));
+                    toast("Aporte eliminado", { action: { label: "Deshacer", onClick: () => f.setContributions((cs) => [...cs, c]) } });
+                  }} className="grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-destructive-soft hover:text-destructive"><X className="size-3.5" /></button>
+                </div>
+              ))}
+              {!f.contributions.some((c) => c.month === mk) && <p className="text-sm text-muted-foreground">Aún no hay aportes este mes.</p>}
+            </div>
+          </section>
+        </div>
+
+        {/* RIGHT: bills calendar + list */}
+        <div className="space-y-4">
+          <section className="rounded-[2rem] bg-card p-4 shadow-card">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-lg font-bold">Bills del mes</h3>
-              <button onClick={() => setView("bills")} className="text-sm font-semibold text-primary">Ver todos</button>
+              <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Calendario de bills</h3>
+              <button onClick={() => setEditing("new")} className="flex items-center gap-1 rounded-full bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground"><Plus className="size-3.5" />Nuevo bill</button>
             </div>
-            <div className="overflow-hidden rounded-[1.75rem] bg-card shadow-card">
-              {visible.filter((b) => b.dueDay >= (mk === monthKey(today.getFullYear(), today.getMonth()) ? today.getDate() : 0)).slice(0, 5)
-                .map((b) => <BillRow key={b.id} b={b} mk={mk} today={today} onClick={() => setSelected(b)} />)}
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+                const due = visible.filter((b) => b.dueDay === d);
+                const anyPending = due.some((b) => billStatus(b, mk, today) === "pending");
+                return (
+                  <button key={d} disabled={!due.length} onClick={() => due[0] && setSelected(due[0])}
+                    className={cn("relative grid aspect-square place-items-center rounded-xl text-xs font-bold tabular transition",
+                      due.length ? (anyPending ? "bg-accent text-accent-foreground hover:scale-105" : "bg-success text-success-foreground hover:scale-105") : "text-muted-foreground/60",
+                      isCurrent && d === today.getDate() && "ring-2 ring-foreground")}>
+                    {d}
+                    {due.length > 1 && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />}
+                  </button>
+                );
+              })}
             </div>
-          </div>
-        </>
-      )}
+          </section>
 
-      {view === "bills" && (
-        <>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Obligaciones recurrentes y quién cubre cada una.</p>
-            <button onClick={() => setEditing("new")} className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-glow"><Plus className="size-4" />Nuevo</button>
-          </div>
-          <label className="flex items-center gap-2 rounded-2xl border bg-card px-4 py-3">
-            <Search className="size-4 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar bill, categoría o persona" className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground" />
-          </label>
           <div className="flex gap-2">
-            {([["all", "Todos"], ["pending", "Pendientes"], ["paid", "Pagados"]] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setFilter(k)} className={cn("rounded-full border px-4 py-1.5 text-sm font-semibold", filter === k ? "border-primary bg-success text-success-foreground" : "text-muted-foreground")}>{l}</button>
-            ))}
+            <label className="flex flex-1 items-center gap-2 rounded-full bg-card px-4 py-2.5 shadow-card">
+              <Search className="size-4 text-muted-foreground" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+            </label>
+            <div className="flex rounded-full bg-card p-1 shadow-card">
+              {([["all", "Todos"], ["pending", "Pend."], ["paid", "Pagados"]] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setFilter(k)} className={cn("rounded-full px-3 py-1.5 text-xs font-bold transition", filter === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{l}</button>
+              ))}
+            </div>
           </div>
+
           {groups.map(({ c, list }) => (
-            <div key={c} className="overflow-hidden rounded-[1.75rem] bg-card shadow-card">
-              <div className="flex justify-between bg-secondary/70 px-4 py-2.5 text-sm font-semibold text-muted-foreground">
+            <section key={c}>
+              <div className="mb-1.5 flex justify-between px-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
                 <span>{CATEGORIES[c]} {c}</span><span className="tabular">{money(list.reduce((a, b) => a + billAmount(b, mk), 0))}</span>
               </div>
-              {list.map((b) => <BillRow key={b.id} b={b} mk={mk} today={today} onClick={() => setSelected(b)} />)}
-            </div>
+              <div className="space-y-2">
+                {list.map((b) => <BillRow key={b.id} b={b} mk={mk} today={today} onClick={() => setSelected(b)} />)}
+              </div>
+            </section>
           ))}
           {!groups.length && <p className="py-8 text-center text-sm text-muted-foreground">No hay bills con ese filtro.</p>}
-        </>
-      )}
-
-      {view === "aportes" && (
-        <>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Dinero que cada persona pone en el fondo común este mes.</p>
-            <button onClick={() => setAddingAporte(true)} className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-glow"><Plus className="size-4" />Aporte</button>
-          </div>
-          <div className="overflow-hidden rounded-[1.75rem] bg-card shadow-card">
-            {f.contributions.filter((c) => c.month === mk).map((c) => (
-              <div key={c.id} className="flex items-center gap-3 border-t px-4 py-3 first:border-t-0">
-                <Avatar m={byId(c.personId)} />
-                <div className="flex-1"><p className="font-semibold">{byId(c.personId).name}</p><p className="text-xs text-muted-foreground">{c.note || "Aporte"}</p></div>
-                <span className="font-display font-bold text-foreground tabular">{money(c.amount)}</span>
-                <button aria-label="Eliminar aporte" onClick={() => {
-                  f.setContributions((cs) => cs.filter((x) => x.id !== c.id));
-                  toast("Aporte eliminado", { action: { label: "Deshacer", onClick: () => f.setContributions((cs) => [...cs, c]) } });
-                }} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-4" /></button>
-              </div>
-            ))}
-            {!f.contributions.some((c) => c.month === mk) && <p className="p-6 text-center text-sm text-muted-foreground">Aún no hay aportes este mes.</p>}
-          </div>
-        </>
-      )}
+        </div>
+      </div>
 
       {sel && (
         <Sheet title={sel.name} subtitle={`${money(billAmount(sel, mk))} · vence ${sel.dueDay} · ${Object.entries(splitBill(billAmount(sel, mk), sel.splits)).map(([p, v]) => `${byId(p).name} ${money(v)}`).join(" · ")}${sel.autoPay ? " · pago automático" : ""}`} onClose={() => { setSelected(null); setNewAmount(null); }}>
