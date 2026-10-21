@@ -94,7 +94,7 @@ function BillRow({ b, mk, today, onClick }: { b: LedgerBill; mk: string; today: 
 
 type SplitMode = "one" | "equal" | "percent" | "amount";
 
-function BillForm({ initial, onSave, onClose }: { initial?: LedgerBill; onSave: (b: LedgerBill) => void; onClose: () => void }) {
+function BillForm({ initial, onSave, onClose }: { initial?: LedgerBill | undefined; onSave: (b: LedgerBill) => void; onClose: () => void }) {
   const initMode: SplitMode = !initial ? "equal" : initial.splits.length === 1 ? "one" : (initial.splits[0]?.type as SplitMode) ?? "equal";
   const [name, setName] = useState(initial?.name ?? "");
   const [amount, setAmount] = useState(initial ? String(initial.base) : "");
