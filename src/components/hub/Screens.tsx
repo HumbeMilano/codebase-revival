@@ -123,7 +123,7 @@ export function Dashboard({ s, user, compact, go }: { s: HubState; user: Member;
               const list = s.chores.filter((c) => c.memberId === m.id);
               const done = list.filter((c) => c.done).length;
               return (
-                <button key={m.id} onClick={() => go("chores")} className="flex min-w-[132px] flex-1 flex-col items-center gap-2 rounded-[1.75rem] bg-card px-3 py-4 shadow-card transition hover:-translate-y-0.5">
+                <button key={m.id} onClick={() => go("chores")} className="flex min-w-[108px] flex-1 flex-col items-center gap-2 rounded-[1.75rem] bg-card px-3 py-4 shadow-card transition hover:-translate-y-0.5">
                   <Ring pct={list.length ? done / list.length : 1} size={72} stroke={5} className="text-foreground">
                     <Avatar m={m} />
                   </Ring>

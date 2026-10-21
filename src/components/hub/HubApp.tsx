@@ -105,7 +105,7 @@ export function HubApp() {
               </div>
             </main>
             {compact && (
-              <nav className="absolute inset-x-4 bottom-4 flex items-center justify-between rounded-[1.75rem] bg-card px-3 py-2 shadow-card">
+              <nav className="absolute inset-x-4 bottom-4 z-20 flex items-center justify-between rounded-[1.75rem] bg-card px-3 py-2 shadow-card">
                 {TABS.slice(0, 2).map(({ id, label, icon: Icon }) => (
                   <DockBtn key={id} active={tab === id} label={label} Icon={Icon} onClick={() => go(id)} />
                 ))}
@@ -118,7 +118,7 @@ export function HubApp() {
               </nav>
             )}
             {quick && (
-              <div className="absolute inset-0 z-20 flex items-end bg-foreground/20 backdrop-blur-sm animate-in fade-in" onClick={() => setQuick(false)}>
+              <div className="absolute inset-0 z-30 flex items-end bg-foreground/20 backdrop-blur-sm animate-in fade-in" onClick={() => setQuick(false)}>
                 <div className="w-full rounded-t-[2rem] bg-card p-5 pb-8 animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
                   <p className="mb-4 font-display text-xl font-bold">¿Qué quieres añadir?</p>
                   <div className="grid grid-cols-3 gap-3">
