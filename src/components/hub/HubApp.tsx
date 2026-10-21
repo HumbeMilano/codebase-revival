@@ -169,7 +169,7 @@ export function HubApp() {
         )}
       </div>
       <p className="mt-4 max-w-md text-center text-xs text-muted-foreground">
-        Prototipo visual con datos de ejemplo. PINs demo: Papá 1111 · Mamá 2222 · Lucas 3333 · Sofía 4444. Con Lucas, Finanzas pide el PIN de un adulto.
+        Datos reales guardados y sincronizados entre dispositivos. PINs demo: Papá 1111 · Mamá 2222 · Lucas 3333 · Sofía 4444. Con Lucas, Finanzas pide el PIN de un adulto.
       </p>
     </div>
   );

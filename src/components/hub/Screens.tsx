@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Check, ListChecks, PiggyBank, Plus, Receipt, ShoppingBasket, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -8,11 +8,10 @@ import { appendDictation } from "@/lib/dictation";
 import { canViewFinances } from "@/lib/finance-visibility";
 import { monthKey, monthSummary, type Contribution, type LedgerBill } from "@/lib/ledger";
 import { Avatar } from "./Kiosk";
-import { DEMO_EVENTS, eventWhen, type FamilyEvent, type FamilyNote } from "./planner-data";
-import {
-  BILLS, CHORES, CONTRIBUTIONS, MEMBERS, SHOPPING, memberBg,
-  type Chore, type Member, type ShopItem,
-} from "./data";
+import { eventWhen, type FamilyEvent, type FamilyNote } from "./planner-data";
+import { MEMBERS, memberBg, type Chore, type Member, type ShopItem } from "./data";
+import { loadHubData, syncBills, syncChores, syncContributions, syncEvents, syncItems, syncNotes } from "@/lib/hub-db";
+import { supabase } from "@/integrations/supabase/client";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const byId = (id: string): Member => MEMBERS.find((m) => m.id === id) ?? MEMBERS[0]!;
@@ -46,13 +45,68 @@ export interface HubState {
   setContributions: React.Dispatch<React.SetStateAction<Contribution[]>>;
 }
 
+/** Wraps a state setter so every change is also persisted to the household database. */
+function persisted<T extends { id: string }[]>(
+  setState: React.Dispatch<React.SetStateAction<T>>,
+  sync: (prev: T, next: T) => Promise<void>,
+): React.Dispatch<React.SetStateAction<T>> {
+  return (update) =>
+    setState((prev) => {
+      const next = typeof update === "function" ? (update as (p: T) => T)(prev) : update;
+      if (next !== prev) void sync(prev, next).catch(() => toast.error("No se pudo guardar. Revisa la conexión."));
+      return next;
+    });
+}
+
 export function useHubState(): HubState {
-  const [events, setEvents] = useState(DEMO_EVENTS);
-  const [notes, setNotes] = useState<FamilyNote[]>([]);
-  const [chores, setChores] = useState(CHORES);
-  const [items, setItems] = useState(SHOPPING);
-  const [bills, setBills] = useState(BILLS);
-  const [contributions, setContributions] = useState(CONTRIBUTIONS);
+  const [events, setEventsRaw] = useState<FamilyEvent[]>([]);
+  const [notes, setNotesRaw] = useState<FamilyNote[]>([]);
+  const [chores, setChoresRaw] = useState<Chore[]>([]);
+  const [items, setItemsRaw] = useState<ShopItem[]>([]);
+  const [bills, setBillsRaw] = useState<LedgerBill[]>([]);
+  const [contributions, setContributionsRaw] = useState<Contribution[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const data = await loadHubData();
+        if (!active) return;
+        setEventsRaw(data.events);
+        setNotesRaw(data.notes);
+        setChoresRaw(data.chores);
+        setItemsRaw(data.items);
+        setBillsRaw(data.bills);
+        setContributionsRaw(data.contributions);
+      } catch {
+        if (active) toast.error("No se pudo cargar la información del hogar.");
+      }
+    };
+    void refresh();
+    // Realtime: any change from another device reloads the household data.
+    const channel = supabase
+      .channel("hub")
+      .on("postgres_changes", { event: "*", schema: "public", table: "chores" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "shopping_items" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "notes" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "bills" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "bill_splits" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "bill_overrides" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "contributions" }, () => void refresh())
+      .subscribe();
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const setEvents = useMemo(() => persisted(setEventsRaw, syncEvents), []);
+  const setNotes = useMemo(() => persisted(setNotesRaw, syncNotes), []);
+  const setChores = useMemo(() => persisted(setChoresRaw, syncChores), []);
+  const setItems = useMemo(() => persisted(setItemsRaw, syncItems), []);
+  const setBills = useMemo(() => persisted(setBillsRaw, syncBills), []);
+  const setContributions = useMemo(() => persisted(setContributionsRaw, syncContributions), []);
   return { events, setEvents, notes, setNotes, chores, setChores, items, setItems, bills, setBills, contributions, setContributions };
 }
 
