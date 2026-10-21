@@ -8,6 +8,13 @@
       "when": 1792624818976,
       "tag": "0000_homehub_household_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792625658360,
+      "tag": "0001_verify_pin_function",
+      "breakpoints": true
     }
   ]
 }
