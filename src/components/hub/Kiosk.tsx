@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CloudSun, Delete, Lock, X } from "lucide-react";
 import photo from "@/assets/kiosk-photo.jpg";
 import { MEMBERS, memberBg, type Member } from "./data";
+import { verifyPin } from "./hub.functions";
 import { cn } from "@/lib/utils";
 
 export function useClock() {
@@ -23,9 +24,12 @@ export function Avatar({ m, size = "md" }: { m: Member; size?: "sm" | "md" | "lg
   );
 }
 
-/** PIN-only entry: the PIN itself identifies who is logging in (PINs are unique). */
-export function findByPin(pin: string, adminOnly = false): Member | undefined {
-  return MEMBERS.find((m) => m.pin === pin && (!adminOnly || m.role === "admin"));
+/** PIN-only entry: the PIN itself identifies who is logging in (PINs are unique). Verified on the server. */
+export async function findByPin(pin: string, adminOnly = false): Promise<Member | undefined> {
+  const found = await verifyPin({ data: { pin, adminOnly } });
+  if (!found) return undefined;
+  const meta = MEMBERS.find((m) => m.id === found.id);
+  return meta ? { ...meta, name: found.name, role: found.role } : undefined;
 }
 
 export function PinPad({
@@ -41,19 +45,25 @@ export function PinPad({
 }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [who, setWho] = useState<Member | null>(null);
 
   useEffect(() => {
     if (pin.length < 4) return;
-    const m = findByPin(pin, adminOnly);
-    if (m) {
-      setWho(m);
-      const t = setTimeout(() => onSuccess(m), 350);
-      return () => clearTimeout(t);
-    }
-    setError(true);
-    const t = setTimeout(() => { setPin(""); setError(false); }, 600);
-    return () => clearTimeout(t);
+    let active = true;
+    setChecking(true);
+    void findByPin(pin, adminOnly).then((m) => {
+      if (!active) return;
+      setChecking(false);
+      if (m) {
+        setWho(m);
+        setTimeout(() => onSuccess(m), 350);
+        return;
+      }
+      setError(true);
+      setTimeout(() => { setPin(""); setError(false); }, 600);
+    });
+    return () => { active = false; };
   }, [pin, adminOnly, onSuccess]);
 
   const press = (d: string) => setPin((p) => (p.length < 4 ? p + d : p));
@@ -67,7 +77,7 @@ export function PinPad({
         <div className="flex flex-col items-center gap-2">
           {who ? <Avatar m={who} size="lg" /> : <span className="grid size-16 place-items-center rounded-full bg-secondary"><Lock className="size-6" /></span>}
           <p className="font-display text-lg font-semibold">{who ? `Hola, ${who.name}` : title ?? "Escribe tu PIN"}</p>
-          <p className="text-xs text-muted-foreground">{error ? "PIN incorrecto" : "Tu PIN dice quién eres"}</p>
+          <p className="text-xs text-muted-foreground">{error ? "PIN incorrecto" : checking ? "Verificando…" : "Tu PIN dice quién eres"}</p>
         </div>
         <div className={cn("my-5 flex justify-center gap-3", error && "animate-[shake_0.4s]")}>
           {[0, 1, 2, 3].map((i) => (
