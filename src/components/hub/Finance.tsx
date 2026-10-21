@@ -230,8 +230,8 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
         <button onClick={() => shift(-1)} aria-label="Mes anterior" className="grid size-10 shrink-0 place-items-center rounded-full bg-card shadow-card"><ChevronLeft className="size-4" /></button>
         <div className="flex flex-1 items-center justify-center gap-1 overflow-hidden">
           {[-2, -1, 0, 1, 2].filter((d) => !compact || Math.abs(d) < 2).map((d) => (
-            <button key={d} onClick={() => d && shift(d)} className={cn("rounded-full px-4 py-2 font-display font-bold capitalize transition", d === 0 ? "bg-primary text-lg text-primary-foreground" : "text-sm text-muted-foreground hover:text-foreground")}>
-              {d === 0 ? label : monthLabel(d)}
+            <button key={d} onClick={() => d && shift(d)} className={cn("whitespace-nowrap rounded-full px-4 py-2 font-display font-bold transition first-letter:uppercase", d === 0 ? "bg-primary text-lg text-primary-foreground" : "text-sm text-muted-foreground hover:text-foreground")}>
+              {d === 0 ? (compact ? new Date(cursor.y, cursor.m, 1).toLocaleDateString("es", { month: "long" }) : label) : monthLabel(d)}
             </button>
           ))}
         </div>
@@ -284,7 +284,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-foreground transition-all" style={{ width: `${fill * 100}%` }} /></div>
                     <div className="mt-2 flex justify-between text-xs text-muted-foreground tabular">
                       <span>Aportó <b className="text-foreground">{money(p.contributed)}</b></span>
-                      <span>Pagado {money(p.paid)} · Pend. {money(p.pending)}</span>
+                      {!compact && <span>Pagado {money(p.paid)} · Pend. {money(p.pending)}</span>}
                       <span>Disponible <b className={p.available < 0 ? "text-destructive" : "text-success-foreground"}>{money(p.available)}</b></span>
                     </div>
                   </div>
@@ -326,7 +326,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
                 const anyPending = due.some((b) => billStatus(b, mk, today) === "pending");
                 return (
                   <button key={d} disabled={!due.length} onClick={() => due[0] && setSelected(due[0])}
-                    className={cn("relative grid aspect-square place-items-center rounded-xl text-xs font-bold tabular transition",
+                    className={cn("relative grid h-10 place-items-center rounded-xl text-xs font-bold tabular transition",
                       due.length ? (anyPending ? "bg-accent text-accent-foreground hover:scale-105" : "bg-success text-success-foreground hover:scale-105") : "text-muted-foreground/60",
                       isCurrent && d === today.getDate() && "ring-2 ring-foreground")}>
                     {d}
