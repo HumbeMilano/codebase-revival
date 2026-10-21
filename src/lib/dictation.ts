@@ -1,4 +1,7 @@
 export type DictationLanguage = "es" | "en";
+export const WHISPER_MODEL = "Xenova/whisper-base";
+export const WHISPER_SAMPLE_RATE = 16000;
+export const DICTATION_LIMIT_SECONDS = 30;
 export type WhisperRequest = { type: "load" } | { type: "transcribe"; audio: Float32Array; language: DictationLanguage };
 export type WhisperReply = { type: "progress"; progress: number } | { type: "ready" } | { type: "result"; text: string } | { type: "error"; message: string };
 

@@ -1,5 +1,5 @@
 import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
-import type { WhisperRequest, WhisperReply } from "./dictation";
+import { WHISPER_MODEL, type WhisperRequest, type WhisperReply } from "./dictation";
 
 // This module is only loaded through a browser Worker, never by SSR.
 env.allowLocalModels = false;
@@ -11,7 +11,7 @@ const reply = (message: WhisperReply) => self.postMessage(message);
 self.onmessage = async (event: MessageEvent<WhisperRequest>) => {
   try {
     if (event.data.type === "load") {
-      transcriber = await pipeline<"automatic-speech-recognition">("automatic-speech-recognition", "Xenova/whisper-tiny", {
+      transcriber = await pipeline<"automatic-speech-recognition">("automatic-speech-recognition", WHISPER_MODEL, {
         device: "wasm",
         dtype: "q8",
         progress_callback: (progress) => {
@@ -25,6 +25,9 @@ self.onmessage = async (event: MessageEvent<WhisperRequest>) => {
     const result = await transcriber(event.data.audio, {
       language: event.data.language === "es" ? "spanish" : "english",
       task: "transcribe",
+      num_beams: 3,
+      max_new_tokens: 128,
+      repetition_penalty: 1.1,
     });
     reply({ type: "result", text: (Array.isArray(result) ? result[0]?.text : result.text)?.trim() ?? "" });
   } catch {
