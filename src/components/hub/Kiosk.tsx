@@ -97,36 +97,46 @@ export function Kiosk({ compact, onUnlock }: { compact: boolean; onUnlock: (m: M
   const [picked, setPicked] = useState<Member | null>(null);
   const time = now?.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }) ?? "--:--";
   const date = now?.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" }) ?? "";
+  const next = [
+    { t: "18:00", label: "Regar las plantas" },
+    { t: "19:30", label: "Cena en familia" },
+    { t: "Mañ.", label: "Revisión del coche" },
+  ];
 
   return (
-    <div className="relative h-full w-full overflow-y-auto bg-background p-3">
-      <div className={cn("grid h-full gap-3", compact ? "grid-cols-1 grid-rows-[auto_1fr_auto]" : "grid-cols-[1.1fr_1fr] grid-rows-[1fr_auto]")}>
-        <div className={cn("flex flex-col justify-between rounded-[1.75rem] bg-card p-6 shadow-card", !compact && "row-span-1")}>
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-display font-semibold">Familia Pérez</span>
-            <span className="flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 font-semibold text-accent-foreground"><CloudSun className="size-4" /> 22°</span>
-          </div>
-          <div className={compact ? "py-4" : ""}>
-            <p className={cn("font-display font-extrabold leading-[0.85] tracking-[-0.06em] tabular", compact ? "text-[5.5rem]" : "text-[10rem]")}>{time}</p>
-            <p className="mt-3 text-lg font-medium first-letter:uppercase text-muted-foreground">{date}</p>
-          </div>
+    <div className="relative h-full w-full overflow-hidden text-primary-foreground">
+      <img src={photo} alt="Foto familiar" width={1600} height={1008} className="absolute inset-0 h-full w-full object-cover animate-[kenburns_30s_ease-in-out_infinite_alternate]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-foreground/40 via-foreground/10 to-foreground/75" />
+
+      <div className={cn("relative flex h-full flex-col justify-between", compact ? "p-5" : "p-10")}>
+        <div className="flex items-center justify-between">
+          <span className="rounded-full bg-primary-foreground/15 px-4 py-2 font-display text-sm font-bold backdrop-blur-xl">Familia Pérez</span>
+          <span className="flex items-center gap-2 rounded-full bg-primary-foreground/15 px-4 py-2 text-sm font-semibold backdrop-blur-xl"><CloudSun className="size-4" /> 22° · Soleado</span>
         </div>
 
-        <div className={cn("relative overflow-hidden rounded-[1.75rem] shadow-card", compact ? "min-h-48" : "row-span-2")}>
-          <img src={photo} alt="Foto familiar" width={1600} height={1008} className="absolute inset-0 h-full w-full object-cover animate-[kenburns_30s_ease-in-out_infinite_alternate]" />
-          <div className="absolute inset-0 bg-scrim" />
-          <span className="absolute bottom-4 left-4 rounded-full bg-surface-glass px-3 py-1.5 text-xs font-semibold backdrop-blur-md">Recuerdos · Verano 2026</span>
+        <div>
+          <p className={cn("font-display font-extrabold leading-[0.8] tracking-[-0.07em] tabular drop-shadow-lg", compact ? "text-[6.5rem]" : "text-[13rem]")}>{time}</p>
+          <p className={cn("mt-2 font-display font-semibold first-letter:uppercase opacity-90", compact ? "text-xl" : "text-3xl")}>{date}</p>
         </div>
 
-        <div className="rounded-[1.75rem] bg-card p-4 shadow-card">
-          <p className="mb-3 flex items-center gap-2 px-1 text-sm font-medium text-muted-foreground"><Lock className="size-4" /> ¿Quién está aquí?</p>
-          <div className="grid grid-cols-4 gap-2">
-            {MEMBERS.map((m) => (
-              <button key={m.id} onClick={() => setPicked(m)} className="flex flex-col items-center gap-2 rounded-2xl bg-secondary p-3 transition hover:-translate-y-0.5 hover:shadow-card active:scale-95">
-                <Avatar m={m} size={compact ? "md" : "lg"} />
-                <span className="text-sm font-semibold">{m.name}</span>
-              </button>
+        <div className={cn("flex gap-3", compact ? "flex-col" : "items-end justify-between")}>
+          <div className="flex gap-2 overflow-x-auto">
+            {next.map((n) => (
+              <div key={n.label} className="min-w-[140px] rounded-2xl bg-primary-foreground/15 px-4 py-3 backdrop-blur-xl">
+                <p className="font-display text-sm font-bold tabular opacity-70">{n.t}</p>
+                <p className="text-sm font-semibold">{n.label}</p>
+              </div>
             ))}
+          </div>
+          <div className="flex items-center gap-3 rounded-full bg-card p-2 pl-5 text-foreground shadow-card">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"><Lock className="size-4" /> Entrar</span>
+            <div className="flex -space-x-2">
+              {MEMBERS.map((m) => (
+                <button key={m.id} onClick={() => setPicked(m)} aria-label={m.name} className="rounded-full ring-4 ring-card transition hover:z-10 hover:-translate-y-1 hover:scale-110">
+                  <Avatar m={m} size={compact ? "md" : "lg"} />
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
