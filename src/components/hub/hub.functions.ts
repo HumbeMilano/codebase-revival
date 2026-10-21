@@ -14,6 +14,8 @@ export const verifyPin = createServerFn({ method: "POST" })
   .inputValidator((input: { pin: string; adminOnly?: boolean }) => input)
   .handler(async ({ data }) => {
     if (!/^\d{4}$/.test(data.pin)) return null;
+    // TEMP DEBUG
+    console.log("[verifyPin] pin:", JSON.stringify(data.pin), "hash:", await sha256(data.pin));
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const hash = await sha256(data.pin);
     const { data: member, error } = await supabaseAdmin
