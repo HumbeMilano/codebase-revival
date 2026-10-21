@@ -108,7 +108,7 @@ export function Kiosk({ compact, onUnlock }: { compact: boolean; onUnlock: (m: M
           </div>
           <div className={compact ? "py-4" : ""}>
             <p className={cn("font-display font-extrabold leading-[0.85] tracking-[-0.06em] tabular", compact ? "text-[5.5rem]" : "text-[10rem]")}>{time}</p>
-            <p className="mt-3 text-lg font-medium capitalize text-muted-foreground">{date}</p>
+            <p className="mt-3 text-lg font-medium first-letter:uppercase text-muted-foreground">{date}</p>
           </div>
         </div>
 

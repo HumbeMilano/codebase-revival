@@ -83,7 +83,7 @@ export function Dashboard({ s, user, compact, openFinance }: { s: HubState; user
           <h2 className={cn("font-display font-extrabold leading-none tracking-tight", compact ? "text-4xl" : "text-6xl")}>Hola, {user.name}</h2>
         </div>
         <p className={cn("mt-4 font-medium text-foreground/70", compact ? "text-base" : "text-xl")}>
-          Hoy te tocan <b className="text-foreground">{mine.length} tareas</b> y faltan <b className="text-foreground">{pending.length} cosas</b> en la lista.
+          Hoy te {mine.length === 1 ? "toca" : "tocan"} <b className="text-foreground">{mine.length} {mine.length === 1 ? "tarea" : "tareas"}</b> y faltan <b className="text-foreground">{pending.length} cosas</b> en la lista.
         </p>
       </div>
 

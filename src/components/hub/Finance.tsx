@@ -220,7 +220,7 @@ export function Finance({ f, compact }: { f: FinanceState; compact: boolean }) {
   return (
     <div className="space-y-5 pb-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display text-2xl font-bold capitalize">{label}</h2>
+        <h2 className="font-display text-2xl font-extrabold tracking-tight first-letter:uppercase">{label}</h2>
         <div className="flex gap-2">
           <button onClick={() => setCursor({ y: today.getFullYear(), m: today.getMonth() })} className="rounded-2xl border px-4 py-2 text-sm font-semibold hover:bg-secondary">Hoy</button>
           <button onClick={() => shift(-1)} aria-label="Mes anterior" className="grid size-10 place-items-center rounded-2xl border hover:bg-secondary"><ChevronLeft className="size-4" /></button>

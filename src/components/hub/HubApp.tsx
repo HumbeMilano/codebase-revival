@@ -103,7 +103,7 @@ export function HubApp() {
               {compact && (
                 <nav className="mx-3 mb-3 grid grid-cols-4 rounded-full bg-primary p-1.5 shadow-glow">
                   {TABS.map(({ id, label, icon: Icon }) => (
-                    <button key={id} onClick={() => go(id)} className={cn("flex flex-col items-center gap-1 rounded-xl py-1.5 text-[11px] font-semibold", tab === id ? "text-success-foreground" : "text-muted-foreground")}>
+                    <button key={id} onClick={() => go(id)} className={cn("flex flex-col items-center gap-0.5 rounded-full py-2 text-[11px] font-semibold transition", tab === id ? "bg-primary-foreground text-primary" : "text-primary-foreground/60")}>
                       <Icon className="size-5" /> {label}
                     </button>
                   ))}
