@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Use the shared finance visibility predicate for every financial UI surface in the PIN prototype so child visibility is consistent; this is presentation gating, not production security.
+- Calendar and notes share session-only prototype state with the dashboard; keep date-only values local and put overflow sections in the mobile More menu so navigation never scrolls horizontally. Real persistence requires Lovable Cloud.
