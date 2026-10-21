@@ -20,7 +20,7 @@ export function HubApp() {
   const [tab, setTab] = useState<Tab>("home");
   const [financeUnlocked, setFinanceUnlocked] = useState(false);
   const [quick, setQuick] = useState(false);
-  const [askAdmin, setAskAdmin] = useState<Member | null>(null);
+  const [askAdmin, setAskAdmin] = useState(false);
   const s = useHubState();
   const now = useClock();
 
@@ -32,7 +32,7 @@ export function HubApp() {
 
   const go = (t: Tab) => {
     if (t === "finance" && user?.role !== "admin" && !financeUnlocked) {
-      setAskAdmin(MEMBERS[0] ?? null);
+      setAskAdmin(true);
       return;
     }
     setTab(t);
@@ -136,11 +136,11 @@ export function HubApp() {
 
         {askAdmin && (
           <PinPad
-            member={askAdmin}
+            adminOnly
             title="Finanzas: PIN de un adulto"
-            onCancel={() => setAskAdmin(null)}
+            onCancel={() => setAskAdmin(false)}
             onSuccess={() => {
-              setAskAdmin(null);
+              setAskAdmin(false);
               setFinanceUnlocked(true);
               setTab("finance");
             }}
@@ -148,7 +148,7 @@ export function HubApp() {
         )}
       </div>
       <p className="mt-4 max-w-md text-center text-xs text-muted-foreground">
-        Prototipo visual con datos de ejemplo. Entra como Lucas (PIN 1111) para ver cómo Finanzas pide el PIN de un adulto.
+        Prototipo visual con datos de ejemplo. PINs demo: Papá 1111 · Mamá 2222 · Lucas 3333 · Sofía 4444. Con Lucas, Finanzas pide el PIN de un adulto.
       </p>
     </div>
   );

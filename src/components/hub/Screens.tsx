@@ -118,17 +118,17 @@ export function Dashboard({ s, user, compact, go }: { s: HubState; user: Member;
         {/* Family progress rings */}
         <section>
           <h3 className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">La familia hoy</h3>
-          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+          <div className="grid grid-cols-4 gap-2">
             {MEMBERS.map((m) => {
               const list = s.chores.filter((c) => c.memberId === m.id);
               const done = list.filter((c) => c.done).length;
               return (
-                <button key={m.id} onClick={() => go("chores")} className="flex min-w-[108px] flex-1 flex-col items-center gap-2 rounded-[1.75rem] bg-card px-3 py-4 shadow-card transition hover:-translate-y-0.5">
-                  <Ring pct={list.length ? done / list.length : 1} size={72} stroke={5} className="text-foreground">
+                <button key={m.id} onClick={() => go("chores")} className="flex min-w-0 flex-col items-center gap-1.5 rounded-[1.5rem] bg-card px-1 py-3 shadow-card transition hover:-translate-y-0.5">
+                  <Ring pct={list.length ? done / list.length : 1} size={compact ? 52 : 72} stroke={4} className="text-foreground">
                     <Avatar m={m} />
                   </Ring>
                   <span className="text-sm font-bold">{m.name}</span>
-                  <span className="text-xs text-muted-foreground tabular">{done}/{list.length} hechas</span>
+                  <span className="text-xs text-muted-foreground tabular">{done}/{list.length}</span>
                 </button>
               );
             })}
@@ -233,7 +233,7 @@ export function Chores({ s, compact }: { s: HubState; compact: boolean }) {
   const groups = ["Hoy", "Mañana"];
   return (
     <div className="space-y-5">
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1">
+      <div className="flex flex-wrap gap-2">
         <button onClick={() => setWho("all")} className={cn("rounded-full px-4 py-2 text-sm font-semibold transition", who === "all" ? "bg-primary text-primary-foreground" : "bg-card shadow-card")}>Todos</button>
         {MEMBERS.map((m) => (
           <button key={m.id} onClick={() => setWho(m.id)} className={cn("flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 text-sm font-semibold transition", who === m.id ? "bg-primary text-primary-foreground" : "bg-card shadow-card")}>
