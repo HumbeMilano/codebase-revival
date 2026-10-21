@@ -1,2 +1,6 @@
 - [x] Simplify dashboard with visual counters and a compact agenda.
 - [x] Hide financial content and shortcuts for children until adult authorization; verify authorization and logout.
+- [x] Simplify shopping into one uncategorized checklist.
+- [x] Add calendar with event creation, editing and deletion.
+- [x] Add editable household notes and connect both sections to navigation.
+- [x] Verify shopping, calendar and notes in the PIN prototype on phone and tablet.

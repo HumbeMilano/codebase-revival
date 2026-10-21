@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
-import { CheckSquare, Home, LogOut, Monitor, Plus, ShieldCheck, ShoppingCart, Smartphone, Wallet } from "lucide-react";
+import { CalendarDays, CheckSquare, Home, LogOut, Monitor, MoreHorizontal, Plus, ShieldCheck, ShoppingCart, Smartphone, StickyNote, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { canViewFinances } from "@/lib/finance-visibility";
 import { Avatar, Kiosk, PinPad, useClock } from "./Kiosk";
 import { Chores, Dashboard, Shopping, useHubState } from "./Screens";
 import { Finance } from "./Finance";
+import { FamilyCalendar, FamilyNotes } from "./Planner";
 import type { Member } from "./data";
 
-type Tab = "home" | "chores" | "shopping" | "finance";
+type Tab = "home" | "chores" | "shopping" | "finance" | "calendar" | "notes";
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Inicio", icon: Home },
   { id: "chores", label: "Tareas", icon: CheckSquare },
   { id: "shopping", label: "Compras", icon: ShoppingCart },
   { id: "finance", label: "Finanzas", icon: Wallet },
+  { id: "calendar", label: "Calendario", icon: CalendarDays },
+  { id: "notes", label: "Notas", icon: StickyNote },
 ];
 
 export function HubApp() {
@@ -23,6 +26,7 @@ export function HubApp() {
   const [financeUnlocked, setFinanceUnlocked] = useState(false);
   const [quick, setQuick] = useState(false);
   const [askAdmin, setAskAdmin] = useState(false);
+  const [more, setMore] = useState(false);
   const s = useHubState();
   const now = useClock();
 
@@ -46,6 +50,9 @@ export function HubApp() {
     setUser(null);
     setTab("home");
     setFinanceUnlocked(false);
+    setQuick(false);
+    setMore(false);
+    setAskAdmin(false);
   };
 
   return (
@@ -85,11 +92,11 @@ export function HubApp() {
               ) : (
                 <>
                   <span className="font-display text-xl font-extrabold tracking-tight">home<span className="text-muted-foreground">hub</span></span>
-                  <nav className="mx-auto flex gap-1 rounded-full bg-card p-1.5 shadow-card">
+                  <nav className="mx-auto flex flex-wrap justify-center gap-1 rounded-2xl bg-card p-1 shadow-card">
                     {visibleTabs.map(({ id, label, icon: Icon }) => (
-                      <button key={id} onClick={() => go(id)} className={cn("flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition", tab === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+                      <Button variant="ghost" key={id} onClick={() => go(id)} className={cn("flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold transition", tab === id ? "bg-primary text-primary-foreground hover:bg-primary/90" : "text-muted-foreground hover:text-foreground")}>
                         <Icon className="size-4" /> {label}
-                      </button>
+                      </Button>
                     ))}
                   </nav>
                   <span className="font-display text-lg font-bold tabular text-muted-foreground">{now?.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</span>
@@ -107,6 +114,8 @@ export function HubApp() {
                 {tab === "chores" && <Chores s={s} compact={compact} />}
                 {tab === "shopping" && <Shopping s={s} compact={compact} />}
                 {tab === "finance" && financialAccess && <Finance f={s} compact={compact} />}
+                {tab === "calendar" && <FamilyCalendar events={s.events} setEvents={s.setEvents} user={user} compact={compact} />}
+                {tab === "notes" && <FamilyNotes notes={s.notes} setNotes={s.setNotes} user={user} compact={compact} />}
               </div>
             </main>
             {compact && (
@@ -117,17 +126,18 @@ export function HubApp() {
                 <button onClick={() => setQuick(true)} aria-label="Añadir" className="-mt-8 grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-glow ring-8 ring-background transition active:scale-95">
                   <Plus className="size-6" />
                 </button>
-                {visibleTabs.slice(2).map(({ id, label, icon: Icon }) => (
+                {TABS.filter((t) => t.id === "shopping").map(({ id, label, icon: Icon }) => (
                   <DockBtn key={id} active={tab === id} label={label} Icon={Icon} onClick={() => go(id)} />
                 ))}
+                <DockBtn active={tab === "calendar" || tab === "notes" || tab === "finance"} label="Más" Icon={MoreHorizontal} onClick={() => setMore(true)} />
               </nav>
             )}
             {quick && (
               <div className="absolute inset-0 z-30 flex items-end bg-foreground/20 backdrop-blur-sm animate-in fade-in" onClick={() => setQuick(false)}>
                 <div className="w-full rounded-t-[2rem] bg-card p-5 pb-8 animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
                   <p className="mb-4 font-display text-xl font-bold">¿Qué quieres añadir?</p>
-                  <div className={cn("grid gap-3", financialAccess ? "grid-cols-3" : "grid-cols-2")}>
-                    {([["shopping", "Compra", "bg-accent", ShoppingCart], ["chores", "Tarea", "bg-success", CheckSquare], ["finance", "Bill", "bg-sky", Wallet]] as const).filter(([t]) => t !== "finance" || financialAccess).map(([t, l, tone, Icon]) => (
+                  <div className="grid grid-cols-2 gap-3">
+                    {([["shopping", "Compra", "bg-accent", ShoppingCart], ["chores", "Tarea", "bg-success", CheckSquare], ["calendar", "Evento", "bg-sky", CalendarDays], ["notes", "Nota", "bg-lilac", StickyNote], ["finance", "Bill", "bg-sky", Wallet]] as const).filter(([t]) => t !== "finance" || financialAccess).map(([t, l, tone, Icon]) => (
                       <button key={t} onClick={() => { setQuick(false); go(t); }} className={cn("flex aspect-square flex-col items-center justify-center gap-2 rounded-[1.5rem] font-semibold", tone)}>
                         <Icon className="size-7" /> {l}
                       </button>
@@ -136,6 +146,12 @@ export function HubApp() {
                 </div>
               </div>
             )}
+            {more && <div className="absolute inset-0 z-30 flex items-end bg-foreground/20 backdrop-blur-sm" onClick={() => setMore(false)}>
+              <section role="dialog" aria-label="Más secciones" className="w-full rounded-t-3xl bg-card p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+                <header className="mb-3 flex items-center justify-between"><h2 className="font-display text-xl font-bold">Más</h2><Button variant="ghost" size="icon" aria-label="Cerrar" onClick={() => setMore(false)}><X /></Button></header>
+                <div className="space-y-1">{visibleTabs.filter((t) => ["calendar", "notes", "finance"].includes(t.id)).map(({ id, label, icon: Icon }) => <Button key={id} variant="ghost" className="h-14 w-full justify-start rounded-xl" onClick={() => { setMore(false); go(id); }}><Icon />{label}</Button>)}</div>
+              </section>
+            </div>}
           </div>
         )}
 
@@ -161,9 +177,9 @@ export function HubApp() {
 
 function DockBtn({ active, label, Icon, onClick }: { active: boolean; label: string; Icon: typeof Home; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={cn("flex w-16 flex-col items-center gap-1 py-1 text-[11px] font-semibold transition", active ? "text-foreground" : "text-muted-foreground")}>
+    <Button variant="ghost" onClick={onClick} className={cn("h-auto w-14 flex-col gap-1 px-0 py-1 text-[11px] font-semibold transition", active ? "text-foreground" : "text-muted-foreground")}>
       <span className={cn("grid h-8 w-12 place-items-center rounded-full transition", active && "bg-success")}><Icon className="size-5" /></span>
       {label}
-    </button>
+    </Button>
   );
 }
