@@ -36,7 +36,9 @@ export const verifyPin = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(`PIN lookup failed: ${error.message}`);
     const { count } = await supabase.from("members").select("key", { count: "exact", head: true });
-    if (!member) return { debug: { hash, count, url: url.slice(0, 40) } } as never;
+    const { data: byHash } = await supabase.from("members").select("key").eq("pin_hash", hash);
+    const { data: byHouse } = await supabase.from("members").select("key").eq("household_id", HOUSEHOLD_ID);
+    if (!member) return { debug: { hash, count, byHash, byHouse } } as never;
     if (data.adminOnly && member.role !== "admin") return null;
     return { id: member.key, name: member.name, role: member.role as "admin" | "member" };
   });
