@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, Kiosk, PinPad, useClock } from "./Kiosk";
 import { Chores, Dashboard, Shopping, useHubState } from "./Screens";
 import { Finance } from "./Finance";
-import { MEMBERS, type Member } from "./data";
+import type { Member } from "./data";
 
 type Tab = "home" | "chores" | "shopping" | "finance";
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
