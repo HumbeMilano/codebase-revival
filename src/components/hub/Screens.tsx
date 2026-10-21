@@ -270,6 +270,13 @@ export function Chores({ s, compact }: { s: HubState; compact: boolean }) {
   );
 }
 
+const AISLE_TONE: Record<string, string> = {
+  "Frutas y verduras": "bg-success",
+  "Lácteos y nevera": "bg-sky",
+  Despensa: "bg-accent",
+  Limpieza: "bg-lilac",
+};
+
 export function Shopping({ s, compact }: { s: HubState; compact: boolean }) {
   const [name, setName] = useState("");
   const [aisle, setAisle] = useState<string>(AISLES[0] ?? "Despensa");
@@ -286,49 +293,76 @@ export function Shopping({ s, compact }: { s: HubState; compact: boolean }) {
       action: { label: "Deshacer", onClick: () => s.setItems((xs) => [...xs, item]) },
     });
   };
+  const toggle = (id: string) => s.setItems((xs) => xs.map((x) => (x.id === id ? { ...x, done: !x.done } : x)));
+  const inCart = s.items.filter((i) => i.done);
+  const pct = s.items.length ? inCart.length / s.items.length : 0;
 
   return (
-    <div className="space-y-4">
-      <form onSubmit={add} className="flex gap-2 rounded-[1.75rem] bg-card p-2 shadow-card">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Añadir producto…" className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground" />
-        {!compact && (
-          <select value={aisle} onChange={(e) => setAisle(e.target.value)} className="rounded-xl bg-secondary px-3 text-sm outline-none">
-            {AISLES.map((a) => <option key={a}>{a}</option>)}
-          </select>
-        )}
-        <button className="grid size-10 place-items-center rounded-2xl bg-primary text-primary-foreground transition active:scale-95" aria-label="Añadir">
-          <Plus className="size-5" />
-        </button>
-      </form>
-      <div className={cn("grid gap-4", compact ? "grid-cols-1" : "grid-cols-2")}>
+    <div className="space-y-6">
+      {/* Progress hero + composer */}
+      <div className={cn("grid gap-3", compact ? "grid-cols-1" : "grid-cols-[1fr_1.4fr]")}>
+        <div className="rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-card">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] opacity-60">En el carrito</p>
+          <p className="mt-2 font-display text-6xl font-extrabold tracking-tight tabular">{inCart.length}<span className="text-3xl opacity-50">/{s.items.length}</span></p>
+          <div className="mt-4 flex h-3 gap-1">
+            {s.items.map((i) => <span key={i.id} className={cn("flex-1 rounded-full transition", i.done ? "bg-success" : "bg-primary-foreground/15")} />)}
+          </div>
+          <p className="mt-2 text-sm opacity-70">{pct === 1 ? "¡Todo listo! 🎉" : `Faltan ${s.items.length - inCart.length} productos`}</p>
+        </div>
+        <form onSubmit={add} className="flex flex-col justify-between gap-3 rounded-[2rem] bg-card p-4 shadow-card">
+          <div className="flex items-center gap-2 rounded-2xl bg-secondary p-1.5 pl-4">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="¿Qué falta en casa?" className="min-w-0 flex-1 bg-transparent font-display text-lg font-semibold outline-none placeholder:text-muted-foreground" />
+            <button className="grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground transition active:scale-95" aria-label="Añadir"><Plus className="size-5" /></button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {AISLES.map((a) => (
+              <button type="button" key={a} onClick={() => setAisle(a)} className={cn("rounded-full px-3.5 py-1.5 text-xs font-bold transition", aisle === a ? "bg-primary text-primary-foreground" : cn(AISLE_TONE[a], "opacity-80 hover:opacity-100"))}>{a}</button>
+            ))}
+          </div>
+        </form>
+      </div>
+
+      {/* Aisle columns */}
+      <div className={cn("gap-3", compact ? "space-y-5" : "grid grid-cols-4")}>
         {AISLES.map((a) => {
-          const list = s.items.filter((i) => i.aisle === a);
-          if (!list.length) return null;
+          const list = s.items.filter((i) => i.aisle === a && !i.done);
           return (
-            <Card key={a} title={a}>
-              <ul className="space-y-1">
+            <section key={a} className={cn(!compact && "rounded-[1.75rem] bg-card/60 p-2")}>
+              <div className="mb-2 flex items-center gap-2 px-2 pt-1">
+                <span className={cn("size-3 rounded-full", AISLE_TONE[a])} />
+                <h3 className="flex-1 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">{a}</h3>
+                <span className="text-xs font-bold tabular text-muted-foreground">{list.length}</span>
+              </div>
+              <div className={cn(compact ? "flex flex-wrap gap-2" : "space-y-2")}>
                 {list.map((i) => (
-                  <li key={i.id} className="group flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-secondary">
-                    <button
-                      onClick={() => s.setItems((xs) => xs.map((x) => (x.id === i.id ? { ...x, done: !x.done } : x)))}
-                      className="flex flex-1 items-center gap-3 text-left text-sm"
-                    >
-                      <span className={cn("grid size-6 place-items-center rounded-lg border-2", i.done ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40")}>
-                        {i.done && <Check className="size-3.5" />}
-                      </span>
-                      <span className={cn(i.done && "text-muted-foreground line-through")}>{i.name}</span>
+                  <div key={i.id} className={cn("group flex items-center gap-1 rounded-2xl bg-card shadow-card", compact ? "pl-1" : "p-1")}>
+                    <button onClick={() => toggle(i.id)} className="flex flex-1 items-center gap-2.5 px-2 py-2.5 text-left text-sm font-semibold">
+                      <span className={cn("size-5 shrink-0 rounded-full border-2 border-foreground/25 transition group-hover:border-foreground")} />
+                      {i.name}
                     </button>
-                    <button onClick={() => remove(i)} aria-label={`Eliminar ${i.name}`} className="text-muted-foreground opacity-60 hover:text-destructive group-hover:opacity-100">
-                      <Trash2 className="size-4" />
+                    <button onClick={() => remove(i)} aria-label={`Eliminar ${i.name}`} className="grid size-8 place-items-center rounded-xl text-muted-foreground opacity-50 hover:bg-destructive-soft hover:text-destructive group-hover:opacity-100">
+                      <Trash2 className="size-3.5" />
                     </button>
-                  </li>
+                  </div>
                 ))}
-              </ul>
-            </Card>
+                {!list.length && <p className="px-2 py-3 text-xs text-muted-foreground">Nada pendiente</p>}
+              </div>
+            </section>
           );
         })}
       </div>
+
+      {/* Cart tray */}
+      {inCart.length > 0 && (
+        <section className="rounded-[1.75rem] border-2 border-dashed border-foreground/10 p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground"><Check className="size-4" /> Ya en el carrito · toca para devolver</h3>
+          <div className="flex flex-wrap gap-2">
+            {inCart.map((i) => (
+              <button key={i.id} onClick={() => toggle(i.id)} className={cn("rounded-full px-3.5 py-1.5 text-sm font-semibold line-through opacity-70 transition hover:opacity-100", AISLE_TONE[i.aisle])}>{i.name}</button>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
-
