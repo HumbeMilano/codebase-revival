@@ -30,7 +30,7 @@ export function HubApp() {
 
   const go = (t: Tab) => {
     if (t === "finance" && user?.role !== "admin" && !financeUnlocked) {
-      setAskAdmin(MEMBERS[0]);
+      setAskAdmin(MEMBERS[0] ?? null);
       return;
     }
     setTab(t);
