@@ -267,7 +267,7 @@ export function Finance({ s, compact }: { s: HubState; compact: boolean }) {
                       return (
                         <span key={sp.personId} className="flex items-center gap-1.5 rounded-full bg-background/60 py-1 pl-1 pr-2.5 text-xs">
                           <Avatar m={m} size="sm" />
-                          <span className="font-semibold tabular">{money(shares[sp.personId])}</span>
+                          <span className="font-semibold tabular">{money(shares[sp.personId] ?? 0)}</span>
                           <span className="text-muted-foreground">{sp.type === "amount" ? "fijo" : sp.type === "percent" ? `${sp.value}%` : "igual"}</span>
                         </span>
                       );
