@@ -138,3 +138,14 @@
     color: var(--color-foreground);
   }
 }
+
+@keyframes kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.12) translate(-2%, -1%); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+body { font-family: var(--font-sans); }

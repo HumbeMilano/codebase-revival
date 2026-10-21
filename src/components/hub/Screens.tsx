@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { splitBill } from "@/lib/split";
 import { Avatar } from "./Kiosk";
 import {
-  AISLES, BILLS, CHORES, EVENTS, MEMBERS, SHOPPING, memberText,
+  AISLES, BILLS, CHORES, EVENTS, MEMBERS, SHOPPING, memberBg, memberText,
   type Bill, type Chore, type Member, type ShopItem,
 } from "./data";
 
@@ -100,7 +100,7 @@ export function Dashboard({ s, user, compact, openFinance }: { s: HubState; user
             const m = byId(e.memberId);
             return (
               <li key={e.id} className="flex gap-3">
-                <span className={cn("w-1 rounded-full", `bg-${m.color}`)} />
+                <span className={cn("w-1 rounded-full", memberBg[m.color])} />
                 <div>
                   <p className="text-sm font-semibold">{e.title}</p>
                   <p className={cn("text-xs", memberText[m.color])}>{e.when}</p>
