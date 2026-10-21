@@ -1,4 +1,5 @@
 - [x] Research free GitHub Whisper implementations: recommend Transformers.js with multilingual Whisper Tiny running in a browser worker; device testing required before claiming compatibility.
+- [ ] Final dictation attempt: improve local accuracy and simplify capture-to-insertion; verify human Spanish/English audio.
 - [x] Add local bilingual microphones to shopping, calendar and notes.
 - [x] Verify model download, real human English microphone transcription, review, insertion, saving and input preservation; Spanish synthetic-audio accuracy was poor, so real Spanish voices and user devices remain unverified.
 - [x] Simplify dashboard with visual counters and a compact agenda.
