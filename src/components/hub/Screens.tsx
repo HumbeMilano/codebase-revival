@@ -3,6 +3,8 @@ import { ArrowUpRight, Check, ListChecks, PiggyBank, Plus, Receipt, ShoppingBask
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { VoiceInput } from "./VoiceInput";
+import { appendDictation } from "@/lib/dictation";
 import { canViewFinances } from "@/lib/finance-visibility";
 import { monthKey, monthSummary, type Contribution, type LedgerBill } from "@/lib/ledger";
 import { Avatar } from "./Kiosk";
@@ -232,6 +234,7 @@ export function Shopping({ s }: { s: HubState; compact: boolean }) {
   return <div className="mx-auto max-w-2xl space-y-4">
     <form onSubmit={add} className="flex items-center gap-2 rounded-2xl bg-card p-2 pl-4 shadow-card">
       <input aria-label="Producto" value={name} onChange={(e) => setName(e.target.value)} placeholder="Añadir producto" className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground" />
+      <VoiceInput label="producto" onText={(text) => setName((current) => appendDictation(current, text))} />
       <Button type="submit" size="icon" aria-label="Añadir producto" className="size-11 shrink-0 rounded-xl"><Plus /></Button>
     </form>
     <ul className="divide-y divide-border">
