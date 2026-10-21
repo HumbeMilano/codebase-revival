@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Lock, Plus, Trash2, Zap } from "lucide-react";
+import { Check, Lock, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { splitBill } from "@/lib/split";
+import { monthKey, monthSummary, type Contribution, type LedgerBill } from "@/lib/ledger";
 import { Avatar } from "./Kiosk";
 import {
-  AISLES, BILLS, CHORES, EVENTS, MEMBERS, SHOPPING, memberBg, memberText,
-  type Bill, type Chore, type Member, type ShopItem,
+  AISLES, BILLS, CHORES, CONTRIBUTIONS, EVENTS, MEMBERS, SHOPPING, memberBg, memberText,
+  type Chore, type Member, type ShopItem,
 } from "./data";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -31,15 +31,18 @@ export interface HubState {
   setChores: React.Dispatch<React.SetStateAction<Chore[]>>;
   items: ShopItem[];
   setItems: React.Dispatch<React.SetStateAction<ShopItem[]>>;
-  bills: Bill[];
-  setBills: React.Dispatch<React.SetStateAction<Bill[]>>;
+  bills: LedgerBill[];
+  setBills: React.Dispatch<React.SetStateAction<LedgerBill[]>>;
+  contributions: Contribution[];
+  setContributions: React.Dispatch<React.SetStateAction<Contribution[]>>;
 }
 
 export function useHubState(): HubState {
   const [chores, setChores] = useState(CHORES);
   const [items, setItems] = useState(SHOPPING);
   const [bills, setBills] = useState(BILLS);
-  return { chores, setChores, items, setItems, bills, setBills };
+  const [contributions, setContributions] = useState(CONTRIBUTIONS);
+  return { chores, setChores, items, setItems, bills, setBills, contributions, setContributions };
 }
 
 function ChoreRow({ c, onToggle }: { c: Chore; onToggle: () => void }) {
@@ -64,8 +67,9 @@ const toggleChore = (s: HubState, id: string) =>
 export function Dashboard({ s, user, compact, openFinance }: { s: HubState; user: Member; compact: boolean; openFinance: () => void }) {
   const today = s.chores.filter((c) => c.when === "Hoy");
   const pending = s.items.filter((i) => !i.done);
-  const total = s.bills.reduce((a, b) => a + (b.override ?? b.base), 0);
-  const paid = s.bills.filter((b) => b.paid).reduce((a, b) => a + (b.override ?? b.base), 0);
+  const now = new Date();
+  const sum = monthSummary(s.bills, s.contributions, monthKey(now.getFullYear(), now.getMonth()), now, MEMBERS.map((m) => m.id));
+  const { total, paid } = sum;
   const mine = s.chores.filter((c) => c.memberId === user.id && !c.done);
 
   return (
@@ -112,15 +116,15 @@ export function Dashboard({ s, user, compact, openFinance }: { s: HubState; user
       </Card>
 
       <button onClick={openFinance} className={cn("text-left", !compact && "col-span-3")}>
-        <Card title="Finanzas · octubre" action={user.role !== "admin" && <Lock className="size-4 text-muted-foreground" />}>
+        <Card title="Finanzas del mes" action={user.role !== "admin" && <Lock className="size-4 text-muted-foreground" />}>
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="font-display text-3xl font-bold tabular">{money(paid)} <span className="text-base font-medium text-muted-foreground">/ {money(total)}</span></p>
-              <p className="text-xs text-muted-foreground">pagado este mes · {s.bills.filter((b) => !b.paid).length} facturas pendientes</p>
+              <p className="text-xs text-muted-foreground">pagado este mes · {sum.pendingCount} bills pendientes · aportado {money(sum.contributed)}</p>
             </div>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(paid / total) * 100}%` }} />
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${total ? (paid / total) * 100 : 0}%` }} />
           </div>
         </Card>
       </button>
@@ -208,97 +212,3 @@ export function Shopping({ s, compact }: { s: HubState; compact: boolean }) {
   );
 }
 
-export function Finance({ s, compact }: { s: HubState; compact: boolean }) {
-  const [month, setMonth] = useState(9); // octubre (0-index)
-  const monthName = new Date(2026, month, 1).toLocaleDateString("es", { month: "long", year: "numeric" });
-
-  const settlement = useMemo(() => {
-    const owed: Record<string, number> = {};
-    const paid: Record<string, number> = {};
-    for (const b of s.bills) {
-      const amt = b.override ?? b.base;
-      const shares = splitBill(amt, b.splits);
-      for (const [p, v] of Object.entries(shares)) owed[p] = (owed[p] ?? 0) + v;
-      if (b.paid && b.paidBy) paid[b.paidBy] = (paid[b.paidBy] ?? 0) + amt;
-    }
-    return MEMBERS.filter((m) => owed[m.id] || paid[m.id]).map((m) => ({
-      m, owed: owed[m.id] ?? 0, paid: paid[m.id] ?? 0, net: (paid[m.id] ?? 0) - (owed[m.id] ?? 0),
-    }));
-  }, [s.bills]);
-
-  const togglePaid = (b: Bill) =>
-    s.setBills((bs) => bs.map((x) => (x.id === b.id ? (x.paid ? { ...x, paid: false, paidBy: "" } : { ...x, paid: true, paidBy: "papa" }) : x)));
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between rounded-3xl border bg-card p-3 shadow-card">
-        <button onClick={() => setMonth((m) => m - 1)} aria-label="Mes anterior" className="grid size-10 place-items-center rounded-2xl hover:bg-secondary"><ChevronLeft className="size-5" /></button>
-        <p className="font-display text-lg font-semibold capitalize">{monthName}</p>
-        <button onClick={() => setMonth((m) => m + 1)} aria-label="Mes siguiente" className="grid size-10 place-items-center rounded-2xl hover:bg-secondary"><ChevronRight className="size-5" /></button>
-      </div>
-
-      <div className={cn("grid gap-4", compact ? "grid-cols-1" : "grid-cols-[1.4fr_1fr]")}>
-        <Card title="Facturas del mes">
-          <div className="space-y-3">
-            {s.bills.map((b) => {
-              const amt = b.override ?? b.base;
-              const shares = splitBill(amt, b.splits);
-              return (
-                <div key={b.id} className="rounded-2xl bg-secondary/60 p-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{b.icon}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold">{b.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Vence el {b.dueDay} {b.autoPay && <span className="ml-1 inline-flex items-center gap-0.5 text-accent"><Zap className="size-3" />auto</span>}
-                        {b.override !== undefined && <span className="ml-1">· base {money(b.base)} → este mes {money(b.override)}</span>}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-display text-lg font-bold tabular">{money(amt)}</p>
-                      <button onClick={() => togglePaid(b)} className={cn("mt-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold", b.paid ? "bg-primary/15 text-primary" : "bg-accent/15 text-accent")}>
-                        {b.paid ? "Pagado ✓" : "Pendiente"}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {b.splits.map((sp) => {
-                      const m = byId(sp.personId);
-                      return (
-                        <span key={sp.personId} className="flex items-center gap-1.5 rounded-full bg-background/60 py-1 pl-1 pr-2.5 text-xs">
-                          <Avatar m={m} size="sm" />
-                          <span className="font-semibold tabular">{money(shares[sp.personId] ?? 0)}</span>
-                          <span className="text-muted-foreground">{sp.type === "amount" ? "fijo" : sp.type === "percent" ? `${sp.value}%` : "igual"}</span>
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        <Card title="Liquidación · quién debe a quién">
-          <div className="space-y-3">
-            {settlement.map(({ m, owed, paid, net }) => (
-              <div key={m.id} className="flex items-center gap-3 rounded-2xl bg-secondary/60 p-3">
-                <Avatar m={m} />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold">{m.name}</p>
-                  <p className="text-xs text-muted-foreground tabular">Le toca {money(owed)} · pagó {money(paid)}</p>
-                </div>
-                <span className={cn("font-display font-bold tabular", net >= 0 ? "text-primary" : "text-destructive")}>
-                  {net >= 0 ? "+" : ""}{money(net)}
-                </span>
-              </div>
-            ))}
-            <p className="pt-1 text-xs text-muted-foreground">
-              Reparto: primero montos fijos, luego porcentajes sobre el resto y lo que queda se divide en partes iguales.
-            </p>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}

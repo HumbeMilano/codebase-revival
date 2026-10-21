@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { CheckSquare, Home, LogOut, Monitor, ShoppingCart, Smartphone, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, Kiosk, PinPad, useClock } from "./Kiosk";
-import { Chores, Dashboard, Finance, Shopping, useHubState } from "./Screens";
+import { Chores, Dashboard, Shopping, useHubState } from "./Screens";
+import { Finance } from "./Finance";
 import { MEMBERS, type Member } from "./data";
 
 type Tab = "home" | "chores" | "shopping" | "finance";
@@ -96,7 +97,7 @@ export function HubApp() {
                   {tab === "home" && <Dashboard s={s} user={user} compact={compact} openFinance={() => go("finance")} />}
                   {tab === "chores" && <Chores s={s} compact={compact} />}
                   {tab === "shopping" && <Shopping s={s} compact={compact} />}
-                  {tab === "finance" && <Finance s={s} compact={compact} />}
+                  {tab === "finance" && <Finance f={s} compact={compact} />}
                 </div>
               </main>
               {compact && (
