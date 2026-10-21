@@ -9,8 +9,8 @@ import {
   type Bill, type Chore, type Member, type ShopItem,
 } from "./data";
 
-const money = (n: number) => n.toLocaleString("es", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-const byId = (id: string) => MEMBERS.find((m) => m.id === id)!;
+const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const byId = (id: string): Member => MEMBERS.find((m) => m.id === id) ?? MEMBERS[0]!;
 
 export function Card({ title, action, children, className }: { title?: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
@@ -148,7 +148,7 @@ export function Chores({ s, compact }: { s: HubState; compact: boolean }) {
 
 export function Shopping({ s, compact }: { s: HubState; compact: boolean }) {
   const [name, setName] = useState("");
-  const [aisle, setAisle] = useState(AISLES[0]);
+  const [aisle, setAisle] = useState<string>(AISLES[0] ?? "Despensa");
 
   const add = (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,7 +227,7 @@ export function Finance({ s, compact }: { s: HubState; compact: boolean }) {
   }, [s.bills]);
 
   const togglePaid = (b: Bill) =>
-    s.setBills((bs) => bs.map((x) => (x.id === b.id ? { ...x, paid: !x.paid, paidBy: !x.paid ? "papa" : undefined } : x)));
+    s.setBills((bs) => bs.map((x) => (x.id === b.id ? (x.paid ? { ...x, paid: false, paidBy: "" } : { ...x, paid: true, paidBy: "papa" }) : x)));
 
   return (
     <div className="space-y-4">
