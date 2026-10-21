@@ -11,4 +11,4 @@
 
 - Use the shared finance visibility predicate for every financial UI surface in the PIN prototype so child visibility is consistent; this is presentation gating, not production security.
 - Calendar and notes share session-only prototype state with the dashboard; keep date-only values local and put overflow sections in the mobile More menu so navigation never scrolls horizontally. Real persistence requires Lovable Cloud.
-- Dictation runs multilingual Whisper Tiny only in a lazily created browser Web Worker with single-thread WASM; never send audio to Cloud or an AI API, keeping inference local and the UI usable.
+- Dictation runs multilingual Whisper only in a lazily created, session-reused browser Web Worker with single-thread WASM and explicitly resampled 16 kHz audio; never send audio to Cloud or an AI API, keeping inference local and the UI usable.
