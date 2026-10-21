@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CloudSun, Delete, Lock, X } from "lucide-react";
 import photo from "@/assets/kiosk-photo.jpg";
 import { MEMBERS, memberBg, type Member } from "./data";
-import { verifyPin } from "./hub.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 export function useClock() {
@@ -26,10 +26,11 @@ export function Avatar({ m, size = "md" }: { m: Member; size?: "sm" | "md" | "lg
 
 /** PIN-only entry: the PIN itself identifies who is logging in (PINs are unique). Verified on the server. */
 export async function findByPin(pin: string, adminOnly = false): Promise<Member | undefined> {
-  const found = await verifyPin({ data: { pin, adminOnly } });
+  const { data } = await supabase.rpc("verify_pin", { _pin: pin, _admin_only: adminOnly });
+  const found = data?.[0];
   if (!found) return undefined;
-  const meta = MEMBERS.find((m) => m.id === found.id);
-  return meta ? { ...meta, name: found.name, role: found.role } : undefined;
+  const meta = MEMBERS.find((m) => m.id === found.key);
+  return meta ? { ...meta, name: found.name, role: found.role as Member["role"] } : undefined;
 }
 
 export function PinPad({
