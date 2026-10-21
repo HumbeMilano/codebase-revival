@@ -1,4 +1,4 @@
-import type { Split } from "@/lib/split";
+import type { Contribution, LedgerBill } from "@/lib/ledger";
 
 export type Role = "admin" | "member";
 export interface Member {
@@ -60,35 +60,34 @@ export const SHOPPING: ShopItem[] = [
   { id: "s6", name: "Detergente de platos", aisle: "Limpieza", done: false },
 ];
 
-export interface Bill {
-  id: string;
-  name: string;
-  icon: string;
-  base: number;
-  override?: number; // monto de este mes si es distinto
-  dueDay: number;
-  paid: boolean;
-  paidBy?: string;
-  autoPay: boolean;
-  splits: Split[];
-}
-export const BILLS: Bill[] = [
-  {
-    id: "b1", name: "Luz", icon: "⚡", base: 90, override: 130, dueDay: 15, paid: true, paidBy: "papa", autoPay: false,
-    splits: [{ personId: "papa", type: "percent", value: 50 }, { personId: "mama", type: "percent", value: 50 }],
-  },
-  {
-    id: "b2", name: "Internet fibra", icon: "🌐", base: 60, dueDay: 28, paid: false, autoPay: true,
-    splits: [{ personId: "lucas", type: "amount", value: 20 }, { personId: "papa", type: "equal", value: 0 }, { personId: "mama", type: "equal", value: 0 }],
-  },
-  {
-    id: "b3", name: "Alquiler", icon: "🏠", base: 1200, dueDay: 1, paid: true, paidBy: "mama", autoPay: true,
-    splits: [{ personId: "papa", type: "percent", value: 60 }, { personId: "mama", type: "percent", value: 40 }],
-  },
-  {
-    id: "b4", name: "Agua", icon: "💧", base: 45, dueDay: 20, paid: false, autoPay: false,
-    splits: [{ personId: "papa", type: "equal", value: 0 }, { personId: "mama", type: "equal", value: 0 }],
-  },
+export const CATEGORIES: Record<string, string> = {
+  Vivienda: "🏠",
+  Teléfono: "📱",
+  Utilidades: "💡",
+  Auto: "🚗",
+  Suscripciones: "📺",
+  Internet: "🌐",
+};
+
+const two = [{ personId: "papa", type: "equal" as const, value: 0 }, { personId: "mama", type: "equal" as const, value: 0 }];
+
+export const BILLS: LedgerBill[] = [
+  { id: "b1", name: "Renta", category: "Vivienda", base: 2168.59, dueDay: 2, autoPay: true, splits: two, overrides: {} },
+  { id: "b2", name: "T-Mobile", category: "Teléfono", base: 170, dueDay: 12, autoPay: true, overrides: {},
+    splits: [...two, { personId: "lucas", type: "equal", value: 0 }] },
+  { id: "b3", name: "FPL", category: "Utilidades", base: 95, dueDay: 14, autoPay: true, splits: two, overrides: { "2026-10": { amount: 102.33 } } },
+  { id: "b4", name: "State Farm", category: "Auto", base: 119.22, dueDay: 15, autoPay: true, splits: two, overrides: {} },
+  { id: "b5", name: "YouTube Premium", category: "Suscripciones", base: 30.54, dueDay: 16, autoPay: true, splits: two, overrides: {} },
+  { id: "b6", name: "Amazon", category: "Suscripciones", base: 7.08, dueDay: 23, autoPay: true, splits: two, overrides: {} },
+  { id: "b7", name: "Quantum Fiber", category: "Internet", base: 75.32, dueDay: 27, autoPay: true, splits: two, overrides: {} },
+  { id: "b8", name: "Toyota", category: "Auto", base: 489.4, dueDay: 29, autoPay: false,
+    splits: [{ personId: "papa", type: "percent", value: 60 }, { personId: "mama", type: "percent", value: 40 }], overrides: {} },
+];
+
+export const CONTRIBUTIONS: Contribution[] = [
+  { id: "a1", personId: "papa", amount: 765.12, month: "2026-10", note: "Quincena 1" },
+  { id: "a2", personId: "mama", amount: 800, month: "2026-10", note: "Quincena 1" },
+  { id: "a3", personId: "lucas", amount: 56.67, month: "2026-10", note: "Teléfono" },
 ];
 
 export const EVENTS = [
