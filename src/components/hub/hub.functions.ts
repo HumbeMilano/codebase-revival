@@ -16,12 +16,13 @@ export const verifyPin = createServerFn({ method: "POST" })
     if (!/^\d{4}$/.test(data.pin)) return null;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const hash = await sha256(data.pin);
-    const { data: member } = await supabaseAdmin
+    const { data: member, error } = await supabaseAdmin
       .from("members")
       .select("key, name, role")
       .eq("household_id", HOUSEHOLD_ID)
       .eq("pin_hash", hash)
       .maybeSingle();
+    if (error) throw new Error(`PIN lookup failed: ${error.message}`);
     if (!member) return null;
     if (data.adminOnly && member.role !== "admin") return null;
     return { id: member.key, name: member.name, role: member.role as "admin" | "member" };
