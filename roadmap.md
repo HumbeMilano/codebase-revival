@@ -1,4 +1,4 @@
-- [ ] Add Spanish/English voice dictation; awaiting choice because Whisper is unavailable through the connected service.
+- [ ] Research free GitHub Whisper implementations for local Spanish/English dictation without metered AI calls.
 - [x] Simplify dashboard with visual counters and a compact agenda.
 - [x] Hide financial content and shortcuts for children until adult authorization; verify authorization and logout.
 - [x] Simplify shopping into one uncategorized checklist.
