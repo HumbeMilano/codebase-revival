@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { CalendarDays, CheckSquare, Home, LogOut, Monitor, MoreHorizontal, Plus, ShieldCheck, ShoppingCart, Smartphone, StickyNote, Wallet, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { CalendarDays, CheckSquare, Home, LogOut, Monitor, MoreHorizontal, Plus, ShieldCheck, ShoppingCart, Smartphone, StickyNote, Users, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { canViewFinances } from "@/lib/finance-visibility";
@@ -7,9 +7,13 @@ import { Avatar, Kiosk, PinPad, useClock } from "./Kiosk";
 import { Chores, Dashboard, Shopping, useHubState } from "./Screens";
 import { Finance } from "./Finance";
 import { FamilyCalendar, FamilyNotes } from "./Planner";
-import type { Member } from "./data";
+import { HOUSEHOLD, MEMBERS, setMembers, type Member } from "./data";
+import { HouseholdSettings, SetupHousehold, Welcome } from "./Onboarding";
+import { supabase } from "@/integrations/supabase/client";
+import { db, forgetDevice, getDeviceToken, setDeviceMode } from "@/lib/db";
+import { setHouseholdId } from "@/lib/hub-db";
 
-type Tab = "home" | "chores" | "shopping" | "finance" | "calendar" | "notes";
+type Tab = "home" | "chores" | "shopping" | "finance" | "calendar" | "notes" | "household";
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Inicio", icon: Home },
   { id: "chores", label: "Tareas", icon: CheckSquare },
@@ -17,43 +21,46 @@ const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "finance", label: "Finanzas", icon: Wallet },
   { id: "calendar", label: "Calendario", icon: CalendarDays },
   { id: "notes", label: "Notas", icon: StickyNote },
+  { id: "household", label: "Hogar", icon: Users },
 ];
+
+type Gate = { status: "loading" | "welcome" | "setup" } | { status: "ready"; mode: "account" | "device"; member: Member | null };
+
+/** Resolves who this browser is: a signed-in account, a paired tablet, or nobody yet. */
+async function resolveGate(): Promise<Gate> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = getDeviceToken();
+  setDeviceMode(session ? null : token);
+  if (!session && !token) return { status: "welcome" };
+  const { data: ctx } = await db().rpc("my_context");
+  const c = ctx?.[0];
+  if (!c) {
+    if (session) return { status: "setup" };
+    forgetDevice();
+    return { status: "welcome" };
+  }
+  setHouseholdId(c.household_id);
+  HOUSEHOLD.id = c.household_id;
+  HOUSEHOLD.name = c.household_name;
+  const { data: members } = await db().rpc("household_members");
+  setMembers(members ?? []);
+  const member = c.member_key ? MEMBERS.find((m) => m.id === c.member_key) ?? null : null;
+  return { status: "ready", mode: c.mode === "device" ? "device" : "account", member };
+}
 
 export function HubApp() {
   const [device, setDevice] = useState<"tablet" | "mobile">("tablet");
-  const [user, setUser] = useState<Member | null>(null);
-  const [tab, setTab] = useState<Tab>("home");
-  const [financeUnlocked, setFinanceUnlocked] = useState(false);
-  const [quick, setQuick] = useState(false);
-  const [askAdmin, setAskAdmin] = useState(false);
-  const [more, setMore] = useState(false);
-  const s = useHubState();
-  const now = useClock();
-
+  const [gate, setGate] = useState<Gate>({ status: "loading" });
+  const reload = useCallback(() => void resolveGate().then(setGate).catch(() => setGate({ status: "welcome" })), []);
   useEffect(() => {
     if (window.innerWidth < 900) setDevice("mobile");
-  }, []);
-
+    reload();
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT") reload();
+    });
+    return () => data.subscription.unsubscribe();
+  }, [reload]);
   const compact = device === "mobile";
-  const financialAccess = canViewFinances(user?.role, financeUnlocked);
-  const visibleTabs = TABS.filter((t) => t.id !== "finance" || financialAccess);
-
-  const go = (t: Tab) => {
-    if (t === "finance" && !financialAccess) {
-      setAskAdmin(true);
-      return;
-    }
-    setTab(t);
-  };
-
-  const logout = () => {
-    setUser(null);
-    setTab("home");
-    setFinanceUnlocked(false);
-    setQuick(false);
-    setMore(false);
-    setAskAdmin(false);
-  };
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-background px-3 py-4 sm:px-6">
@@ -68,13 +75,60 @@ export function HubApp() {
           </button>
         ))}
       </div>
-
       <div
         className={cn(
           "relative w-full overflow-hidden border bg-background shadow-card transition-all duration-500",
           compact ? "h-[800px] max-w-[400px] rounded-[2.5rem] border-[6px] border-foreground" : "aspect-[16/10] max-w-[1200px] rounded-[2rem] border-[12px] border-foreground",
         )}
       >
+        {gate.status === "loading" && <div className="grid h-full place-items-center text-muted-foreground">Cargando…</div>}
+        {gate.status === "welcome" && <Welcome compact={compact} onPaired={reload} />}
+        {gate.status === "setup" && <SetupHousehold compact={compact} onDone={reload} />}
+        {gate.status === "ready" && <HubShell key={gate.mode + (gate.member?.id ?? "")} compact={compact} mode={gate.mode} accountMember={gate.member} />}
+      </div>
+      <p className="mt-4 max-w-md text-center text-xs text-muted-foreground">
+        Demo: empareja la tablet con el código PEREZ1 y entra con PIN Papá 1111 · Mamá 2222 · Lucas 3333 · Sofía 4444.
+      </p>
+    </div>
+  );
+}
+
+function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "account" | "device"; accountMember: Member | null }) {
+  const [user, setUser] = useState<Member | null>(accountMember);
+  const [tab, setTab] = useState<Tab>("home");
+  const [financeUnlocked, setFinanceUnlocked] = useState(false);
+  const [quick, setQuick] = useState(false);
+  const [askAdmin, setAskAdmin] = useState(false);
+  const [more, setMore] = useState(false);
+  const s = useHubState();
+  const now = useClock();
+  const financialAccess = canViewFinances(user?.role, financeUnlocked);
+  const canManage = mode === "account" && user?.role === "admin";
+  const visibleTabs = TABS.filter((t) => (t.id !== "finance" || financialAccess) && (t.id !== "household" || canManage));
+
+  const go = (t: Tab) => {
+    if (t === "finance" && !financialAccess) {
+      setAskAdmin(true);
+      return;
+    }
+    setTab(t);
+  };
+
+  const logout = () => {
+    if (mode === "account") {
+      void supabase.auth.signOut();
+      return;
+    }
+    setUser(null);
+    setTab("home");
+    setFinanceUnlocked(false);
+    setQuick(false);
+    setMore(false);
+    setAskAdmin(false);
+  };
+
+  return (
+      <>
         {!user ? (
           <Kiosk compact={compact} onUnlock={setUser} />
         ) : (
@@ -84,7 +138,7 @@ export function HubApp() {
                 <>
                   <Avatar m={user} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground">Familia Pérez</p>
+                    <p className="text-xs text-muted-foreground">{HOUSEHOLD.name}</p>
                     <p className="font-display text-lg font-bold leading-tight">{TABS.find((t) => t.id === tab)?.label}</p>
                   </div>
                   <button onClick={logout} aria-label="Bloquear" className="grid size-10 place-items-center rounded-full bg-card shadow-card"><LogOut className="size-4" /></button>
@@ -116,6 +170,7 @@ export function HubApp() {
                 {tab === "finance" && financialAccess && <Finance f={s} compact={compact} />}
                 {tab === "calendar" && <FamilyCalendar events={s.events} setEvents={s.setEvents} user={user} compact={compact} />}
                 {tab === "notes" && <FamilyNotes notes={s.notes} setNotes={s.setNotes} user={user} compact={compact} />}
+                {tab === "household" && canManage && <HouseholdSettings />}
               </div>
             </main>
             {compact && (
@@ -129,7 +184,7 @@ export function HubApp() {
                 {TABS.filter((t) => t.id === "shopping").map(({ id, label, icon: Icon }) => (
                   <DockBtn key={id} active={tab === id} label={label} Icon={Icon} onClick={() => go(id)} />
                 ))}
-                <DockBtn active={tab === "calendar" || tab === "notes" || tab === "finance"} label="Más" Icon={MoreHorizontal} onClick={() => setMore(true)} />
+                <DockBtn active={tab === "calendar" || tab === "notes" || tab === "finance" || tab === "household"} label="Más" Icon={MoreHorizontal} onClick={() => setMore(true)} />
               </nav>
             )}
             {quick && (
@@ -149,7 +204,7 @@ export function HubApp() {
             {more && <div className="absolute inset-0 z-30 flex items-end bg-foreground/20 backdrop-blur-sm" onClick={() => setMore(false)}>
               <section role="dialog" aria-label="Más secciones" className="w-full rounded-t-3xl bg-card p-5 pb-8" onClick={(e) => e.stopPropagation()}>
                 <header className="mb-3 flex items-center justify-between"><h2 className="font-display text-xl font-bold">Más</h2><Button variant="ghost" size="icon" aria-label="Cerrar" onClick={() => setMore(false)}><X /></Button></header>
-                <div className="space-y-1">{visibleTabs.filter((t) => ["calendar", "notes", "finance"].includes(t.id)).map(({ id, label, icon: Icon }) => <Button key={id} variant="ghost" className="h-14 w-full justify-start rounded-xl" onClick={() => { setMore(false); go(id); }}><Icon />{label}</Button>)}</div>
+                <div className="space-y-1">{visibleTabs.filter((t) => ["calendar", "notes", "finance", "household"].includes(t.id)).map(({ id, label, icon: Icon }) => <Button key={id} variant="ghost" className="h-14 w-full justify-start rounded-xl" onClick={() => { setMore(false); go(id); }}><Icon />{label}</Button>)}</div>
               </section>
             </div>}
           </div>
@@ -167,11 +222,7 @@ export function HubApp() {
             }}
           />
         )}
-      </div>
-      <p className="mt-4 max-w-md text-center text-xs text-muted-foreground">
-        Datos reales guardados y sincronizados entre dispositivos. PINs demo: Papá 1111 · Mamá 2222 · Lucas 3333 · Sofía 4444. Con Lucas, Finanzas pide el PIN de un adulto.
-      </p>
-    </div>
+      </>
   );
 }
 
