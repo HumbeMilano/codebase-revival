@@ -29,6 +29,13 @@
       "when": 1792631647636,
       "tag": "0003_finance_authorization_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792631726616,
+      "tag": "0004_shopping_unique_products",
+      "breakpoints": true
     }
   ]
 }
