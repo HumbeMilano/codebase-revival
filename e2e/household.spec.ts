@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HOME_ID, HouseholdBackend, section, signIn } from "./backend";
+import { HOME_ID, HouseholdBackend, mockTabletPasskey, section, signIn } from "./backend";
 
 test("a real viewport can create household records and reload confirmed data", async ({
   page,
@@ -95,7 +95,7 @@ test("a real viewport can create household records and reload confirmed data", a
   await page.screenshot({ path: testInfo.outputPath("functional-finance.png"), fullPage: true });
 });
 
-test("a failed save rolls back and a later insert can be persisted", async ({ page }) => {
+test("an interrupted shopping sync keeps local changes and safely retries", async ({ page }) => {
   const backend = new HouseholdBackend();
   await backend.install(page);
   await signIn(page);
@@ -104,11 +104,11 @@ test("a failed save rolls back and a later insert can be persisted", async ({ pa
   await page.getByLabel("Producto", { exact: true }).fill("Producto fallido");
   await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
   await expect.poll(() => backend.writeRequests).toBe(1);
-  await expect(page.getByRole("button", { name: "Producto fallido", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Producto fallido", exact: true })).toBeVisible();
   expect(backend.rows["shopping_items"]).toHaveLength(0);
   await page.getByLabel("Producto", { exact: true }).fill("Producto confirmado");
   await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
-  await expect.poll(() => backend.rows["shopping_items"]?.length).toBe(1);
+  await expect.poll(() => backend.rows["shopping_items"]?.length).toBe(2);
   await page.reload();
   await section(page, "Compras");
   await expect(
@@ -140,6 +140,7 @@ test("platform action failure remains visible", async ({ page }) => {
 });
 
 test("paired tablet requires an adult grant and revokes it when locked", async ({ page }) => {
+  await mockTabletPasskey(page);
   const backend = new HouseholdBackend();
   backend.rows["bills"] = [
     {
@@ -157,8 +158,7 @@ test("paired tablet requires an adult grant and revokes it when locked", async (
   await backend.install(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Tablet", exact: true }).click();
-  await page.getByLabel("Código de emparejamiento").fill("ABCDEF123456");
-  await page.getByRole("button", { name: "Emparejar", exact: true }).click();
+  await page.getByRole("button", { name: "Vincular con passkey", exact: true }).click();
   await page.getByRole("button", { name: "Entrar con PIN", exact: true }).click();
   await page.getByLabel("PIN de 4 números").fill("5678");
   await expect(page.getByRole("heading", { name: "Hola, Nico", exact: true })).toBeVisible();

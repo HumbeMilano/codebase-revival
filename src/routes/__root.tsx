@@ -10,6 +10,7 @@ import {
 import { useEffect } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
+import { AppUpdates } from "@/components/AppUpdates";
 
 function NotFoundComponent() {
   return (
@@ -74,7 +75,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "HomeHub · Skendal" },
       { name: "description", content: "El centro de mando de tu hogar." },
       { property: "og:title", content: "HomeHub" },
@@ -97,6 +98,7 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster theme="light" position="top-center" />
+      <AppUpdates />
     </QueryClientProvider>
   );
 }

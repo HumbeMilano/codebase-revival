@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { PersistedSetter } from "@/lib/persisted-collection";
 import { cn } from "@/lib/utils";
-import { appendDictation } from "@/lib/dictation";
-import { VoiceInput } from "./VoiceInput";
 import { Avatar } from "./Kiosk";
 import { MEMBERS, type Member } from "./data";
 import { dateKey, parseDate, type FamilyEvent, type FamilyNote } from "./planner-data";
@@ -254,12 +252,6 @@ export function FamilyCalendar({
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                   className={field}
                 />
-                <VoiceInput
-                  label="título"
-                  onText={(text) =>
-                    setDraft((d) => (d ? { ...d, title: appendDictation(d.title, text) } : d))
-                  }
-                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -302,12 +294,6 @@ export function FamilyCalendar({
                 <label htmlFor="event-note" className="text-sm font-semibold">
                   Nota
                 </label>
-                <VoiceInput
-                  label="nota"
-                  onText={(text) =>
-                    setDraft((d) => (d ? { ...d, note: appendDictation(d.note, text) } : d))
-                  }
-                />
               </div>
               <textarea
                 id="event-note"
@@ -486,12 +472,6 @@ export function FamilyNotes({
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                   className={field}
                 />
-                <VoiceInput
-                  label="título"
-                  onText={(text) =>
-                    setDraft((d) => (d ? { ...d, title: appendDictation(d.title, text) } : d))
-                  }
-                />
               </div>
             </div>
             <div>
@@ -499,12 +479,6 @@ export function FamilyNotes({
                 <label htmlFor="note-body" className="text-sm font-semibold">
                   Contenido
                 </label>
-                <VoiceInput
-                  label="contenido"
-                  onText={(text) =>
-                    setDraft((d) => (d ? { ...d, body: appendDictation(d.body, text) } : d))
-                  }
-                />
               </div>
               <textarea
                 id="note-body"

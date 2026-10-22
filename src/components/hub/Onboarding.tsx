@@ -12,6 +12,9 @@ import {
   readPendingInvite,
 } from "@/lib/account-validation";
 import { Avatar } from "./Kiosk";
+import { pairTabletWithPasskey, passkeyError, supportsPasskeys } from "@/lib/passkeys";
+import { PasskeySettings } from "./PasskeySettings";
+import { HouseholdPhotos } from "./HouseholdPhotos";
 import { MEMBERS, setMembers as setHouseholdMembers } from "./data";
 import {
   AlertDialog,
@@ -42,6 +45,8 @@ const errMsg = (e: { message?: string } | null) => {
     return "No se pudo conectar. Revisa tu conexión y vuelve a intentarlo.";
   if (m.includes("Invalid login")) return "Correo o contraseña incorrectos";
   if (m.includes("Email not confirmed")) return "Confirma tu correo antes de entrar";
+  if (m.includes("different verified email"))
+    return "Esta invitación corresponde a otro correo. Entra con la dirección que recibió la invitación y confírmala.";
   if (m.includes("Already in household")) return "Esta cuenta ya pertenece a un hogar";
   if (m.includes("Name required")) return "Escribe un nombre válido";
   if (m.includes("PIN already")) return "Ese PIN ya lo usa otra persona del hogar";
@@ -97,10 +102,17 @@ export function Welcome({
   compact: boolean;
   onPaired: (token: string) => void;
 }) {
-  const [view, setView] = useState<"login" | "signup" | "pair" | "forgot">("login");
-  const [email, setEmail] = useState("");
+  const [view, setView] = useState<"login" | "signup" | "pair" | "forgot">(() =>
+    pendingInvitation() ? "signup" : "login",
+  );
+  const [email, setEmail] = useState(() => {
+    const parsed = credentials.shape.email.safeParse(
+      new URLSearchParams(window.location.search).get("email"),
+    );
+    return parsed.success ? parsed.data : "";
+  });
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
+  const [deviceName, setDeviceName] = useState("Tablet del hogar");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [invitation, setInvitation] = useState("");
@@ -114,13 +126,11 @@ export function Welcome({
       if (busy) return;
       setBusy(true);
       if (view === "pair") {
-        const { data, error } = await supabase.rpc("pair_device", {
-          _code: code,
-          _name: "Tablet de casa",
-        });
-        setBusy(false);
-        if (error || !data) {
-          toast.error(errMsg(error));
+        let data: string;
+        try {
+          data = await pairTabletWithPasskey(deviceName);
+        } catch (reason) {
+          toast.error(passkeyError(reason));
           return;
         }
         localStorage.setItem(DEVICE_KEY, data);
@@ -240,23 +250,32 @@ export function Welcome({
       </div>
       <form onSubmit={submit} className="space-y-4 rounded-3xl bg-card p-5 shadow-card">
         {view === "pair" ? (
-          <label className="block text-sm font-semibold">
-            Código de emparejamiento
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="ABCD1234EF56"
-              required
-              maxLength={12}
-              autoComplete="off"
-              autoCapitalize="characters"
-              className={cn(field, "text-center font-display text-2xl tracking-[0.3em]")}
-            />
-            <span className="mt-2 block text-xs font-normal text-muted-foreground">
-              Un adulto lo genera en su móvil, en Hogar → Tablets. El código caduca a los 10
-              minutos.
-            </span>
-          </label>
+          <div className="space-y-3">
+            <label className="block text-sm font-semibold">
+              Nombre de la tablet
+              <input
+                value={deviceName}
+                onChange={(event) => setDeviceName(event.target.value)}
+                maxLength={100}
+                required
+                className={field}
+              />
+            </label>
+            <p className="text-sm text-muted-foreground">
+              Usa la passkey de una persona adulta. En la ventana del sistema, elige «Usar otro
+              dispositivo» para mostrar el QR y autorizar desde tu móvil con Bluetooth activado.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              La tablet quedará vinculada al hogar y seguirá pidiendo PIN para identificar a cada
+              persona. La cuenta personal del adulto no se guarda en la tablet.
+            </p>
+            {!supportsPasskeys() && (
+              <p role="alert" className="text-sm text-destructive">
+                Este navegador no admite passkeys. Actualiza el sistema o utiliza un navegador
+                compatible.
+              </p>
+            )}
+          </div>
         ) : (
           <>
             <label className="block text-sm font-semibold">
@@ -289,7 +308,7 @@ export function Welcome({
                 Invitación (opcional)
                 <input
                   value={invitation}
-                  maxLength={16}
+                  maxLength={32}
                   onChange={(e) => setInvitation(e.target.value.toUpperCase())}
                   className={field}
                 />
@@ -302,7 +321,7 @@ export function Welcome({
             "Un momento…"
           ) : view === "pair" ? (
             <>
-              <Tablet /> Emparejar
+              <Tablet /> Vincular con passkey
             </>
           ) : view === "signup" ? (
             "Crear cuenta"
@@ -461,10 +480,10 @@ export function HouseholdSettings({
 }: {
   onMembersChanged?: () => void | Promise<void>;
 }) {
+  const [inviteEmail, setInviteEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<"member" | "admin">("member");
   const [invite, setInvite] = useState<string | null>(null);
-  const [pair, setPair] = useState<string | null>(null);
   const [devices, setDevices] = useState<
     { id: string; name: string; created_at: string; revoked: boolean }[]
   >([]);
@@ -476,6 +495,8 @@ export function HouseholdSettings({
       expires_at: string;
       used_at: string | null;
       revoked_at: string | null;
+      recipient_email: string | null;
+      delivery_status: string;
     }[]
   >([]);
   const [busy, setBusy] = useState(false);
@@ -509,7 +530,7 @@ export function HouseholdSettings({
   }, []);
   const loadInvites = useCallback(async () => {
     try {
-      const { data, error } = await supabase.rpc("list_invites");
+      const { data, error } = await supabase.rpc("list_email_invites");
       if (error) throw error;
       setInvites(data ?? []);
     } catch {
@@ -557,45 +578,56 @@ export function HouseholdSettings({
       toast.error("No se pudo copiar. Selecciona el código para copiarlo manualmente.");
     }
   };
-  const makeInvite = async (e: React.FormEvent) => {
-    if (busy) return;
-    try {
-      e.preventDefault();
-      if (busy || !name.trim()) return;
-      setBusy(true);
-      const { data, error } = await supabase.rpc("create_invite", {
-        _member_name: name,
-        _role: role,
-      });
-      setBusy(false);
-      if (error) {
-        toast.error(errMsg(error));
-        return;
-      }
-      setInvite(data);
-      setName("");
-      loadInvites();
-    } catch {
-      toast.error("No se pudo conectar. Revisa la conexión y vuelve a intentarlo.");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const makePair = async () => {
+  const sendInvite = async (recipient: {
+    name: string;
+    email: string;
+    role: string;
+    code?: string;
+  }) => {
     if (busy) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase.rpc("create_pairing_code");
-      if (error) {
-        toast.error(errMsg(error));
-        return;
-      }
-      setPair(data);
-    } catch {
-      toast.error("No se pudo conectar. Revisa la conexión y vuelve a intentarlo.");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Vuelve a entrar para invitar a otra persona.");
+      const response = await fetch("/api/invitations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(recipient),
+      });
+      const result = (await response.json()) as {
+        sent?: boolean;
+        error?: string;
+        warning?: string;
+      };
+      if (!response.ok || !result.sent)
+        throw new Error(result.error ?? "No se pudo enviar la invitación.");
+      setInvite(recipient.email);
+      if (result.warning) toast(result.warning);
+      else toast.success("Invitación enviada por correo");
+      setName("");
+      setInviteEmail("");
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "No se pudo conectar para enviar la invitación.",
+      );
     } finally {
       setBusy(false);
+      void loadInvites();
     }
+  };
+  const makeInvite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const valid = credentials.shape.email.safeParse(inviteEmail);
+    if (!valid.success || !name.trim()) {
+      toast.error("Escribe un nombre y correo válidos");
+      return;
+    }
+    await sendInvite({ name: name.trim(), email: valid.data, role });
   };
   const revoke = async (id: string) => {
     if (busy) return;
@@ -711,6 +743,7 @@ export function HouseholdSettings({
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      <HouseholdPhotos />
       <section className="rounded-[1.75rem] bg-lilac p-5">
         <h2 className="flex items-center gap-2 font-display text-xl font-bold">
           <UserPlus className="size-5" /> Invitar
@@ -725,6 +758,19 @@ export function HouseholdSettings({
             placeholder="Nombre"
             className={field}
           />
+          <label className="block text-sm font-semibold">
+            Correo de la persona
+            <input
+              type="email"
+              required
+              maxLength={254}
+              autoComplete="email"
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              placeholder="persona@correo.com"
+              className={field}
+            />
+          </label>
           <div className="grid grid-cols-2 gap-2">
             {(
               [
@@ -746,22 +792,13 @@ export function HouseholdSettings({
             ))}
           </div>
           <Button type="submit" disabled={busy} className="w-full rounded-xl">
-            Crear invitación
+            Enviar invitación por correo
           </Button>
         </form>
         {invite && (
-          <Button
-            variant="ghost"
-            onClick={() => copy(`${window.location.origin}/?invite=${invite}`)}
-            className="mt-3 h-auto w-full gap-2 whitespace-normal bg-card p-4"
-          >
-            <span className="break-all font-mono text-lg font-bold">{invite}</span>
-            <Copy className="size-5 shrink-0" />
-          </Button>
-        )}
-        {invite && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Válida 7 días. Se usa al crear cuenta → “Tengo invitación”.
+          <p role="status" className="mt-3 rounded-2xl bg-card p-4 text-sm">
+            Invitación enviada a {invite}. Al abrir el correo, la persona podrá registrarse o entrar
+            con esa dirección.
           </p>
         )}
         <ul className="mt-4 divide-y divide-border">
@@ -779,18 +816,35 @@ export function HouseholdSettings({
                   <p className="break-words text-sm font-semibold">
                     {i.member_name} · {i.role === "admin" ? "Adulto" : "Hijo/a"}
                   </p>
-                  <p className="text-xs text-muted-foreground">{status}</p>
+                  <p className="break-all text-xs text-muted-foreground">
+                    {i.recipient_email ? `${i.recipient_email} · ` : ""}
+                    {status}
+                    {i.delivery_status === "pending" && status === "Pendiente"
+                      ? " · Correo pendiente de envío"
+                      : ""}
+                  </p>
                 </div>
                 {status === "Pendiente" && (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Copiar invitación de ${i.member_name}`}
-                      onClick={() => copy(`${window.location.origin}/?invite=${i.code}`)}
-                    >
-                      <Copy />
-                    </Button>
+                    {i.recipient_email && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        aria-label={`Reenviar invitación de ${i.member_name}`}
+                        onClick={() =>
+                          void sendInvite({
+                            name: i.member_name,
+                            email: i.recipient_email!,
+                            role: i.role,
+                            code: i.code,
+                          })
+                        }
+                      >
+                        Reenviar
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -799,7 +853,7 @@ export function HouseholdSettings({
                         void supabase.rpc("revoke_invite", { _code: i.code }).then(({ error }) => {
                           if (error) toast.error("No se pudo cancelar");
                           else {
-                            if (invite === i.code) setInvite(null);
+                            setInvite(null);
                             loadInvites();
                           }
                         })
@@ -818,19 +872,11 @@ export function HouseholdSettings({
         <h2 className="flex items-center gap-2 font-display text-xl font-bold">
           <Tablet className="size-5" /> Tablets
         </h2>
-        <Button disabled={busy} onClick={() => void makePair()} className="mt-4 w-full rounded-xl">
-          Generar código
-        </Button>
-        {pair && (
-          <p className="mt-3 break-all rounded-2xl bg-card p-4 text-center font-mono text-2xl font-bold tracking-[0.1em] select-all">
-            {pair}
-          </p>
-        )}
-        {pair && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Válido 10 minutos. En la tablet: Tablet → código.
-          </p>
-        )}
+        <p className="my-4 text-sm text-muted-foreground">
+          En la tablet abre HomeHub → Tablet → Vincular con passkey. Usa el QR del sistema desde tu
+          móvil. Después podrás revocarla desde esta lista.
+        </p>
+        <PasskeySettings />
         <ul className="mt-4 space-y-2">
           {devices.map((d) => (
             <li key={d.id} className="flex items-center gap-2 rounded-xl bg-card p-3 text-sm">

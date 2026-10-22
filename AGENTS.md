@@ -16,7 +16,7 @@
 - This is a functional household application, not a device preview. Use responsive layouts and real household data. Do not restore demo PINs, fixed weather, fixed calendar dates or fictitious agenda entries.
 - Use the shared finance visibility predicate for every financial UI surface; financial tables also require server-side authorization through `db()`.
 - Calendar and notes persist in household tables. Keep date-only values local, and put overflow navigation in the mobile More menu so navigation never scrolls horizontally.
-- Dictation uses multilingual Whisper in a lazily created, session-reused browser Web Worker, single-thread WASM and explicitly resampled 16 kHz audio. Never send audio to Cloud or an AI API.
+- Dictation was removed at the owner's request. Do not add microphone controls, speech models or audio processing dependencies.
 - Resolve authentication into a snapshot before committing household/member state. Ignore stale resolutions before they can mutate shared context. Bind queued writes to their original household and client; a later login must not redirect them.
 - Keep member data reactive across settings, selectors, roles and the tablet kiosk. Invalidate it after member operations and revalidate it between devices.
 - Evaluate collection updates outside replayable React state updaters. Separate confirmed and optimistic data, serialize dependent writes, and reconcile failures. Do not announce a successful save before confirmation or promise offline persistence without a durable implementation.
@@ -41,4 +41,4 @@
 - Test database changes in an isolated disposable database, including permissions, conflicts and concurrency. Inspect the target project's actual schema before applying new migrations.
 - Use Bun 1.4.3 with `bun.lock` and frozen installs. Run typecheck, tests, lint, format checks and build; browser smoke tests use a synthetic local backend.
 - Do not infer production verification from local tests. Record any live flows that still require confirmation in the deployed environment.
-- Production hosting and backend resources must stay on Free plans under the user's $0 infrastructure budget. Static Cloudflare assets must stay below 25 MiB per file. Keep the pinned ONNX CDN binary aligned with the installed package; audio inference remains local.
+- Production hosting and backend resources must stay on Free plans under the user's $0 infrastructure budget. Static Cloudflare assets must stay below 25 MiB per file.

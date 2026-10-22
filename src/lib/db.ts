@@ -100,6 +100,7 @@ export function invalidateDbContext() {
   current = null;
   if (expiryTimer) clearTimeout(expiryTimer);
   financeChanged();
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("homehub-db-invalidated"));
 }
 
 /** Household clients remain bound to their identity, including queued writes. */

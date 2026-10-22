@@ -28,7 +28,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
-function createSupabaseClient() {
+function createSupabaseClient(transient = false) {
   const SUPABASE_URL = import.meta.env["VITE_SUPABASE_URL"];
   const SUPABASE_PUBLISHABLE_KEY = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
 
@@ -47,11 +47,15 @@ function createSupabaseClient() {
       fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
     },
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
+      persistSession: !transient,
+      autoRefreshToken: !transient,
+      detectSessionInUrl: !transient,
+      ...(transient ? { storageKey: `homehub-pair-${crypto.randomUUID()}` } : {}),
     },
   });
 }
+
+export const createPairingClient = () => createSupabaseClient(true);
 
 let _supabase: ReturnType<typeof createSupabaseClient> | undefined;
 

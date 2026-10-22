@@ -28,6 +28,7 @@ export interface Contribution {
   personId: string;
   amount: number;
   month: string; // YYYY-MM
+  date?: string | null;
   note?: string;
 }
 

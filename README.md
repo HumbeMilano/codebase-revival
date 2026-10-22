@@ -1,8 +1,8 @@
 # HomeHub · Codebase Revival
 
-Aplicación para organizar un hogar desde el móvil o una tablet compartida: tareas, compras, calendario, notas y gastos. Usa React 19, TanStack Router, Vite, Tailwind y Supabase. El dictado procesa audio localmente con Whisper en un Web Worker.
+Aplicación para organizar un hogar desde el móvil o una tablet compartida: tareas, compras, calendario, notas y gastos. Usa React 19, TanStack Router, Vite, Tailwind y Supabase.
 
-La aplicación se prepara para `https://app.skendal.com` y su web de presentación para `https://skendal.com`, alojadas como archivos estáticos en Cloudflare. Consulta [Producción](docs/production.md) para las cuentas, el backend y la activación del correo. La aplicación no necesita servicios de Lovable. Se conserva su historial Git; no reescribas commits publicados ni hagas force push.
+La aplicación está publicada en `https://app.skendal.com` y su web de presentación para `https://skendal.com`, alojadas como archivos estáticos en Cloudflare. Consulta [Producción](docs/production.md) para las cuentas, el backend y la activación del correo. La aplicación no necesita servicios de Lovable. Se conserva su historial Git; no reescribas commits publicados ni hagas force push.
 
 ## Desarrollo
 
@@ -25,12 +25,16 @@ Guarda la configuración del proyecto en `.env.local`. Las variables `VITE_*` se
 
 - Una persona crea una cuenta y confirma su correo. Después crea un hogar o acepta una invitación de un adulto.
 - Las cuentas están vinculadas a un miembro del hogar. El rol adulto/hijo se guarda en tablas protegidas, separado del perfil editable.
-- Un adulto genera un código temporal para vincular una tablet. La tablet accede al hogar con un token revocable y cada persona entra con su PIN.
+- Un adulto registra una passkey desde su móvil y vincula la tablet mediante la verificación del sistema (QR y Bluetooth en el método «Usar otro dispositivo»). La tablet accede al hogar con un token revocable y cada persona entra con su PIN.
 - Finanzas exige un adulto o una autorización de PIN adulto válida, vinculada a la sesión o tablet. Ocultar una sección no sustituye la autorización de servidor.
-- La información se persiste en Postgres y se refresca entre dispositivos. Una operación fallida debe mostrar el error y reconciliar el estado; no se promete una cola durable de cambios sin conexión.
-- El dictado requiere descargar el modelo la primera vez y permiso de micrófono. El audio se convierte a 16 kHz y no se envía a una API de IA.
+- La información se persiste en Postgres y se refresca entre dispositivos. Las compras se guardan en IndexedDB y una cola durable reintenta sincronizarlas; los conflictos requieren una elección explícita. El resto de las funciones necesita conexión.
+- Las invitaciones se envían por correo y abren el registro. Solo las puede aceptar la dirección confirmada que las recibió.
+- Las tareas realizadas permanecen en Actuales durante 72 horas y después aparecen en Archivadas.
+- Los aportes tienen fecha (hoy por defecto); el mes corresponde a la fecha elegida.
+- Los adultos gestionan hasta 12 fotos privadas para el carrusel de la pantalla de bloqueo, que ocupa todo el viewport.
+- Se retiraron el dictado, el micrófono y las dependencias de procesamiento de audio.
 
-No existen credenciales universales de demostración. Los códigos de invitación, PIN y códigos de tablet pertenecen a cada hogar.
+No existen credenciales universales de demostración. Las invitaciones, PIN y tokens revocables de tablet pertenecen a cada hogar.
 
 ## Base de datos
 
@@ -70,6 +74,6 @@ bunx playwright install chromium
 bun run test:e2e
 ```
 
-La CI ejecuta las mismas comprobaciones y guarda los resultados del navegador cuando hay un fallo. La compilación genera la SPA estática en `dist`; `bun run preview` permite verificarla antes de publicarla. `site/` contiene la web de presentación, independiente de la aplicación. Los archivos `wrangler.jsonc` y `wrangler.site.jsonc` describen ambos destinos.
+La CI ejecuta las mismas comprobaciones y guarda los resultados del navegador cuando hay un fallo. La compilación genera la SPA estática en `dist` y el servidor privado de invitaciones en `worker-dist`; `bun run preview` permite verificarla antes de publicarla. `site/` contiene la web de presentación, independiente de la aplicación. Los archivos `wrangler.jsonc` y `wrangler.site.jsonc` describen ambos destinos.
 
-Las pruebas locales no sustituyen la verificación en el backend desplegado: registro confirmado, invitaciones, recuperación, avatar privado, dos dispositivos, revocación, suspensión y dictado en iPad/Android reales. No actives límites de planes ni cobros sin definir antes las condiciones del producto.
+Las pruebas locales no sustituyen la verificación en el backend desplegado: registro confirmado, invitaciones, recuperación, avatar privado, dos dispositivos, revocación, suspensión y passkeys en iPad/Android reales. No actives límites de planes ni cobros sin definir antes las condiciones del producto.
