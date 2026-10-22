@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 import uuid
 
@@ -74,6 +75,31 @@ def run():
         time.sleep(.2)
     else:
         raise RuntimeError('PostgreSQL did not become ready')
+    if sys.argv[1:] == ['--empty-install']:
+        sql((ROOT / 'scripts/database-bootstrap.sql').read_text())
+        prepared = execute([sys.executable, str(ROOT / 'scripts/prepare-empty-database.py')])
+        assert prepared.returncode == 0, prepared.stderr
+        sql(prepared.stdout)
+        check('new install contains no households or accounts', sql('SELECT (SELECT count(*) FROM households)+(SELECT count(*) FROM auth.users);'), '0')
+        check('new install contains no demo finance or members', sql('SELECT (SELECT count(*) FROM members)+(SELECT count(*) FROM bills)+(SELECT count(*) FROM pairing_codes);'), '0')
+        migration_count = len(list((ROOT / 'drizzle/migrations').glob('*.sql'))) + len(list((ROOT / 'supabase/migrations').glob('*.sql')))
+        check('new installation tracks every source migration', sql('SELECT count(*) FROM drizzle.__drizzle_migrations;'), str(migration_count))
+        check('all new-install constraints are validated', sql("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='public' AND NOT c.convalidated;"), '0')
+        check('admin allowlist is private', sql("SELECT has_schema_privilege('authenticated','homehub_private','USAGE');"), 'f')
+        sql("INSERT INTO homehub_private.platform_owners(email) VALUES('owner@example.invalid');")
+        sql(f"INSERT INTO auth.users(id,email) VALUES('{USER_A}','owner@example.invalid');")
+        check('unverified owner has no administrator role', sql('SELECT count(*) FROM user_roles;'), '0')
+        sql(f"UPDATE auth.users SET email_confirmed_at=now() WHERE id='{USER_A}';")
+        check('verified allowlisted owner is provisioned', sql(f"SELECT am_platform_admin();", user=USER_A), 't')
+        sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{USER_B}','other@example.invalid',now());")
+        check('ordinary verified account stays unprivileged', sql('SELECT am_platform_admin();', user=USER_B), 'f')
+        sql('SELECT claim_platform_admin();', user=USER_B, fail='permission denied')
+        sql("INSERT INTO homehub_private.platform_owners(email) VALUES('forbidden@example.invalid');", user=USER_B, fail='permission denied')
+        check('only designated owner receives platform administration', sql('SELECT count(*) FROM user_roles;'), '1')
+        repeated = execute([sys.executable, str(ROOT / 'scripts/prepare-empty-database.py')])
+        sql(repeated.stdout, fail='Empty installation requires')
+        print(f'\n{COUNT} empty-install checks passed (plus permission and rerun guards).', flush=True)
+        return
     legacy = [ROOT / 'scripts/database-bootstrap.sql', *sorted((ROOT / 'drizzle/migrations').glob('*.sql'))]
     for path in legacy:
         sql(path.read_text())
@@ -200,6 +226,8 @@ def run():
 
 
 if __name__ == '__main__':
+    if sys.argv[1:] not in ([], ['--empty-install']):
+        raise SystemExit('Usage: test-database.py [--empty-install]')
     try:
         run()
     finally:

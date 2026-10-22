@@ -1,12 +1,12 @@
 # HomeHub · Codebase Revival
 
-Aplicación para organizar un hogar desde el móvil o una tablet compartida: tareas, compras, calendario, notas y gastos. Usa React 19, TanStack Start, Tailwind y Supabase/Lovable Cloud. El dictado procesa audio localmente con Whisper en un Web Worker.
+Aplicación para organizar un hogar desde el móvil o una tablet compartida: tareas, compras, calendario, notas y gastos. Usa React 19, TanStack Router, Vite, Tailwind y Supabase. El dictado procesa audio localmente con Whisper en un Web Worker.
 
-El proyecto está conectado a [Lovable](https://lovable.dev/projects/1a63478a-d161-4f28-bbe7-60ca09fd441f). Los cambios integrados en la rama conectada se sincronizan con su editor. No reescribas historia publicada ni hagas force push.
+La aplicación se prepara para `https://app.skendal.com` y su web de presentación para `https://skendal.com`, alojadas como archivos estáticos en Cloudflare. Consulta [Producción](docs/production.md) para las cuentas, el backend y la activación del correo. La aplicación no necesita servicios de Lovable. Se conserva su historial Git; no reescribas commits publicados ni hagas force push.
 
 ## Desarrollo
 
-Requisitos: Node.js 22.12 o posterior, Bun 1.4.3 y un proyecto Supabase/Lovable configurado.
+Requisitos: Node.js 22.12 o posterior, Bun 1.4.3 y un proyecto Supabase configurado.
 
 ```sh
 git clone https://github.com/HumbeMilano/codebase-revival.git
@@ -19,7 +19,7 @@ bun run dev
 
 Abre la dirección que muestre Vite. `bun.lock` es el lockfile canónico; usa una instalación congelada en CI. No añadas un segundo lockfile de npm o pnpm.
 
-La configuración pública del proyecto puede estar versionada por la integración de Lovable. Guarda cambios locales en `.env.local`. Las variables `VITE_*` se incluyen en el navegador: solo admiten la URL y la clave **publicable**. Nunca pongas claves secretas o `service_role`, contraseñas ni URLs administrativas de base de datos en ellas.
+Guarda la configuración del proyecto en `.env.local`. Las variables `VITE_*` se incluyen en el navegador: solo admiten la URL y la clave **publicable**. Nunca pongas claves secretas o `service_role`, contraseñas ni URLs administrativas de base de datos en ellas.
 
 ## Acceso y datos
 
@@ -40,13 +40,13 @@ El historial inicial está en `drizzle/migrations/0000_*.sql` a `0010_*.sql`. La
 
 `drizzle/schema.ts` y los snapshots vacíos son artefactos históricos y no describen la base existente. Se retiró la herramienta de generación para evitar un push accidental de ese esquema vacío. Inspecciona el esquema real y usa migraciones SQL revisadas.
 
-Para un proyecto existente, verifica qué migraciones ya están aplicadas antes de ejecutar las pendientes. Para un proyecto nuevo, provisiona Supabase Auth/Storage, aplica primero el historial inicial y después las migraciones de `supabase/migrations` por fecha. Usa una herramienta de migración que registre cada archivo aplicado; no ejecutes todo el historial a ciegas contra una base existente. Los scripts de prueba de la base usan datos sintéticos y deben apuntar exclusivamente a una base desechable.
+Para un proyecto existente, verifica qué migraciones ya están aplicadas antes de ejecutar las pendientes. Para un proyecto Supabase nuevo y vacío, `scripts/prepare-empty-database.py` genera una instalación atómica, registra el hash de cada archivo en `drizzle.__drizzle_migrations` y retira únicamente los datos de ejemplo del historial inicial. El script se niega a ejecutarse sobre datos de aplicación o cuentas existentes. Consulta el procedimiento en [Producción](docs/production.md). Los scripts de prueba usan datos sintéticos y deben apuntar exclusivamente a una base desechable.
 
 La migración conserva registros históricos al añadir algunas restricciones con `NOT VALID`: se comprueban las escrituras nuevas y las filas modificadas, pero no se borran ni reescriben datos previos automáticamente. Revisa los posibles registros heredados y valida las restricciones después de reconciliarlos ejecutando `scripts/validate-constraints.sql` mediante la conexión administrativa del proyecto. La validación falla ante inconsistencias y no elimina ni reescribe datos.
 
-El primer administrador de plataforma se aprovisiona mediante una operación administrativa controlada por el propietario. Tras verificar el UUID en Supabase Auth, un operador con acceso administrativo puede ejecutar `INSERT INTO public.user_roles (user_id, role) VALUES ('<UUID-verificado>', 'platform_admin') ON CONFLICT DO NOTHING;`. La app no permite a la primera cuenta registrada reclamar ese privilegio. No expongas credenciales administrativas para completar ese paso.
+El primer administrador se configura mediante la lista privada `homehub_private.platform_owners`, accesible solo al propietario del backend. La migración `20261022131820_verified_platform_owner.sql` concede el rol únicamente después de que Supabase Auth confirme el correo registrado. También es posible aprovisionar un UUID verificado desde una conexión administrativa. La app no permite reclamar ese privilegio públicamente.
 
-Antes de publicar, configura en Supabase/Lovable los orígenes y redirecciones permitidas de confirmación y recuperación de contraseña. Comprueba también el bucket privado de avatares y los permisos de las RPC.
+Antes de publicar, configura en Supabase el SMTP y las redirecciones permitidas de confirmación y recuperación de contraseña. Comprueba también el bucket privado de avatares y los permisos de las RPC.
 
 ## Comprobaciones
 
@@ -58,6 +58,7 @@ bun run format:check
 bun run build
 bun audit --audit-level=high
 bun run test:db # Requiere Python 3 y Docker; crea una base desechable.
+python3 scripts/test-database.py --empty-install
 ```
 
 `bun run check` ejecuta tipado, pruebas unitarias, lint, formato y compilación. `bun run format` aplica formato; mantenlo separado de cambios de comportamiento para facilitar su revisión.
@@ -69,6 +70,6 @@ bunx playwright install chromium
 bun run test:e2e
 ```
 
-La CI ejecuta las mismas comprobaciones y guarda los resultados del navegador cuando hay un fallo. La compilación genera un destino Nitro/Cloudflare; `bun run preview` permite verificar el build antes de publicarlo.
+La CI ejecuta las mismas comprobaciones y guarda los resultados del navegador cuando hay un fallo. La compilación genera la SPA estática en `dist`; `bun run preview` permite verificarla antes de publicarla. `site/` contiene la web de presentación, independiente de la aplicación. Los archivos `wrangler.jsonc` y `wrangler.site.jsonc` describen ambos destinos.
 
 Las pruebas locales no sustituyen la verificación en el backend desplegado: registro confirmado, invitaciones, recuperación, avatar privado, dos dispositivos, revocación, suspensión y dictado en iPad/Android reales. No actives límites de planes ni cobros sin definir antes las condiciones del producto.

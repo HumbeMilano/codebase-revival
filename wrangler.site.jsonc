@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "skendal-web",
+  "compatibility_date": "2026-10-22",
+  "assets": { "directory": "./site" },
+  "routes": [{ "pattern": "skendal.com", "custom_domain": true }],
+}

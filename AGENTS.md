@@ -23,7 +23,7 @@
 
 ## Backend and security
 
-- Household data lives in Lovable Cloud/Postgres; context comes from `my_context()`. Always query household data through `db()` so paired tablets send the device token header.
+- Household data lives in the owner's Supabase project; context comes from `my_context()`. Always query household data through `db()` so paired tablets send the device token header. The app is a static Vite/TanStack Router SPA, independent of Lovable runtime services.
 - PIN verification stays in Postgres. All PIN authorization paths, including finance authorization, must share server-side attempt limits. Never introduce client PIN checks or server-function PIN lookups against a potentially different backend URL.
 - Every household table is RLS-scoped. Suspension must also be checked by privileged RPCs; `SECURITY DEFINER` bypasses RLS and therefore needs its own authorization checks.
 - Household/invitation/pairing/device/member mutations use reviewed RPCs. Revalidate authorization under the household lock when changing roles or members; concurrent calls must not remove the last adult.
@@ -32,6 +32,7 @@
 - Personal profiles contain private avatar paths and preferences only; roles remain in protected household members. Restrict avatar storage to the owner's UUID folder and keep the bucket private.
 - Preserve invitation codes through confirmation redirects. Recovery has its own public route. Distinguish denied access, expired authorization, suspension and connection failures in the UI.
 - `/admin` uses only `admin_*` RPCs gated by a protected `platform_admin` role. Provision the first platform administrator through an owner-controlled backend operation; never expose a first-user claim flow.
+- The private `platform_owners` allowlist may provision only addresses verified by Supabase Auth. Clients must never modify that list or use editable metadata to obtain roles.
 
 ## Migrations and verification
 
@@ -40,3 +41,4 @@
 - Test database changes in an isolated disposable database, including permissions, conflicts and concurrency. Inspect the target project's actual schema before applying new migrations.
 - Use Bun 1.4.3 with `bun.lock` and frozen installs. Run typecheck, tests, lint, format checks and build; browser smoke tests use a synthetic local backend.
 - Do not infer production verification from local tests. Record any live flows that still require confirmation in the deployed environment.
+- Production hosting and backend resources must stay on Free plans under the user's $0 infrastructure budget. Static Cloudflare assets must stay below 25 MiB per file. Keep the pinned ONNX CDN binary aligned with the installed package; audio inference remains local.

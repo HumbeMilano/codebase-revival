@@ -65,8 +65,8 @@ function Sheet({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto rounded-3xl bg-card p-5 pt-7">
-        <div className="pr-6">
+      <DialogContent className="block max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto rounded-3xl bg-card p-5 pt-7">
+        <div className="mb-4 pr-6">
           <DialogTitle className="font-display text-2xl font-bold">{title}</DialogTitle>
           <DialogDescription className={cn("mt-1", !subtitle && "sr-only")}>
             {subtitle ?? "Revisa los datos antes de guardar."}
