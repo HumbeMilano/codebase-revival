@@ -80,6 +80,12 @@ export function useHubState(): HubState {
       }
     };
     void refresh();
+    const financeChanged = () => {
+      setBillsRaw([]);
+      setContributionsRaw([]);
+      void guard.queue.then(refresh);
+    };
+    window.addEventListener("homehub-finance-access", financeChanged);
     // Realtime: any change from another device reloads the household data.
     const channel = supabase
       .channel("hub")
@@ -96,6 +102,7 @@ export function useHubState(): HubState {
     const poll = setInterval(() => void refresh(), isDeviceMode() ? 8000 : 5000);
     return () => {
       active = false;
+      window.removeEventListener("homehub-finance-access", financeChanged);
       if (poll) clearInterval(poll);
       void supabase.removeChannel(channel);
     };

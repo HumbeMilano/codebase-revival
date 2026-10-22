@@ -10,7 +10,8 @@ import { FamilyCalendar, FamilyNotes } from "./Planner";
 import { HOUSEHOLD, MEMBERS, setMembers, type Member } from "./data";
 import { HouseholdSettings, SetupHousehold, Welcome } from "./Onboarding";
 import { supabase } from "@/integrations/supabase/client";
-import { db, forgetDevice, getDeviceToken, setDeviceMode } from "@/lib/db";
+import { clearFinanceAccess, db, forgetDevice, getDeviceToken, setDeviceMode } from "@/lib/db";
+import { toast } from "sonner";
 import { setHouseholdId } from "@/lib/hub-db";
 
 type Tab = "home" | "chores" | "shopping" | "finance" | "calendar" | "notes" | "household";
@@ -114,7 +115,13 @@ function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "a
     setTab(t);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await clearFinanceAccess();
+    } catch {
+      toast.error("No se pudo cerrar la autorización. Reintenta con conexión.");
+      return;
+    }
     if (mode === "account") {
       void supabase.auth.signOut();
       return;
