@@ -1,5 +1,11 @@
 # Roadmap
 
+## Cuentas personales
+- [ ] Completar registro, recuperación de contraseña y entrada con invitación conservada.
+- [ ] Añadir foto privada y preferencias personales.
+- [ ] Permitir a adultos revisar y cancelar invitaciones.
+- [ ] Verificar cuentas adultas/infantiles, aislamiento por hogar y autorización financiera.
+
 ## Corrección de compras
 - [x] Evitar productos duplicados y escrituras repetidas; limpiar copias existentes y exigir unicidad por hogar.
 - [x] Verificar añadir, marcar, borrar y sincronizar entre dos navegadores.
