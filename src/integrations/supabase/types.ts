@@ -676,8 +676,13 @@ export type Database = {
         Args: { _member_name: string; _role: string }
         Returns: string
       }
+      create_member: {
+        Args: { _name: string; _pin: string; _role: string }
+        Returns: string
+      }
       create_pairing_code: { Args: never; Returns: string }
       current_household_ids: { Args: never; Returns: string[] }
+      delete_member: { Args: { _key: string }; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -730,6 +735,10 @@ export type Database = {
       revoke_device: { Args: { _id: string }; Returns: undefined }
       revoke_finance_session: { Args: { _token: string }; Returns: undefined }
       revoke_invite: { Args: { _code: string }; Returns: undefined }
+      update_member: {
+        Args: { _key: string; _name?: string; _pin?: string; _role?: string }
+        Returns: undefined
+      }
       verify_pin: {
         Args: { _admin_only?: boolean; _pin: string }
         Returns: {
