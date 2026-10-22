@@ -302,7 +302,7 @@ function BillForm({
       subtitle={
         initial
           ? "Editar la plantilla cambia todos los meses sin excepción. Para un ajuste puntual, cambia solo el monto del mes."
-          : "Define el monto, vencimiento y reparto de esta factura."
+          : ""
       }
       onClose={onClose}
     >
@@ -365,13 +365,7 @@ function BillForm({
             onChange={(e) => setAutoPay(e.target.checked)}
             className="mt-1 size-5 accent-primary"
           />
-          <span>
-            <span className="font-semibold">Pago automático</span>
-            <br />
-            <span className="text-sm text-muted-foreground">
-              El día de vencimiento se marca como pagado. No mueve dinero ni conecta bancos.
-            </span>
-          </span>
+          <span className="font-semibold">Marcar pagada al vencer</span>
         </label>
 
         <p className="pt-1 text-sm font-semibold">¿Quién paga esta factura?</p>
@@ -593,10 +587,6 @@ export function Finance({
 
   return (
     <div className="space-y-6 pb-4">
-      <p className="text-xs text-muted-foreground">
-        El pago automático estima el estado por fecha. Confirma los pagos reales; HomeHub no mueve
-        dinero ni consulta bancos.
-      </p>
       {!!allocationIssues.length && (
         <p role="alert" className="rounded-2xl bg-accent p-3 text-sm">
           Hay repartos antiguos que necesitan revisión:{" "}
@@ -846,6 +836,7 @@ export function Finance({
                 Calendario de facturas
               </h3>
               <button
+                data-tour="finance"
                 onClick={() => setEditing("new")}
                 className="flex items-center gap-1 rounded-full bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground"
               >
@@ -1199,11 +1190,7 @@ function AporteForm({
     }
   };
   return (
-    <Sheet
-      title={initial ? "Editar aporte" : "Nuevo aporte"}
-      subtitle="Dinero que entra al fondo común. Se registra en el mes de la fecha elegida."
-      onClose={onClose}
-    >
+    <Sheet title={initial ? "Editar aporte" : "Nuevo aporte"} onClose={onClose}>
       <form
         onSubmit={(event) => {
           void submit(event);

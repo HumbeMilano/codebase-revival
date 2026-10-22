@@ -138,7 +138,7 @@ export function PinPad({
       controller.abort();
     };
   }, [pin, adminOnly]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
   const press = (digit: string) => {
     if (checking || who) return;
     setError("");
@@ -154,6 +154,22 @@ export function PinPad({
     >
       <DialogContent
         className="w-[calc(100%-2rem)] max-w-xs rounded-3xl bg-card p-6"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          inputRef.current?.focus();
+        }}
+        onKeyDown={(event) => {
+          if (event.ctrlKey || event.metaKey || event.altKey || checking || who) return;
+          const key = event.key;
+          if (/^[0-9]$/.test(key)) {
+            event.preventDefault();
+            press(key);
+          } else if (key === "Backspace" || key === "Delete") {
+            event.preventDefault();
+            setError("");
+            setPin((value) => (key === "Delete" ? "" : value.slice(0, -1)));
+          }
+        }}
         onInteractOutside={(event) => {
           if (!onCancel) event.preventDefault();
         }}
@@ -172,28 +188,32 @@ export function PinPad({
           <DialogTitle className="text-center font-display text-xl">
             {who ? `Hola, ${who.name}` : (title ?? "Escribe tu PIN")}
           </DialogTitle>
-          <DialogDescription className="text-center">
-            Usa el teclado o los botones para escribir tus 4 números.
+          <DialogDescription className="sr-only">
+            Introduce tu PIN de cuatro números.
           </DialogDescription>
         </div>
-        <input
+        <div
           ref={inputRef}
-          autoFocus
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          pattern="[0-9]{4}"
-          maxLength={4}
+          role="group"
+          tabIndex={0}
           aria-label="PIN de 4 números"
-          aria-invalid={!!error}
-          disabled={checking || !!who}
-          value={pin}
-          onChange={(event) => {
-            setError("");
-            setPin(event.target.value.replace(/\D/g, "").slice(0, 4));
-          }}
-          className="w-full rounded-xl border bg-background px-4 py-3 text-center font-display text-2xl tracking-[0.65em] outline-none focus:ring-2 focus:ring-ring"
-        />
+          aria-disabled={checking || !!who}
+          className="flex w-full justify-center gap-4 rounded-xl border bg-background px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="sr-only" aria-live="polite">
+            {pin.length} de 4 números ingresados
+          </span>
+          {[0, 1, 2, 3].map((index) => (
+            <span
+              key={index}
+              aria-hidden="true"
+              className={cn(
+                "size-3.5 rounded-full border-2 border-primary",
+                index < pin.length && "bg-primary",
+              )}
+            />
+          ))}
+        </div>
         <p
           role={error ? "alert" : "status"}
           className={cn(
@@ -201,7 +221,7 @@ export function PinPad({
             error ? "text-destructive" : "text-muted-foreground",
           )}
         >
-          {error || (checking ? "Verificando…" : "Tu PIN identifica a tu persona del hogar")}
+          {error || (checking ? "Verificando…" : "")}
         </p>
         <div className="grid grid-cols-3 gap-2">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (

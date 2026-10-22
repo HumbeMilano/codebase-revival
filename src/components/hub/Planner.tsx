@@ -101,6 +101,7 @@ export function FamilyCalendar({
           ))}
         </select>
         <Button
+          data-tour="calendar"
           onClick={() =>
             setDraft({ id: "", title: "", date: selected, time: "", memberId: user.id, note: "" })
           }
@@ -360,6 +361,7 @@ export function FamilyNotes({
           className={cn(field, "flex-1")}
         />
         <Button
+          data-tour="notes"
           aria-label="Nueva nota"
           onClick={() =>
             setDraft({ id: "", title: "", body: "", memberId: user.id, pinned: false })

@@ -9,6 +9,19 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 vi.mock("sonner", () => ({ toast: notices }));
 vi.mock("./Kiosk", () => ({ Avatar: () => null }));
+vi.mock("@/lib/tablet-pairing", () => ({
+  startTabletPairing: async () => ({
+    id: "10000000-0000-4000-8000-000000000001",
+    name: "Tablet",
+    claimSecret: "a".repeat(64),
+    approvalSecret: "b".repeat(64),
+    expiresAt: new Date(Date.now() + 300000).toISOString(),
+  }),
+  pairingClient: () => ({
+    rpc: () => ({ abortSignal: async () => ({ data: { status: "pending" }, error: null }) }),
+  }),
+  pairingLink: () => "https://app.skendal.com/vincular#fixture",
+}));
 
 afterEach(() => {
   cleanup();
@@ -34,11 +47,13 @@ describe("account entry", () => {
     fireEvent.click(submit);
     await waitFor(() => expect(auth.signIn).toHaveBeenCalledTimes(2));
   });
-  it("shows real pairing instructions without demo credentials", () => {
+  it("shows the tablet QR directly without account or passkey setup", async () => {
     render(<Welcome compact onPaired={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tablet" }));
-    expect(screen.getByRole("button", { name: "Vincular con passkey" })).toBeInTheDocument();
-    expect(screen.getByText(/QR.*Bluetooth/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("img", { name: "QR para vincular esta tablet" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Contraseña")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Código de emparejamiento")).not.toBeInTheDocument();
     expect(screen.queryByText(/PEREZ1/)).not.toBeInTheDocument();
   });

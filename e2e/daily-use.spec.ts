@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HOME_ID, HouseholdBackend, mockTabletPasskey, section, signIn } from "./backend";
+import { HOME_ID, HouseholdBackend, pairTablet, section, signIn } from "./backend";
 
 test("an invitation opens signup with its recipient and full code", async ({ page }) => {
   const backend = new HouseholdBackend();
@@ -99,7 +99,6 @@ test("tablet pairing leaves no adult session and its photo lock screen fills the
   page,
 }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
-  await mockTabletPasskey(page);
   const backend = new HouseholdBackend();
   backend.photos = [0, 1].map((n) => ({
     id: `photo-${n}`,
@@ -117,9 +116,7 @@ test("tablet pairing leaves no adult session and its photo lock screen fills the
       ),
     }),
   );
-  await page.goto("/");
-  await page.getByRole("button", { name: "Tablet", exact: true }).click();
-  await page.getByRole("button", { name: "Vincular con passkey", exact: true }).click();
+  await pairTablet(page, backend);
   const screen = page.getByTestId("tablet-lock-screen");
   await expect(screen).toBeVisible();
   const size = await screen.evaluate((node) => ({
@@ -150,5 +147,61 @@ test("tablet pairing leaves no adult session and its photo lock screen fills the
       Object.keys(localStorage).filter((key) => key.includes("auth-token")),
     ),
   ).toEqual([]);
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("the tour follows exploration once per account, can be skipped and replayed", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  backend.tourProgress.dismissed = false;
+  await backend.install(page);
+  await signIn(page);
+  await expect(page.getByRole("dialog", { name: "Tu hogar, de un vistazo" })).toBeVisible();
+  await section(page, "Tareas");
+  await expect(page.getByRole("dialog", { name: "Crea tu primera tarea" })).toBeVisible();
+  await page.getByRole("button", { name: "Nueva tarea", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Crea tu primera tarea" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await section(page, "Notas");
+  await expect(page.getByRole("dialog", { name: "Escribe tu primera nota" })).toBeVisible();
+  await page.getByRole("button", { name: "Omitir recorrido", exact: true }).click();
+  await page.reload();
+  await section(page, "Compras");
+  await expect(page.locator("[data-guided-tour]")).toHaveCount(0);
+  await section(page, "Mi perfil");
+  await page.getByRole("button", { name: "Volver a ver el recorrido", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Tu hogar, de un vistazo" })).toBeVisible();
+  await page.getByRole("button", { name: "Entendido", exact: true }).click();
+  await section(page, "Notas");
+  await expect(page.getByRole("dialog", { name: "Escribe tu primera nota" })).toBeVisible();
+  await page.getByRole("button", { name: "Entendido", exact: true }).click();
+  await section(page, "Tareas");
+  await expect(page.getByRole("dialog", { name: "Crea tu primera tarea" })).toBeVisible();
+  await page.getByRole("button", { name: "Entendido", exact: true }).click();
+  await section(page, "Notas");
+  await expect(page.locator("[data-guided-tour]")).toHaveCount(0);
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("a tablet QR survives reload, expires and can be replaced without an adult login", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  await backend.install(page);
+  await page.goto("/vincular");
+  await expect(page.getByRole("img", { name: "QR para vincular esta tablet" })).toBeVisible();
+  const firstId = [...backend.pairings.keys()][0]!;
+  await page.reload();
+  await expect(page.getByRole("img", { name: "QR para vincular esta tablet" })).toBeVisible();
+  expect(backend.pairings.size).toBe(1);
+  backend.pairings.get(firstId)!.expiresAt = new Date(0).toISOString();
+  await expect(page.getByRole("button", { name: "Generar otro QR", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Generar otro QR", exact: true }).click();
+  await expect(page.getByRole("img", { name: "QR para vincular esta tablet" })).toBeVisible();
+  expect(backend.pairings.size).toBe(2);
+  await page.getByRole("button", { name: "Volver", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Bienvenido", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("homehub-tablet-pairing-v1"))).toBeNull();
   expect(backend.unexpectedRequests).toEqual([]);
 });

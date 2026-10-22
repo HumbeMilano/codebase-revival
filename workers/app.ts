@@ -153,8 +153,67 @@ export default {
   fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path === "/api/invitations") return sendInvitation(request, env);
+    if (path === "/api/tablet-pairing") return createTabletPairing(request, env);
     if (path.startsWith("/api/"))
       return Promise.resolve(json({ error: "Ruta no encontrada." }, 404));
     return env.ASSETS.fetch(request);
   },
 };
+
+export async function createTabletPairing(request: Request, env: WorkerEnv): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin)
+    return json({ error: "Origen no permitido." }, 403);
+  if (
+    !env.TABLET_PAIRING_KEY ||
+    !env.TABLET_PAIRING_RATE ||
+    !env.SUPABASE_URL ||
+    !env.SUPABASE_PUBLIC_KEY
+  )
+    return json({ error: "La vinculación no está disponible todavía." }, 503);
+  let data: Record<string, unknown>;
+  try {
+    data = await body(request);
+  } catch {
+    return json({ error: "No se pudo preparar el QR." }, 400);
+  }
+  try {
+    const validHash = (value: unknown) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+    if (
+      typeof data["id"] !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data["id"]) ||
+      typeof data["name"] !== "string" ||
+      data["name"].trim().length < 1 ||
+      data["name"].length > 100 ||
+      !validHash(data["claim_hash"]) ||
+      !validHash(data["approval_hash"]) ||
+      data["claim_hash"] === data["approval_hash"]
+    )
+      return json({ error: "No se pudo preparar el QR." }, 400);
+    const ip = request.headers.get("CF-Connecting-IP");
+    if (!ip) return json({ error: "No se pudo comprobar la conexión. Recarga la página." }, 403);
+    const allowed = await env.TABLET_PAIRING_RATE.limit({ key: `tablet:${ip}` });
+    if (!allowed.success) return json({ error: "Espera un minuto antes de generar otro QR." }, 429);
+    const response = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/create_tablet_pairing`, {
+      method: "POST",
+      signal: AbortSignal.timeout(15_000),
+      headers: { apikey: env.SUPABASE_PUBLIC_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        _id: data["id"],
+        _name: data["name"].trim(),
+        _claim_hash: data["claim_hash"],
+        _approval_hash: data["approval_hash"],
+        _server_key: env.TABLET_PAIRING_KEY,
+      }),
+    });
+    if (!response.ok)
+      return json({ error: "No se pudo preparar el QR. Intenta de nuevo en un momento." }, 503);
+    const prepared = (await response.json()) as { id?: string; name?: string; expires_at?: string };
+    if (prepared.id !== data["id"] || !prepared.expires_at)
+      throw new Error("Invalid pairing response");
+    return json({ id: prepared.id, name: prepared.name, expires_at: prepared.expires_at });
+  } catch {
+    return json({ error: "No se pudo preparar el QR. Comprueba la conexión y reintenta." }, 503);
+  }
+}

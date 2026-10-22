@@ -7,6 +7,8 @@ const env: WorkerEnv = {
   SUPABASE_URL: "https://fixture.invalid",
   SUPABASE_PUBLIC_KEY: "sb_publishable_fixture",
   RESEND_API_KEY: "fixture-private-server-key",
+  TABLET_PAIRING_KEY: "fixture-private-pairing-key",
+  TABLET_PAIRING_RATE: { limit: async () => ({ success: true }) },
 };
 const invite = {
   code: "A".repeat(32),

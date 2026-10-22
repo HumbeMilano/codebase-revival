@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Copy, Home, KeyRound, Mail, Pencil, Tablet, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { DEVICE_KEY } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -12,8 +11,7 @@ import {
   readPendingInvite,
 } from "@/lib/account-validation";
 import { Avatar } from "./Kiosk";
-import { pairTabletWithPasskey, passkeyError, supportsPasskeys } from "@/lib/passkeys";
-import { PasskeySettings } from "./PasskeySettings";
+import { TabletPairingPane } from "./TabletPairing";
 import { HouseholdPhotos } from "./HouseholdPhotos";
 import { MEMBERS, setMembers as setHouseholdMembers } from "./data";
 import {
@@ -95,13 +93,7 @@ function Shell({ children, compact }: { children: React.ReactNode; compact: bool
 }
 
 /** First screen for a browser with no account and no paired tablet. */
-export function Welcome({
-  compact,
-  onPaired,
-}: {
-  compact: boolean;
-  onPaired: (token: string) => void;
-}) {
+export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () => void }) {
   const [view, setView] = useState<"login" | "signup" | "pair" | "forgot">(() =>
     pendingInvitation() ? "signup" : "login",
   );
@@ -112,7 +104,6 @@ export function Welcome({
     return parsed.success ? parsed.data : "";
   });
   const [password, setPassword] = useState("");
-  const [deviceName, setDeviceName] = useState("Tablet del hogar");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [invitation, setInvitation] = useState("");
@@ -125,18 +116,6 @@ export function Welcome({
       e.preventDefault();
       if (busy) return;
       setBusy(true);
-      if (view === "pair") {
-        let data: string;
-        try {
-          data = await pairTabletWithPasskey(deviceName);
-        } catch (reason) {
-          toast.error(passkeyError(reason));
-          return;
-        }
-        localStorage.setItem(DEVICE_KEY, data);
-        onPaired(data);
-        return;
-      }
       if (view === "forgot") {
         const valid = credentials.shape.email.safeParse(email);
         if (!valid.success) {
@@ -191,6 +170,13 @@ export function Welcome({
     }
   };
 
+  if (view === "pair")
+    return (
+      <Shell compact={compact}>
+        <TabletPairingPane onPaired={onPaired} onCancel={() => setView("login")} />
+      </Shell>
+    );
+
   if (sent)
     return (
       <Shell compact={compact}>
@@ -218,13 +204,11 @@ export function Welcome({
   return (
     <Shell compact={compact}>
       <h1 className="font-display text-4xl font-extrabold">
-        {view === "pair"
-          ? "Emparejar tablet"
-          : view === "signup"
-            ? "Crea tu cuenta"
-            : view === "forgot"
-              ? "Recuperar acceso"
-              : "Bienvenido"}
+        {view === "signup"
+          ? "Crea tu cuenta"
+          : view === "forgot"
+            ? "Recuperar acceso"
+            : "Bienvenido"}
       </h1>
       <div className="my-5 grid grid-cols-3 gap-1 rounded-2xl bg-card p-1 shadow-card">
         {(
@@ -249,87 +233,50 @@ export function Welcome({
         ))}
       </div>
       <form onSubmit={submit} className="space-y-4 rounded-3xl bg-card p-5 shadow-card">
-        {view === "pair" ? (
-          <div className="space-y-3">
-            <label className="block text-sm font-semibold">
-              Nombre de la tablet
-              <input
-                value={deviceName}
-                onChange={(event) => setDeviceName(event.target.value)}
-                maxLength={100}
-                required
-                className={field}
-              />
-            </label>
-            <p className="text-sm text-muted-foreground">
-              Usa la passkey de una persona adulta. En la ventana del sistema, elige «Usar otro
-              dispositivo» para mostrar el QR y autorizar desde tu móvil con Bluetooth activado.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              La tablet quedará vinculada al hogar y seguirá pidiendo PIN para identificar a cada
-              persona. La cuenta personal del adulto no se guarda en la tablet.
-            </p>
-            {!supportsPasskeys() && (
-              <p role="alert" className="text-sm text-destructive">
-                Este navegador no admite passkeys. Actualiza el sistema o utiliza un navegador
-                compatible.
-              </p>
-            )}
-          </div>
-        ) : (
-          <>
-            <label className="block text-sm font-semibold">
-              Correo
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={field}
-              />
-            </label>
-            {view !== "forgot" && (
-              <label className="block text-sm font-semibold">
-                Contraseña
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  maxLength={128}
-                  autoComplete={view === "signup" ? "new-password" : "current-password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={field}
-                />
-              </label>
-            )}
-            {view === "signup" && (
-              <label className="block text-sm font-semibold">
-                Invitación (opcional)
-                <input
-                  value={invitation}
-                  maxLength={32}
-                  onChange={(e) => setInvitation(e.target.value.toUpperCase())}
-                  className={field}
-                />
-              </label>
-            )}
-          </>
+        <label className="block text-sm font-semibold">
+          Correo
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={field}
+          />
+        </label>
+        {view !== "forgot" && (
+          <label className="block text-sm font-semibold">
+            Contraseña
+            <input
+              type="password"
+              required
+              minLength={6}
+              maxLength={128}
+              autoComplete={view === "signup" ? "new-password" : "current-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={field}
+            />
+          </label>
+        )}
+        {view === "signup" && (
+          <label className="block text-sm font-semibold">
+            Invitación (opcional)
+            <input
+              value={invitation}
+              maxLength={32}
+              onChange={(e) => setInvitation(e.target.value.toUpperCase())}
+              className={field}
+            />
+          </label>
         )}
         <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl">
-          {busy ? (
-            "Un momento…"
-          ) : view === "pair" ? (
-            <>
-              <Tablet /> Vincular con passkey
-            </>
-          ) : view === "signup" ? (
-            "Crear cuenta"
-          ) : view === "forgot" ? (
-            "Enviar enlace"
-          ) : (
-            "Entrar"
-          )}
+          {busy
+            ? "Un momento…"
+            : view === "signup"
+              ? "Crear cuenta"
+              : view === "forgot"
+                ? "Enviar enlace"
+                : "Entrar"}
         </Button>
         {view === "login" && (
           <Button
@@ -872,11 +819,28 @@ export function HouseholdSettings({
         <h2 className="flex items-center gap-2 font-display text-xl font-bold">
           <Tablet className="size-5" /> Tablets
         </h2>
-        <p className="my-4 text-sm text-muted-foreground">
-          En la tablet abre HomeHub → Tablet → Vincular con passkey. Usa el QR del sistema desde tu
-          móvil. Después podrás revocarla desde esta lista.
+        <p className="my-4 text-sm">
+          En la tablet, abre{" "}
+          <a href="/vincular" className="font-semibold underline">
+            app.skendal.com/vincular
+          </a>
+          . Escanea el QR con tu teléfono y confirma.
         </p>
-        <PasskeySettings />
+        <Button
+          variant="outline"
+          onClick={() => {
+            if (!navigator.clipboard) {
+              toast.error("Abre app.skendal.com/vincular en la tablet.");
+              return;
+            }
+            void navigator.clipboard.writeText(`${window.location.origin}/vincular`).then(
+              () => toast.success("Enlace copiado para abrir en la tablet"),
+              () => toast.error("No se pudo copiar el enlace."),
+            );
+          }}
+        >
+          <Copy /> Copiar enlace para la tablet
+        </Button>
         <ul className="mt-4 space-y-2">
           {devices.map((d) => (
             <li key={d.id} className="flex items-center gap-2 rounded-xl bg-card p-3 text-sm">
@@ -904,6 +868,7 @@ export function HouseholdSettings({
         </h2>
         {!adding && (
           <Button
+            data-tour="household"
             onClick={() => setAdding({ name: "", role: "member", pin: "" })}
             className="mt-4 rounded-xl"
           >

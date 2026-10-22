@@ -669,18 +669,21 @@ export type Database = {
         Row: {
           avatar_path: string | null;
           id: string;
+          onboarding_state: Json;
           preferred_view: string;
           time_format: string;
         };
         Insert: {
           avatar_path?: string | null;
           id: string;
+          onboarding_state?: Json;
           preferred_view?: string;
           time_format?: string;
         };
         Update: {
           avatar_path?: string | null;
           id?: string;
+          onboarding_state?: Json;
           preferred_view?: string;
           time_format?: string;
         };
@@ -799,9 +802,21 @@ export type Database = {
         }[];
       };
       am_platform_admin: { Args: never; Returns: boolean };
+      approve_tablet_pairing: {
+        Args: { _approval_secret: string; _id: string };
+        Returns: undefined;
+      };
       authorize_finances: { Args: { _pin: string }; Returns: string };
       can_access_finances: { Args: { _household: string }; Returns: boolean };
+      cancel_tablet_pairing: {
+        Args: { _claim_secret: string; _id: string };
+        Returns: undefined;
+      };
       claim_platform_admin: { Args: never; Returns: boolean };
+      claim_tablet_pairing: {
+        Args: { _claim_secret: string; _id: string };
+        Returns: Json;
+      };
       create_household: {
         Args: { _member_name: string; _name: string; _pin: string };
         Returns: string;
@@ -815,6 +830,16 @@ export type Database = {
         Returns: string;
       };
       create_pairing_code: { Args: never; Returns: string };
+      create_tablet_pairing: {
+        Args: {
+          _approval_hash: string;
+          _claim_hash: string;
+          _id: string;
+          _name: string;
+          _server_key: string;
+        };
+        Returns: Json;
+      };
       current_household_ids: { Args: never; Returns: string[] };
       delete_bill: {
         Args: { _expected_revision: number; _id: string };
@@ -927,6 +952,10 @@ export type Database = {
         Args: { _changes: Json; _household: string; _table: string };
         Returns: Json;
       };
+      save_onboarding_progress: {
+        Args: { _dismissed?: boolean; _restart?: boolean; _seen?: string[] };
+        Returns: Json;
+      };
       sync_shopping: {
         Args: {
           _changes: Json;
@@ -934,6 +963,14 @@ export type Database = {
           _member_key?: string;
           _mutation_id: string;
         };
+        Returns: Json;
+      };
+      tablet_pairing_preview: {
+        Args: { _approval_secret: string; _id: string };
+        Returns: Json;
+      };
+      tablet_pairing_status: {
+        Args: { _claim_secret: string; _id: string };
         Returns: Json;
       };
       unlink_member: { Args: { _key: string }; Returns: undefined };
