@@ -15,6 +15,13 @@
       "when": 1792625658360,
       "tag": "0001_verify_pin_function",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792629604669,
+      "tag": "0002_household_isolation_saas",
+      "breakpoints": true
     }
   ]
 }
