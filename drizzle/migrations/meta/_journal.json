@@ -43,6 +43,13 @@
       "when": 1792632026422,
       "tag": "0005_personal_profiles_invitation_management",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792632193472,
+      "tag": "0006_invitation_redemption_serialization",
+      "breakpoints": true
     }
   ]
 }
