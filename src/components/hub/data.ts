@@ -48,3 +48,9 @@ export const CATEGORIES: Record<string, string> = {
   Suscripciones: "📺",
   Internet: "🌐",
 };
+
+/** Household context loaded at sign-in/pairing. MEMBERS is mutated in place so existing imports stay live. */
+export const HOUSEHOLD = { id: "", name: "" };
+export function setMembers(rows: { key: string; name: string; role: string }[]) {
+  MEMBERS.splice(0, MEMBERS.length, ...rows.map((r, i): Member => ({ id: r.key, name: r.name, role: r.role === "admin" ? "admin" : "member", color: `member-${(i % 4) + 1}` })));
+}

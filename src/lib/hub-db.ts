@@ -1,10 +1,11 @@
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/db";
 import type { Chore, ShopItem } from "@/components/hub/data";
 import type { FamilyEvent, FamilyNote } from "@/components/hub/planner-data";
 import type { Contribution, LedgerBill, MonthOverride } from "@/lib/ledger";
 import type { Split } from "@/lib/split";
 
-export const HOUSEHOLD_ID = "11111111-1111-1111-1111-111111111111";
+export let HOUSEHOLD_ID = "";
+export const setHouseholdId = (id: string) => { HOUSEHOLD_ID = id; };
 
 export interface HubData {
   chores: Chore[];
@@ -17,14 +18,14 @@ export interface HubData {
 
 export async function loadHubData(): Promise<HubData> {
   const [chores, items, events, notes, bills, splits, overrides, contributions] = await Promise.all([
-    supabase.from("chores").select("*").eq("household_id", HOUSEHOLD_ID).order("position"),
-    supabase.from("shopping_items").select("*").eq("household_id", HOUSEHOLD_ID).order("position"),
-    supabase.from("events").select("*").eq("household_id", HOUSEHOLD_ID),
-    supabase.from("notes").select("*").eq("household_id", HOUSEHOLD_ID),
-    supabase.from("bills").select("*").eq("household_id", HOUSEHOLD_ID).order("position"),
-    supabase.from("bill_splits").select("*"),
-    supabase.from("bill_overrides").select("*"),
-    supabase.from("contributions").select("*").eq("household_id", HOUSEHOLD_ID),
+    db().from("chores").select("*").eq("household_id", HOUSEHOLD_ID).order("position"),
+    db().from("shopping_items").select("*").eq("household_id", HOUSEHOLD_ID).order("position"),
+    db().from("events").select("*").eq("household_id", HOUSEHOLD_ID),
+    db().from("notes").select("*").eq("household_id", HOUSEHOLD_ID),
+    db().from("bills").select("*").eq("household_id", HOUSEHOLD_ID).order("position"),
+    db().from("bill_splits").select("*"),
+    db().from("bill_overrides").select("*"),
+    db().from("contributions").select("*").eq("household_id", HOUSEHOLD_ID),
   ]);
   const splitRows = splits.data ?? [];
   const overrideRows = overrides.data ?? [];
@@ -67,15 +68,15 @@ async function syncCollection(
   const prevIds = new Set(prev.map((x) => x.id));
   const nextIds = new Set(next.map((x) => x.id));
   const removed = prev.filter((x) => !nextIds.has(x.id)).map((x) => x.id);
-  if (removed.length) await supabase.from(table).delete().in("id", removed);
+  if (removed.length) await db().from(table).delete().in("id", removed);
   const prevById = new Map(prev.map((x) => [x.id, x]));
   for (let i = 0; i < next.length; i++) {
     const item = next[i]!;
     const before = prevById.get(item.id);
     const row = toRow(item as never, i);
-    if (!before) await supabase.from(table).insert(row as never);
+    if (!before) await db().from(table).insert(row as never);
     else if (JSON.stringify(toRow(before as never, i)) !== JSON.stringify(row))
-      await supabase.from(table).update(row as never).eq("id", item.id);
+      await db().from(table).update(row as never).eq("id", item.id);
   }
 }
 
@@ -98,19 +99,19 @@ export const syncContributions = (prev: Contribution[], next: Contribution[]) =>
 export async function syncBills(prev: LedgerBill[], next: LedgerBill[]) {
   const nextIds = new Set(next.map((b) => b.id));
   const removed = prev.filter((b) => !nextIds.has(b.id)).map((b) => b.id);
-  if (removed.length) await supabase.from("bills").delete().in("id", removed);
+  if (removed.length) await db().from("bills").delete().in("id", removed);
   const prevById = new Map(prev.map((b) => [b.id, b]));
   for (let i = 0; i < next.length; i++) {
     const b = next[i]!;
     const before = prevById.get(b.id);
     const changed = before && JSON.stringify(before) !== JSON.stringify(b);
     if (before && !changed) continue;
-    await supabase.from("bills").upsert({ id: b.id, household_id: HOUSEHOLD_ID, name: b.name, category: b.category, base: b.base, due_day: b.dueDay, auto_pay: b.autoPay, position: i });
-    await supabase.from("bill_splits").delete().eq("bill_id", b.id);
+    await db().from("bills").upsert({ id: b.id, household_id: HOUSEHOLD_ID, name: b.name, category: b.category, base: b.base, due_day: b.dueDay, auto_pay: b.autoPay, position: i });
+    await db().from("bill_splits").delete().eq("bill_id", b.id);
     if (b.splits.length)
-      await supabase.from("bill_splits").insert(b.splits.map((s) => ({ bill_id: b.id, person_key: s.personId, type: s.type, value: s.value })));
-    await supabase.from("bill_overrides").delete().eq("bill_id", b.id);
+      await db().from("bill_splits").insert(b.splits.map((s) => ({ bill_id: b.id, person_key: s.personId, type: s.type, value: s.value })));
+    await db().from("bill_overrides").delete().eq("bill_id", b.id);
     const rows = Object.entries(b.overrides).map(([month, o]) => ({ bill_id: b.id, month, amount: o.amount ?? null, status: o.status ?? null, hidden: o.hidden ?? false }));
-    if (rows.length) await supabase.from("bill_overrides").insert(rows);
+    if (rows.length) await db().from("bill_overrides").insert(rows);
   }
 }
