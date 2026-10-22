@@ -503,6 +503,32 @@ export type Database = {
           },
         ]
       }
+      pin_attempts: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pin_attempts_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_path: string | null

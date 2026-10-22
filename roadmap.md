@@ -26,3 +26,12 @@
 - [ ] Verificar autorización financiera en cuentas personales: necesita sesión autorizada del solicitante en la vista previa; no es posible obtenerla automáticamente para su identidad verificada.
 - [ ] Planes Free / Family Pro: pendiente definir límites, precios y cuenta de cobro; no aplicar restricciones ni cargos inventados.
 - [ ] Dictado: pendiente el veredicto del usuario sobre su último intento.
+
+## Lista de pendientes (plan aprobado)
+- [x] Bloqueo de 5 minutos tras 5 PIN incorrectos en la entrada.
+- [ ] Gestión de miembros (añadir/editar/quitar, cambiar PIN y rol).
+- [ ] Vincular cuenta con persona al aceptar invitación.
+- [ ] Calendario y Notas guardados en la base de datos.
+- [ ] Mensajes de error sin conexión y estados vacíos.
+- [ ] Publicar y probar en tablet y teléfonos reales.
+- [ ] Mejoras B y extras C (ver plan).
