@@ -13,6 +13,7 @@ export interface MonthOverride {
 }
 export interface LedgerBill {
   id: string;
+  revision?: number;
   name: string;
   category: string;
   base: number;
@@ -23,6 +24,7 @@ export interface LedgerBill {
 }
 export interface Contribution {
   id: string;
+  revision?: number;
   personId: string;
   amount: number;
   month: string; // YYYY-MM
@@ -36,7 +38,13 @@ export function billAmount(b: LedgerBill, mk: string) {
   return b.overrides[mk]?.amount ?? b.base;
 }
 
-/** Explicit status wins; otherwise auto-pay bills count as paid once the due day has arrived. */
+/** Clamp monthly due days to the last actual day, including February. */
+export function effectiveDueDay(dueDay: number, mk: string): number {
+  const [year, month] = mk.split("-").map(Number);
+  return Math.min(Math.max(1, dueDay), new Date(year!, month!, 0).getDate());
+}
+
+/** Explicit status wins; automatic status is an estimate based on the due date. */
 export function billStatus(b: LedgerBill, mk: string, today: Date): "paid" | "pending" {
   const explicit = b.overrides[mk]?.status;
   if (explicit) return explicit;
@@ -44,7 +52,7 @@ export function billStatus(b: LedgerBill, mk: string, today: Date): "paid" | "pe
   const todayKey = monthKey(today.getFullYear(), today.getMonth());
   if (mk < todayKey) return "paid";
   if (mk > todayKey) return "pending";
-  return today.getDate() >= b.dueDay ? "paid" : "pending";
+  return today.getDate() >= effectiveDueDay(b.dueDay, mk) ? "paid" : "pending";
 }
 
 export function billsForMonth(bills: LedgerBill[], mk: string) {
@@ -62,12 +70,34 @@ export interface PersonSummary {
   billCount: number;
 }
 
-export function monthSummary(bills: LedgerBill[], contributions: Contribution[], mk: string, today: Date, people: string[]) {
+export function monthSummary(
+  bills: LedgerBill[],
+  contributions: Contribution[],
+  mk: string,
+  today: Date,
+  people: string[],
+) {
   const persons: Record<string, PersonSummary> = {};
-  for (const id of people)
-    persons[id] = { personId: id, assigned: 0, paid: 0, pending: 0, contributed: 0, available: 0, stillOwes: 0, billCount: 0 };
+  const relevantPeople = new Set([
+    ...people,
+    ...billsForMonth(bills, mk).flatMap((bill) => bill.splits.map((split) => split.personId)),
+    ...contributions.filter((c) => c.month === mk).map((c) => c.personId),
+  ]);
+  for (const id of relevantPeople)
+    persons[id] = {
+      personId: id,
+      assigned: 0,
+      paid: 0,
+      pending: 0,
+      contributed: 0,
+      available: 0,
+      stillOwes: 0,
+      billCount: 0,
+    };
 
-  let total = 0, paid = 0, pendingCount = 0;
+  let total = 0,
+    paid = 0,
+    pendingCount = 0;
   for (const b of billsForMonth(bills, mk)) {
     const amt = billAmount(b, mk);
     const isPaid = billStatus(b, mk, today) === "paid";
@@ -99,5 +129,12 @@ export function monthSummary(bills: LedgerBill[], contributions: Contribution[],
     available: round(p.contributed - p.paid),
     stillOwes: round(Math.max(0, p.assigned - p.contributed)),
   }));
-  return { total: round(total), paid: round(paid), pending: round(total - paid), pendingCount, contributed: round(contributed), persons: list };
+  return {
+    total: round(total),
+    paid: round(paid),
+    pending: round(total - paid),
+    pendingCount,
+    contributed: round(contributed),
+    persons: list,
+  };
 }

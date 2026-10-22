@@ -7,12 +7,20 @@ describe("personal accounts", () => {
     expect(invitationCode.safeParse("https://bad.test").success).toBe(false);
   });
   it("allows only actual view and time preferences, never financial roles", () => {
-    expect(personalPreferences.safeParse({ preferred_view: "mobile", time_format: "12" }).success).toBe(true);
-    expect(personalPreferences.safeParse({ preferred_view: "admin", time_format: "24" }).success).toBe(false);
+    expect(
+      personalPreferences.safeParse({ preferred_view: "mobile", time_format: "12" }).success,
+    ).toBe(true);
+    expect(
+      personalPreferences.safeParse({ preferred_view: "admin", time_format: "24" }).success,
+    ).toBe(false);
   });
   it("requires a real email and a valid password", () => {
     expect(credentials.safeParse({ email: "lucas", password: "123456" }).success).toBe(false);
-    expect(credentials.safeParse({ email: "lucas@example.com", password: "12" }).success).toBe(false);
-    expect(credentials.safeParse({ email: "lucas@example.com", password: "strong-password" }).success).toBe(true);
+    expect(credentials.safeParse({ email: "lucas@example.com", password: "12" }).success).toBe(
+      false,
+    );
+    expect(
+      credentials.safeParse({ email: "lucas@example.com", password: "strong-password" }).success,
+    ).toBe(true);
   });
 });

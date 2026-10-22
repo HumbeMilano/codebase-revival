@@ -1,4 +1,5 @@
 <!-- LOVABLE:BEGIN -->
+
 > [!IMPORTANT]
 > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
 > published git history — force pushing, or rebasing/amending/squashing commits
@@ -7,21 +8,37 @@
 >
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
+
 <!-- LOVABLE:END -->
 
-- Use the shared finance visibility predicate for every financial UI surface; financial tables additionally require adult account membership or a server-issued, caller-bound authorization token through db().
-- Calendar and notes share session-only prototype state with the dashboard; keep date-only values local and put overflow sections in the mobile More menu so navigation never scrolls horizontally. Real persistence requires Lovable Cloud.
-- Dictation runs multilingual Whisper only in a lazily created, session-reused browser Web Worker with single-thread WASM and explicitly resampled 16 kHz audio; never send audio to Cloud or an AI API, keeping inference local and the UI usable.
+## Application and state
 
-## Backend (Fase 2)
-- Household data lives in Lovable Cloud tables; household id comes from my_context() at startup, and MEMBERS/HOUSEHOLD are mutated in place after load. Collection updates use usePersistedCollection outside replayable React state updaters, with a shared write queue and revision-guarded refreshes so StrictMode and realtime cannot duplicate or overwrite pending edits.
-- PIN login is verified by the Postgres function public.verify_pin (SECURITY DEFINER, sha256 via pgcrypto); members.pin_hash is not readable by anon. Do not reintroduce client-side PIN checks or server-fn PIN lookups (server-side Supabase URL in the sandbox points at a different backend than the browser).
+- This is a functional household application, not a device preview. Use responsive layouts and real household data. Do not restore demo PINs, fixed weather, fixed calendar dates or fictitious agenda entries.
+- Use the shared finance visibility predicate for every financial UI surface; financial tables also require server-side authorization through `db()`.
+- Calendar and notes persist in household tables. Keep date-only values local, and put overflow navigation in the mobile More menu so navigation never scrolls horizontally.
+- Dictation uses multilingual Whisper in a lazily created, session-reused browser Web Worker, single-thread WASM and explicitly resampled 16 kHz audio. Never send audio to Cloud or an AI API.
+- Resolve authentication into a snapshot before committing household/member state. Ignore stale resolutions before they can mutate shared context. Bind queued writes to their original household and client; a later login must not redirect them.
+- Keep member data reactive across settings, selectors, roles and the tablet kiosk. Invalidate it after member operations and revalidate it between devices.
+- Evaluate collection updates outside replayable React state updaters. Separate confirmed and optimistic data, serialize dependent writes, and reconcile failures. Do not announce a successful save before confirmation or promise offline persistence without a durable implementation.
 
-## SaaS isolation (Fase 3)
-- Every household table is RLS-scoped through public.current_household_ids(): signed-in accounts via household_accounts, paired tablets via an x-device-token header hashed against devices; always query household data through db() in src/lib/db.ts so the device header is sent.
-- Households, invites, tablet pairing and device revocation go only through SECURITY DEFINER RPCs (create_household, create_invite, redeem_invite, create_pairing_code, pair_device, list_devices, revoke_device); the backing tables have no client grants.
-- Paired tablets get no realtime (no JWT), so useHubState polls in device mode.
-- Adult PIN financial authorization uses a memory-only secret backed by finance_sessions, bound to the account auth session or paired device; revoke before logout and never trust a client role or boolean as database authorization.
-- Personal profiles store only owner-scoped private avatar paths and view/time preferences; roles stay in protected household members, never in editable profiles. A signup trigger provisions profiles, and private storage is restricted to the owner's UUID folder.
-- Registration preserves invitation codes through confirmation redirects; recovery has its own public route. Auth resolution revalidates with getUser and ignores stale results before rendering household content.
-- SaaS platform administration lives at /admin and goes only through SECURITY DEFINER admin_* RPCs gated by has_role(auth.uid(),'platform_admin') in public.user_roles; suspended households are excluded in current_household_ids() so suspension is enforced by RLS, not UI.
+## Backend and security
+
+- Household data lives in the owner's Supabase project; context comes from `my_context()`. Always query household data through `db()` so paired tablets send the device token header. The app is a static Vite/TanStack Router SPA, independent of Lovable runtime services.
+- PIN verification stays in Postgres. All PIN authorization paths, including finance authorization, must share server-side attempt limits. Never introduce client PIN checks or server-function PIN lookups against a potentially different backend URL.
+- Every household table is RLS-scoped. Suspension must also be checked by privileged RPCs; `SECURITY DEFINER` bypasses RLS and therefore needs its own authorization checks.
+- Household/invitation/pairing/device/member mutations use reviewed RPCs. Revalidate authorization under the household lock when changing roles or members; concurrent calls must not remove the last adult.
+- Finance authorization is a memory-only secret with server-enforced expiry, caller binding and revocation. Revoke on logout, and never treat a client boolean or role as database authorization.
+- Save a bill, its splits and monthly overrides atomically with optimistic concurrency. Monetary allocations must conserve cents and reference members of the same household.
+- Personal profiles contain private avatar paths and preferences only; roles remain in protected household members. Restrict avatar storage to the owner's UUID folder and keep the bucket private.
+- Preserve invitation codes through confirmation redirects. Recovery has its own public route. Distinguish denied access, expired authorization, suspension and connection failures in the UI.
+- `/admin` uses only `admin_*` RPCs gated by a protected `platform_admin` role. Provision the first platform administrator through an owner-controlled backend operation; never expose a first-user claim flow.
+- The private `platform_owners` allowlist may provision only addresses verified by Supabase Auth. Clients must never modify that list or use editable metadata to obtain roles.
+
+## Migrations and verification
+
+- Do not edit applied SQL migrations. The legacy migration history is `drizzle/migrations/0000`–`0010`; subsequent changes belong in new timestamped `supabase/migrations` files.
+- `drizzle/schema.ts` and legacy snapshots are not a declarative copy of the live schema. Do not run a generated schema push/diff from those empty files against a real database.
+- Test database changes in an isolated disposable database, including permissions, conflicts and concurrency. Inspect the target project's actual schema before applying new migrations.
+- Use Bun 1.4.3 with `bun.lock` and frozen installs. Run typecheck, tests, lint, format checks and build; browser smoke tests use a synthetic local backend.
+- Do not infer production verification from local tests. Record any live flows that still require confirmation in the deployed environment.
+- Production hosting and backend resources must stay on Free plans under the user's $0 infrastructure budget. Static Cloudflare assets must stay below 25 MiB per file. Keep the pinned ONNX CDN binary aligned with the installed package; audio inference remains local.

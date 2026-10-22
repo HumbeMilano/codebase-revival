@@ -6,12 +6,7 @@ export interface Member {
   color: string; // tailwind token class suffix
 }
 
-export const MEMBERS: Member[] = [
-  { id: "papa", name: "Papá", role: "admin", color: "member-1" },
-  { id: "mama", name: "Mamá", role: "admin", color: "member-2" },
-  { id: "lucas", name: "Lucas", role: "member", color: "member-3" },
-  { id: "sofia", name: "Sofía", role: "member", color: "member-4" },
-];
+export const MEMBERS: Member[] = [];
 
 export const memberBg: Record<string, string> = {
   "member-1": "bg-member-1",
@@ -32,9 +27,12 @@ export interface Chore {
   memberId: string;
   done: boolean;
   when: string;
+  dueDate?: string | null;
+  revision?: number;
 }
 
 export interface ShopItem {
+  revision?: number;
   id: string;
   name: string;
   done: boolean;
@@ -52,5 +50,14 @@ export const CATEGORIES: Record<string, string> = {
 /** Household context loaded at sign-in/pairing. MEMBERS is mutated in place so existing imports stay live. */
 export const HOUSEHOLD = { id: "", name: "" };
 export function setMembers(rows: { key: string; name: string; role: string }[]) {
-  MEMBERS.splice(0, MEMBERS.length, ...rows.map((r, i): Member => ({ id: r.key, name: r.name, role: r.role === "admin" ? "admin" : "member", color: `member-${(i % 4) + 1}` })));
+  MEMBERS.splice(
+    0,
+    MEMBERS.length,
+    ...rows.map((r, i): Member => ({
+      id: r.key,
+      name: r.name,
+      role: r.role === "admin" ? "admin" : "member",
+      color: `member-${(i % 4) + 1}`,
+    })),
+  );
 }

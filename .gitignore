@@ -30,3 +30,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local environment overrides and privileged credentials
+.env
+.env.*
+!.env.example
+
+# Browser verification artifacts
+playwright-report/
+test-results/
+
+# Supabase CLI local metadata
+supabase/.temp/

@@ -1,38 +1,41 @@
 # Roadmap
 
-## Cuentas personales
-- [x] Completar formularios de registro, recuperación de contraseña y entrada con invitación conservada; confirmación de correo sigue activada.
-- [x] Añadir foto privada y preferencias personales con permisos propios y creación automática de perfil.
-- [x] Permitir a adultos revisar y cancelar invitaciones; rechazar invitaciones canceladas, usadas o caducadas.
-- [ ] Verificar registro confirmado, foto y cuentas adultas/infantiles de extremo a extremo: requiere que el solicitante entre en su cuenta en la vista previa; no hay sesión disponible para su identidad verificada.
+## Aplicación actual
 
-## Corrección de compras
-- [x] Evitar productos duplicados y escrituras repetidas; limpiar copias existentes y exigir unicidad por hogar.
-- [x] Verificar añadir, marcar, borrar y sincronizar entre dos navegadores.
+HomeHub ofrece cuentas personales, hogares, invitaciones, tablets vinculadas, acceso por PIN, tareas, compras, calendario, notas, finanzas compartidas y preferencias privadas de perfil. La administración del servicio tiene un rol separado. El repositorio está conectado a Lovable; el código y las migraciones deben mantenerse coordinados.
 
-## Fase 2 — Backend real (en curso)
-- [x] Esquema multi-hogar en la base de datos: hogares, miembros (PIN cifrado), tareas, compras, eventos, notas, bills, repartos, ajustes mensuales y aportes.
-- [x] Datos de ejemplo de la Familia Pérez cargados en la base de datos.
-- [x] PIN verificado en servidor mediante función de base de datos (verify_pin); los cifrados ya no son legibles desde el navegador.
-- [x] Tareas, compras, calendario, notas y finanzas se guardan y sincronizan en tiempo real entre dispositivos.
-- [x] Verificado: login con PIN 2222, producto añadido persiste tras recargar, PIN incorrecto no entra.
-- [x] Datos aislados por hogar (cuentas y tablets emparejadas).
-- [x] Verificar sincronización de compras con dos tablets abiertas a la vez.
+## Estabilización
 
-## Fase 3 — SaaS
-- [x] Registro con correo, crear hogar o unirse con invitación, emparejar tablet por código, desvincular tablets.
-- [x] Tareas: crear, editar, eliminar (con deshacer).
-- [x] Bloquear finanzas para hijos en la base de datos; PIN adulto concede permiso y cerrar sesión lo revoca (verificado en tablet, incluso reutilizando el permiso anterior).
-- [ ] Verificar autorización financiera en cuentas personales: necesita sesión autorizada del solicitante en la vista previa; no es posible obtenerla automáticamente para su identidad verificada.
-- [ ] Planes Free / Family Pro: pendiente definir límites, precios y cuenta de cobro; no aplicar restricciones ni cargos inventados.
-- [ ] Dictado: pendiente el veredicto del usuario sobre su último intento.
+El trabajo de corrección cubre la revisión del 22 de octubre de 2026:
 
-## Lista de pendientes (plan aprobado)
-- [x] Bloqueo de 5 minutos tras 5 PIN incorrectos en la entrada.
-- [x] Panel de administración del servicio en /admin (hogares, planes, suspensión, tablets, cuentas, administradores).
-- [x] Gestión de miembros (añadir/editar/quitar, cambiar PIN y rol) en Hogar, con guardas: PIN único, no quitar a quien tiene cuenta, no dejar el hogar sin adultos. Verificado en la vista previa y en la base de datos.
-- [x] Vincular cuenta con persona al aceptar invitación: cada cuenta queda enlazada a su miembro (no se puede quitar ese miembro sin desvincular).
-- [x] Calendario y Notas guardados en la base de datos: verificado que siguen ahí tras recargar, con sincronización en vivo.
-- [x] Mensajes de error sin conexión y estados vacíos: aviso de sin conexión, aviso al fallar un guardado y estados vacíos en notas.
-- [ ] Publicar y probar en tablet y teléfonos reales.
-- [ ] Mejoras B y extras C (ver plan).
+- Restringir la creación del primer administrador de plataforma a una operación del propietario.
+- Compartir el límite de intentos de PIN entre entrada y autorización financiera.
+- Serializar cambios de miembros y conservar al menos un adulto.
+- Guardar facturas, repartos y ajustes de forma atómica; rechazar escrituras obsoletas.
+- Reconciliar los guardados optimistas fallidos y mostrar sus errores correctamente.
+- Exigir miembros válidos del hogar y repartos que conserven el importe.
+- Aplicar la suspensión a tablas y RPC.
+- Caducar y revocar las autorizaciones financieras.
+- Mantener reactivo el contexto de sesión y miembros, descartando respuestas obsoletas.
+- Sustituir marcos de preview, fechas fijas y contenido de demostración por flujos funcionales adaptables.
+- Provisionar el almacenamiento privado y hacer reproducible la instalación.
+- Actualizar dependencias vulnerables y ejecutar comprobaciones en CI.
+
+La finalización requiere comprobaciones de código y regresiones de base de datos/navegador aisladas. La validación del despliegue se registra por separado.
+
+## Verificación del despliegue
+
+- [ ] Confirmar la migración de corrección en el proyecto correcto y revisar los avisos de seguridad/rendimiento de la base.
+- [ ] Verificar registro confirmado, invitación y recuperación de contraseña en el dominio publicado.
+- [ ] Verificar subida/eliminación de avatar privado y rechazo del acceso desde otra cuenta.
+- [ ] Verificar permisos adulto/hijo, caducidad de autorización financiera y revocación al salir sobre la API real.
+- [ ] Verificar dos dispositivos reales, reconexión, cambios de cuenta/rol, revocación de tablet y suspensión del hogar.
+- [ ] Probar diseño, teclado, micrófono, descarga de Whisper y transcripción en iPad/Safari y Android.
+- [ ] Ensayar la restauración de base de datos, Auth y configuración de Storage.
+
+## Decisiones de producto
+
+- Definir límites de planes, precios y proveedor de pago antes de implementar suscripciones o cargos.
+- Decidir la política del historial financiero: obligaciones mensuales, pagos inmutables y correcciones explícitas si se necesita conservar contabilidad histórica.
+- Definir cierre de cuenta, salida del hogar, transferencia de responsabilidad y retención antes de exponer acciones irreversibles.
+- Recoger resultados del dictado en dispositivos reales antes de ampliar idiomas o modelos.

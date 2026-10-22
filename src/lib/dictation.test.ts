@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { appendDictation, monoAudio, WHISPER_MODEL, WHISPER_SAMPLE_RATE, DICTATION_LIMIT_SECONDS } from "./dictation";
+import {
+  appendDictation,
+  monoAudio,
+  WHISPER_MODEL,
+  WHISPER_SAMPLE_RATE,
+  DICTATION_LIMIT_SECONDS,
+} from "./dictation";
 
 describe("local bilingual dictation", () => {
   it("uses multilingual Base for the final accuracy trial", () => {
@@ -21,6 +27,8 @@ describe("local bilingual dictation", () => {
     expect(appendDictation("Pendiente\n", " ")).toBe("Pendiente\n");
   });
   it("mixes both audio channels for the local model", () => {
-    expect([...monoAudio([new Float32Array([1, 0]), new Float32Array([0, -1])])]).toEqual([0.5, -0.5]);
+    expect([...monoAudio([new Float32Array([1, 0]), new Float32Array([0, -1])])]).toEqual([
+      0.5, -0.5,
+    ]);
   });
 });
