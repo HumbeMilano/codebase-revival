@@ -41,7 +41,7 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: (to
     if (view === "pair") {
       const { data, error } = await supabase.rpc("pair_device", { _code: code, _name: "Tablet de casa" });
       setBusy(false);
-      if (error || !data) return toast.error(errMsg(error));
+      if (error || !data) { toast.error(errMsg(error)); return; }
       localStorage.setItem(DEVICE_KEY, data);
       onPaired(data);
       return;
@@ -50,7 +50,7 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: (to
       ? await supabase.auth.signInWithPassword({ email, password })
       : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
     setBusy(false);
-    if (error) return toast.error(errMsg(error));
+    if (error) { toast.error(errMsg(error)); return; }
     if (view === "signup" && !data.session) setSent(true);
   };
 
@@ -92,13 +92,13 @@ export function SetupHousehold({ compact, onDone }: { compact: boolean; onDone: 
   const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin.length !== 4) return toast.error("El PIN debe tener 4 números");
+    if (pin.length !== 4) { toast.error("El PIN debe tener 4 números"); return; }
     setBusy(true);
     const { error } = view === "create"
       ? await supabase.rpc("create_household", { _name: home, _member_name: name, _pin: pin })
       : await supabase.rpc("redeem_invite", { _code: code, _pin: pin });
     setBusy(false);
-    if (error) return toast.error(errMsg(error));
+    if (error) { toast.error(errMsg(error)); return; }
     onDone();
   };
   return (
@@ -140,12 +140,12 @@ export function HouseholdSettings() {
   const makeInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     const { data, error } = await supabase.rpc("create_invite", { _member_name: name, _role: role });
-    if (error) return toast.error(errMsg(error));
+    if (error) { toast.error(errMsg(error)); return; }
     setInvite(data); setName("");
   };
   const makePair = async () => {
     const { data, error } = await supabase.rpc("create_pairing_code");
-    if (error) return toast.error(errMsg(error));
+    if (error) { toast.error(errMsg(error)); return; }
     setPair(data);
   };
   const revoke = async (id: string) => {
