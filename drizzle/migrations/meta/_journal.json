@@ -71,6 +71,13 @@
       "when": 1792633521047,
       "tag": "0009_member_management",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792633589224,
+      "tag": "0010_update_member_optional_pin",
+      "breakpoints": true
     }
   ]
 }
