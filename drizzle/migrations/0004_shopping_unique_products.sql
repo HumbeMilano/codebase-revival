@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX shopping_household_product_unique ON public.shopping_items(household_id,lower(btrim(name)));

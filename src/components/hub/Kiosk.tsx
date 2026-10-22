@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CloudSun, Delete, Lock, X } from "lucide-react";
 import photo from "@/assets/kiosk-photo.jpg";
 import { HOUSEHOLD, MEMBERS, memberBg, type Member } from "./data";
-import { db } from "@/lib/db";
+import { db, isDeviceMode, setFinanceToken } from "@/lib/db";
 import { cn } from "@/lib/utils";
 
 export function useClock() {
@@ -29,6 +29,11 @@ export async function findByPin(pin: string, adminOnly = false): Promise<Member 
   const { data } = await db().rpc("verify_pin", { _pin: pin, _admin_only: adminOnly });
   const found = data?.[0];
   if (!found) return undefined;
+  if (adminOnly || (isDeviceMode() && found.role === "admin")) {
+    const { data: token, error } = await db().rpc("authorize_finances", { _pin: pin });
+    if (error || !token) return undefined;
+    setFinanceToken(token);
+  }
   const meta = MEMBERS.find((m) => m.id === found.key);
   return meta ? { ...meta, name: found.name, role: found.role as Member["role"] } : undefined;
 }
