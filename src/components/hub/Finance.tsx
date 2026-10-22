@@ -65,7 +65,7 @@ function Sheet({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="block max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto rounded-3xl bg-card p-5 pt-7">
+      <DialogContent className="left-4 top-[5dvh] block max-h-[90dvh] w-[calc(100dvw_-_2rem)] max-w-xl translate-none overflow-y-auto overscroll-contain rounded-3xl bg-card p-5 pt-7 sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]">
         <div className="mb-4 pr-6">
           <DialogTitle className="font-display text-2xl font-bold">{title}</DialogTitle>
           <DialogDescription className={cn("mt-1", !subtitle && "sr-only")}>
@@ -879,8 +879,8 @@ export function Finance({
           </section>
 
           <div className="flex gap-2">
-            <label className="flex flex-1 items-center gap-2 rounded-full bg-card px-4 py-2.5 shadow-card">
-              <Search className="size-4 text-muted-foreground" />
+            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-card px-4 py-2.5 shadow-card">
+              <Search className="size-4 shrink-0 text-muted-foreground" />
               <input
                 aria-label="Buscar facturas"
                 value={q}
@@ -889,7 +889,7 @@ export function Finance({
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </label>
-            <div className="flex rounded-full bg-card p-1 shadow-card">
+            <div className="flex shrink-0 rounded-full bg-card p-1 shadow-card">
               {(
                 [
                   ["all", "Todos"],

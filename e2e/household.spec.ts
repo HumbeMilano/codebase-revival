@@ -47,6 +47,13 @@ test("a real viewport can create household records and reload confirmed data", a
   await dialog.getByLabel("Nombre", { exact: true }).fill("Internet familiar");
   await dialog.getByLabel("Monto mensual", { exact: true }).fill("60.30");
   await dialog.getByLabel("Día de vencimiento", { exact: true }).fill("15");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
   await dialog.getByRole("button", { name: "Guardar factura", exact: true }).click();
   await expect.poll(() => backend.rows["bills"]?.length).toBe(1);
   await expect(dialog).toHaveCount(0);
@@ -78,7 +85,11 @@ test("a real viewport can create household records and reload confirmed data", a
   await section(page, "Finanzas");
   await expect(page.getByText("$50.25", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Internet familiar", { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
   expect(browserErrors).toEqual([]);
   expect(backend.unexpectedRequests).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("functional-finance.png"), fullPage: true });

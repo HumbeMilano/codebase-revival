@@ -54,6 +54,8 @@ El conector de Supabase disponible permite gestionar SQL y funciones, pero no mo
 
 La clave SMTP se crea y se guarda en Resend/Supabase, nunca en el frontend. Los registros SPF, DKIM y Return-Path pertenecen al subdominio de envío; no se sustituyen los MX del dominio raíz. Se desactiva el seguimiento de aperturas y clics en enlaces de autenticación.
 
+Durante el lanzamiento del 22 de octubre de 2026, el propietario completó SMTP y las URLs en Supabase. Se comprobó que el registro exige confirmar el correo y que la cuenta designada, una vez confirmada, obtuvo el rol protegido de administrador. El propietario confirmó el inicio de sesión en `app.skendal.com` y la recuperación de contraseña mediante el correo, incluido el acceso con la contraseña nueva.
+
 Verificar con una cuenta real: registro y confirmación, inicio y cierre de sesión, recuperación de contraseña, creación de hogar, invitación, avatar privado, una segunda sesión, vinculación y revocación de tablet y autorización financiera por PIN. El dictado debe comprobarse con micrófono en los dispositivos previstos. Las pruebas locales con backend sintético no prueban la entrega de correos.
 
 ## Límites del presupuesto gratuito
