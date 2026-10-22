@@ -5,12 +5,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { DEVICE_KEY } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { credentials, invitationCode, INVITATION_KEY, readPendingInvite } from "@/lib/account-validation";
 
 const field = "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-ring";
 const pinField = (v: string) => v.replace(/\D/g, "").slice(0, 4);
 const errMsg = (e: { message?: string } | null) => {
   const m = e?.message ?? "";
   if (m.includes("Invalid login")) return "Correo o contraseña incorrectos";
+  if (m.includes("Email not confirmed")) return "Confirma tu correo antes de entrar";
+  if (m.includes("Already in household")) return "Esta cuenta ya pertenece a un hogar";
+  if (m.includes("Name required")) return "Escribe un nombre válido";
   if (m.includes("PIN already")) return "Ese PIN ya lo usa otra persona del hogar";
   if (m.includes("Invalid or expired")) return "Código no válido o caducado";
   if (m.includes("duplicate key") && m.includes("pin")) return "Ese PIN ya lo usa otra persona del hogar";
@@ -28,15 +32,23 @@ function Shell({ children, compact }: { children: React.ReactNode; compact: bool
 
 /** First screen for a browser with no account and no paired tablet. */
 export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: (token: string) => void }) {
-  const [view, setView] = useState<"login" | "signup" | "pair">("login");
+  const [view, setView] = useState<"login" | "signup" | "pair" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [invitation, setInvitation] = useState("");
+  useEffect(() => {
+    const candidate = new URLSearchParams(window.location.search).get("invite");
+    const parsed = invitationCode.safeParse(candidate);
+    if (parsed.success) localStorage.setItem(INVITATION_KEY, parsed.data);
+    setInvitation(readPendingInvite());
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     if (view === "pair") {
       const { data, error } = await supabase.rpc("pair_device", { _code: code, _name: "Tablet de casa" });
@@ -46,22 +58,38 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: (to
       onPaired(data);
       return;
     }
+    if (view === "forgot") {
+      const valid = credentials.shape.email.safeParse(email);
+      if (!valid.success) { toast.error("Escribe un correo válido"); setBusy(false); return; }
+      const { error } = await supabase.auth.resetPasswordForEmail(valid.data, { redirectTo: `${window.location.origin}/reset-password` });
+      setBusy(false);
+      if (error) toast.error("No se pudo enviar el enlace. Intenta de nuevo más tarde.");
+      else setSent(true);
+      return;
+    }
+    const valid = credentials.safeParse({ email, password });
+    if (!valid.success) { toast.error(valid.error.issues[0]?.message ?? "Revisa tus datos"); setBusy(false); return; }
+    if (invitation) {
+      const parsed = invitationCode.safeParse(invitation);
+      if (!parsed.success) { toast.error("Código de invitación no válido"); setBusy(false); return; }
+      localStorage.setItem(INVITATION_KEY, parsed.data);
+    } else localStorage.removeItem(INVITATION_KEY);
     const { error, data } = view === "login"
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
+      ? await supabase.auth.signInWithPassword(valid.data)
+      : await supabase.auth.signUp({ ...valid.data, options: { emailRedirectTo: invitation ? `${window.location.origin}/?invite=${encodeURIComponent(invitation)}` : window.location.origin } });
     setBusy(false);
     if (error) { toast.error(errMsg(error)); return; }
     if (view === "signup" && !data.session) setSent(true);
   };
 
-  if (sent) return <Shell compact={compact}><div className="rounded-3xl bg-card p-6 text-center shadow-card"><Mail className="mx-auto size-10" /><h1 className="mt-3 font-display text-2xl font-bold">Revisa tu correo</h1><p className="mt-2 text-sm text-muted-foreground">Confirma tu cuenta con el enlace que enviamos a {email}.</p><Button variant="ghost" className="mt-4" onClick={() => { setSent(false); setView("login"); }}>Ya confirmé</Button></div></Shell>;
+  if (sent) return <Shell compact={compact}><div className="space-y-4 text-center"><Mail className="mx-auto size-10" /><h1 className="font-display text-2xl font-bold">Revisa tu correo</h1><p className="text-sm text-muted-foreground">{view === "forgot" ? "Si el correo tiene una cuenta, recibirás un enlace para recuperar tu contraseña." : `Confirma tu cuenta con el enlace enviado a ${email}.`}</p><Button variant="ghost" onClick={() => { setSent(false); setView("login"); }}>Volver a entrar</Button></div></Shell>;
 
   return (
     <Shell compact={compact}>
-      <h1 className="font-display text-4xl font-extrabold tracking-[-0.04em]">{view === "pair" ? "Emparejar tablet" : view === "signup" ? "Crea tu cuenta" : "Bienvenido"}</h1>
+      <h1 className="font-display text-4xl font-extrabold">{view === "pair" ? "Emparejar tablet" : view === "signup" ? "Crea tu cuenta" : view === "forgot" ? "Recuperar acceso" : "Bienvenido"}</h1>
       <div className="my-5 grid grid-cols-3 gap-1 rounded-2xl bg-card p-1 shadow-card">
         {([["login", "Entrar"], ["signup", "Registro"], ["pair", "Tablet"]] as const).map(([v, l]) => (
-          <button key={v} onClick={() => setView(v)} className={cn("rounded-xl py-2 text-sm font-semibold", view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{l}</button>
+          <Button variant="ghost" key={v} disabled={busy} onClick={() => setView(v)} className={cn("rounded-xl py-2 text-sm font-semibold", view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{l}</Button>
         ))}
       </div>
       <form onSubmit={submit} className="space-y-4 rounded-3xl bg-card p-5 shadow-card">
@@ -73,10 +101,12 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: (to
         ) : (
           <>
             <label className="block text-sm font-semibold">Correo<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={field} /></label>
-            <label className="block text-sm font-semibold">Contraseña<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className={field} /></label>
+            {view !== "forgot" && <label className="block text-sm font-semibold">Contraseña<input type="password" required minLength={6} maxLength={128} autoComplete={view === "signup" ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} className={field} /></label>}
+            {view === "signup" && <label className="block text-sm font-semibold">Invitación (opcional)<input value={invitation} maxLength={16} onChange={(e) => setInvitation(e.target.value.toUpperCase())} className={field} /></label>}
           </>
         )}
-        <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl">{view === "pair" ? <><Tablet /> Emparejar</> : view === "signup" ? "Crear cuenta" : "Entrar"}</Button>
+        <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl">{busy ? "Un momento…" : view === "pair" ? <><Tablet /> Emparejar</> : view === "signup" ? "Crear cuenta" : view === "forgot" ? "Enviar enlace" : "Entrar"}</Button>
+        {view === "login" && <Button type="button" variant="ghost" className="w-full" onClick={() => setView("forgot")}>Olvidé mi contraseña</Button>}
       </form>
     </Shell>
   );
@@ -90,8 +120,10 @@ export function SetupHousehold({ compact, onDone }: { compact: boolean; onDone: 
   const [code, setCode] = useState("");
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => { const pending = readPendingInvite(); if (pending) { setCode(pending); setView("join"); } }, []);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     if (pin.length !== 4) { toast.error("El PIN debe tener 4 números"); return; }
     setBusy(true);
     const { error } = view === "create"
@@ -99,6 +131,8 @@ export function SetupHousehold({ compact, onDone }: { compact: boolean; onDone: 
       : await supabase.rpc("redeem_invite", { _code: code, _pin: pin });
     setBusy(false);
     if (error) { toast.error(errMsg(error)); return; }
+    localStorage.removeItem(INVITATION_KEY);
+    window.history.replaceState({}, "", window.location.pathname);
     onDone();
   };
   return (
@@ -133,15 +167,21 @@ export function HouseholdSettings() {
   const [invite, setInvite] = useState<string | null>(null);
   const [pair, setPair] = useState<string | null>(null);
   const [devices, setDevices] = useState<{ id: string; name: string; created_at: string; revoked: boolean }[]>([]);
+  const [invites, setInvites] = useState<{ code: string; member_name: string; role: string; expires_at: string; used_at: string | null; revoked_at: string | null }[]>([]);
+  const [busy, setBusy] = useState(false);
   const loadDevices = () => void supabase.rpc("list_devices").then(({ data }) => setDevices(data ?? []));
-  useEffect(loadDevices, []);
+  const loadInvites = () => void supabase.rpc("list_invites").then(({ data, error }) => { if (error) toast.error("No se pudieron cargar las invitaciones"); else setInvites(data ?? []); });
+  useEffect(() => { loadDevices(); loadInvites(); }, []);
 
   const copy = (t: string) => void navigator.clipboard?.writeText(t).then(() => toast.success("Copiado"));
   const makeInvite = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy || !name.trim()) return;
+    setBusy(true);
     const { data, error } = await supabase.rpc("create_invite", { _member_name: name, _role: role });
+    setBusy(false);
     if (error) { toast.error(errMsg(error)); return; }
-    setInvite(data); setName("");
+    setInvite(data); setName(""); loadInvites();
   };
   const makePair = async () => {
     const { data, error } = await supabase.rpc("create_pairing_code");
@@ -158,14 +198,18 @@ export function HouseholdSettings() {
       <section className="rounded-[1.75rem] bg-lilac p-5">
         <h2 className="flex items-center gap-2 font-display text-xl font-bold"><UserPlus className="size-5" /> Invitar</h2>
         <form onSubmit={makeInvite} className="mt-4 space-y-3">
-          <input required aria-label="Nombre de la persona" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" className={field} />
+          <input required maxLength={100} aria-label="Nombre de la persona" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" className={field} />
           <div className="grid grid-cols-2 gap-2">
             {([["member", "Hijo/a"], ["admin", "Adulto"]] as const).map(([r, l]) => <button type="button" key={r} onClick={() => setRole(r)} className={cn("rounded-xl py-2 text-sm font-semibold", role === r ? "bg-primary text-primary-foreground" : "bg-card")}>{l}</button>)}
           </div>
-          <Button type="submit" className="w-full rounded-xl">Crear invitación</Button>
+          <Button type="submit" disabled={busy} className="w-full rounded-xl">Crear invitación</Button>
         </form>
-        {invite && <button onClick={() => copy(invite)} className="mt-3 flex w-full items-center justify-between rounded-2xl bg-card p-4"><span className="font-display text-3xl font-extrabold tracking-widest">{invite}</span><Copy className="size-5" /></button>}
+        {invite && <Button variant="ghost" onClick={() => copy(`${window.location.origin}/?invite=${invite}`)} className="mt-3 h-auto w-full gap-2 whitespace-normal bg-card p-4"><span className="break-all font-mono text-lg font-bold">{invite}</span><Copy className="size-5 shrink-0" /></Button>}
         {invite && <p className="mt-2 text-xs text-muted-foreground">Válida 7 días. Se usa al crear cuenta → “Tengo invitación”.</p>}
+        <ul className="mt-4 divide-y divide-border">{invites.map((i) => {
+          const status = i.used_at ? "Aceptada" : i.revoked_at ? "Cancelada" : new Date(i.expires_at) <= new Date() ? "Caducada" : "Pendiente";
+          return <li key={i.code} className="flex items-center gap-2 py-3"><div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{i.member_name} · {i.role === "admin" ? "Adulto" : "Hijo/a"}</p><p className="text-xs text-muted-foreground">{status}</p></div>{status === "Pendiente" && <><Button variant="ghost" size="icon" aria-label={`Copiar invitación de ${i.member_name}`} onClick={() => copy(`${window.location.origin}/?invite=${i.code}`)}><Copy /></Button><Button variant="ghost" size="icon" aria-label={`Cancelar invitación de ${i.member_name}`} onClick={() => void supabase.rpc("revoke_invite", { _code: i.code }).then(({ error }) => { if (error) toast.error("No se pudo cancelar"); else { if (invite === i.code) setInvite(null); loadInvites(); } })}><Trash2 /></Button></>}</li>;
+        })}</ul>
       </section>
       <section className="rounded-[1.75rem] bg-sky p-5">
         <h2 className="flex items-center gap-2 font-display text-xl font-bold"><Tablet className="size-5" /> Tablets</h2>

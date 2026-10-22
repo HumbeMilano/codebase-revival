@@ -364,6 +364,7 @@ export type Database = {
           expires_at: string
           household_id: string
           member_name: string
+          revoked_at: string | null
           role: string
           used_at: string | null
         }
@@ -373,6 +374,7 @@ export type Database = {
           expires_at: string
           household_id: string
           member_name: string
+          revoked_at?: string | null
           role?: string
           used_at?: string | null
         }
@@ -382,6 +384,7 @@ export type Database = {
           expires_at?: string
           household_id?: string
           member_name?: string
+          revoked_at?: string | null
           role?: string
           used_at?: string | null
         }
@@ -500,6 +503,27 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          avatar_path: string | null
+          id: string
+          preferred_view: string
+          time_format: string
+        }
+        Insert: {
+          avatar_path?: string | null
+          id: string
+          preferred_view?: string
+          time_format?: string
+        }
+        Update: {
+          avatar_path?: string | null
+          id?: string
+          preferred_view?: string
+          time_format?: string
+        }
+        Relationships: []
+      }
       shopping_items: {
         Row: {
           done: boolean
@@ -567,6 +591,17 @@ export type Database = {
           revoked: boolean
         }[]
       }
+      list_invites: {
+        Args: never
+        Returns: {
+          code: string
+          expires_at: string
+          member_name: string
+          revoked_at: string
+          role: string
+          used_at: string
+        }[]
+      }
       my_context: {
         Args: never
         Returns: {
@@ -580,6 +615,7 @@ export type Database = {
       redeem_invite: { Args: { _code: string; _pin: string }; Returns: string }
       revoke_device: { Args: { _id: string }; Returns: undefined }
       revoke_finance_session: { Args: { _token: string }; Returns: undefined }
+      revoke_invite: { Args: { _code: string }; Returns: undefined }
       verify_pin: {
         Args: { _admin_only?: boolean; _pin: string }
         Returns: {

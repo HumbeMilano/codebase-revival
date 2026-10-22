@@ -22,3 +22,5 @@
 - Households, invites, tablet pairing and device revocation go only through SECURITY DEFINER RPCs (create_household, create_invite, redeem_invite, create_pairing_code, pair_device, list_devices, revoke_device); the backing tables have no client grants.
 - Paired tablets get no realtime (no JWT), so useHubState polls in device mode.
 - Adult PIN financial authorization uses a memory-only secret backed by finance_sessions, bound to the account auth session or paired device; revoke before logout and never trust a client role or boolean as database authorization.
+- Personal profiles store only owner-scoped private avatar paths and view/time preferences; roles stay in protected household members, never in editable profiles. A signup trigger provisions profiles, and private storage is restricted to the owner's UUID folder.
+- Registration preserves invitation codes through confirmation redirects; recovery has its own public route. Auth resolution revalidates with getUser and ignores stale results before rendering household content.

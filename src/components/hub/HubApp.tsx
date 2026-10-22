@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, CheckSquare, Home, LogOut, Monitor, MoreHorizontal, Plus, ShieldCheck, ShoppingCart, Smartphone, StickyNote, Users, Wallet, X } from "lucide-react";
+import { CalendarDays, CheckSquare, Home, LogOut, Monitor, MoreHorizontal, Plus, ShieldCheck, ShoppingCart, Smartphone, StickyNote, UserRound, Users, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { canViewFinances } from "@/lib/finance-visibility";
@@ -13,8 +13,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearFinanceAccess, db, forgetDevice, getDeviceToken, setDeviceMode } from "@/lib/db";
 import { toast } from "sonner";
 import { setHouseholdId } from "@/lib/hub-db";
+import { PersonalProfile } from "./PersonalProfile";
+import { personalPreferences } from "@/lib/account-validation";
 
-type Tab = "home" | "chores" | "shopping" | "finance" | "calendar" | "notes" | "household";
+type Tab = "home" | "chores" | "shopping" | "finance" | "calendar" | "notes" | "household" | "profile";
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Inicio", icon: Home },
   { id: "chores", label: "Tareas", icon: CheckSquare },
@@ -23,20 +25,22 @@ const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "calendar", label: "Calendario", icon: CalendarDays },
   { id: "notes", label: "Notas", icon: StickyNote },
   { id: "household", label: "Hogar", icon: Users },
+  { id: "profile", label: "Mi perfil", icon: UserRound },
 ];
 
 type Gate = { status: "loading" | "welcome" | "setup" } | { status: "ready"; mode: "account" | "device"; member: Member | null };
 
 /** Resolves who this browser is: a signed-in account, a paired tablet, or nobody yet. */
 async function resolveGate(): Promise<Gate> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user: account } } = await supabase.auth.getUser();
   const token = getDeviceToken();
-  setDeviceMode(session ? null : token);
-  if (!session && !token) return { status: "welcome" };
-  const { data: ctx } = await db().rpc("my_context");
+  setDeviceMode(account ? null : token);
+  if (!account && !token) return { status: "welcome" };
+  const { data: ctx, error } = await db().rpc("my_context");
+  if (error) throw error;
   const c = ctx?.[0];
   if (!c) {
-    if (session) return { status: "setup" };
+    if (account) return { status: "setup" };
     forgetDevice();
     return { status: "welcome" };
   }
@@ -52,14 +56,30 @@ async function resolveGate(): Promise<Gate> {
 export function HubApp() {
   const [device, setDevice] = useState<"tablet" | "mobile">("tablet");
   const [gate, setGate] = useState<Gate>({ status: "loading" });
-  const reload = useCallback(() => void resolveGate().then(setGate).catch(() => setGate({ status: "welcome" })), []);
+  const [timeFormat, setTimeFormat] = useState<"12" | "24">("24");
+  const sequence = useState(() => ({ current: 0 }))[0];
+  const loadPreferences = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from("profiles").select("preferred_view,time_format").eq("id", user.id).single();
+    const prefs = personalPreferences.safeParse(data);
+    if (!prefs.success) return;
+    setTimeFormat(prefs.data.time_format);
+    setDevice(prefs.data.preferred_view === "auto" ? window.innerWidth < 900 ? "mobile" : "tablet" : prefs.data.preferred_view);
+  }, []);
+  const reload = useCallback(() => {
+    const request = ++sequence.current;
+    setGate({ status: "loading" });
+    setHouseholdId(""); HOUSEHOLD.id = ""; HOUSEHOLD.name = ""; setMembers([]);
+    void resolveGate().then((next) => { if (sequence.current === request) { setGate(next); if (next.status === "ready" && next.mode === "account") void loadPreferences(); } }).catch(() => { if (sequence.current === request) setGate({ status: "welcome" }); });
+  }, [sequence, loadPreferences]);
   useEffect(() => {
     if (window.innerWidth < 900) setDevice("mobile");
     reload();
     const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT") reload();
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(reload, 0);
     });
-    return () => data.subscription.unsubscribe();
+    return () => { sequence.current += 1; data.subscription.unsubscribe(); };
   }, [reload]);
   const compact = device === "mobile";
 
@@ -85,7 +105,7 @@ export function HubApp() {
         {gate.status === "loading" && <div className="grid h-full place-items-center text-muted-foreground">Cargando…</div>}
         {gate.status === "welcome" && <Welcome compact={compact} onPaired={reload} />}
         {gate.status === "setup" && <SetupHousehold compact={compact} onDone={reload} />}
-        {gate.status === "ready" && <HubShell key={gate.mode + (gate.member?.id ?? "")} compact={compact} mode={gate.mode} accountMember={gate.member} />}
+        {gate.status === "ready" && <HubShell key={gate.mode + HOUSEHOLD.id + (gate.member?.id ?? "")} compact={compact} mode={gate.mode} accountMember={gate.member} timeFormat={timeFormat} onProfileSaved={() => void loadPreferences()} />}
       </div>
       <p className="mt-4 max-w-md text-center text-xs text-muted-foreground">
         Demo: empareja la tablet con el código PEREZ1 y entra con PIN Papá 1111 · Mamá 2222 · Lucas 3333 · Sofía 4444.
@@ -94,7 +114,7 @@ export function HubApp() {
   );
 }
 
-function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "account" | "device"; accountMember: Member | null }) {
+function HubShell({ compact, mode, accountMember, timeFormat, onProfileSaved }: { compact: boolean; mode: "account" | "device"; accountMember: Member | null; timeFormat: "12" | "24"; onProfileSaved: () => void }) {
   const [user, setUser] = useState<Member | null>(accountMember);
   const [tab, setTab] = useState<Tab>("home");
   const [financeUnlocked, setFinanceUnlocked] = useState(false);
@@ -105,7 +125,7 @@ function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "a
   const now = useClock();
   const financialAccess = canViewFinances(user?.role, financeUnlocked);
   const canManage = mode === "account" && user?.role === "admin";
-  const visibleTabs = TABS.filter((t) => (t.id !== "finance" || financialAccess) && (t.id !== "household" || canManage));
+  const visibleTabs = TABS.filter((t) => (t.id !== "finance" || financialAccess) && (t.id !== "household" || canManage) && (t.id !== "profile" || mode === "account"));
 
   const go = (t: Tab) => {
     if (t === "finance" && !financialAccess) {
@@ -123,7 +143,8 @@ function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "a
       return;
     }
     if (mode === "account") {
-      void supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) toast.error("No se pudo cerrar sesión. Reintenta.");
       return;
     }
     setUser(null);
@@ -160,7 +181,7 @@ function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "a
                       </Button>
                     ))}
                   </nav>
-                  <span className="font-display text-lg font-bold tabular text-muted-foreground">{now?.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="font-display text-lg font-bold tabular text-muted-foreground">{now?.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: timeFormat === "12" })}</span>
                   <button onClick={logout} aria-label="Bloquear" className="flex items-center gap-2 rounded-full bg-card p-1 pr-3 shadow-card">
                     <Avatar m={user} size="sm" /><LogOut className="size-4 text-muted-foreground" />
                   </button>
@@ -178,6 +199,7 @@ function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "a
                 {tab === "calendar" && <FamilyCalendar events={s.events} setEvents={s.setEvents} user={user} compact={compact} />}
                 {tab === "notes" && <FamilyNotes notes={s.notes} setNotes={s.setNotes} user={user} compact={compact} />}
                 {tab === "household" && canManage && <HouseholdSettings />}
+                {tab === "profile" && mode === "account" && <PersonalProfile onSaved={onProfileSaved} />}
               </div>
             </main>
             {compact && (
@@ -191,7 +213,7 @@ function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "a
                 {TABS.filter((t) => t.id === "shopping").map(({ id, label, icon: Icon }) => (
                   <DockBtn key={id} active={tab === id} label={label} Icon={Icon} onClick={() => go(id)} />
                 ))}
-                <DockBtn active={tab === "calendar" || tab === "notes" || tab === "finance" || tab === "household"} label="Más" Icon={MoreHorizontal} onClick={() => setMore(true)} />
+                <DockBtn active={["calendar", "notes", "finance", "household", "profile"].includes(tab)} label="Más" Icon={MoreHorizontal} onClick={() => setMore(true)} />
               </nav>
             )}
             {quick && (
@@ -211,7 +233,7 @@ function HubShell({ compact, mode, accountMember }: { compact: boolean; mode: "a
             {more && <div className="absolute inset-0 z-30 flex items-end bg-foreground/20 backdrop-blur-sm" onClick={() => setMore(false)}>
               <section role="dialog" aria-label="Más secciones" className="w-full rounded-t-3xl bg-card p-5 pb-8" onClick={(e) => e.stopPropagation()}>
                 <header className="mb-3 flex items-center justify-between"><h2 className="font-display text-xl font-bold">Más</h2><Button variant="ghost" size="icon" aria-label="Cerrar" onClick={() => setMore(false)}><X /></Button></header>
-                <div className="space-y-1">{visibleTabs.filter((t) => ["calendar", "notes", "finance", "household"].includes(t.id)).map(({ id, label, icon: Icon }) => <Button key={id} variant="ghost" className="h-14 w-full justify-start rounded-xl" onClick={() => { setMore(false); go(id); }}><Icon />{label}</Button>)}</div>
+                <div className="space-y-1">{visibleTabs.filter((t) => ["calendar", "notes", "finance", "household", "profile"].includes(t.id)).map(({ id, label, icon: Icon }) => <Button key={id} variant="ghost" className="h-14 w-full justify-start rounded-xl" onClick={() => { setMore(false); go(id); }}><Icon />{label}</Button>)}</div>
               </section>
             </div>}
           </div>
