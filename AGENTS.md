@@ -14,7 +14,7 @@
 - Dictation runs multilingual Whisper only in a lazily created, session-reused browser Web Worker with single-thread WASM and explicitly resampled 16 kHz audio; never send audio to Cloud or an AI API, keeping inference local and the UI usable.
 
 ## Backend (Fase 2)
-- Household data lives in Lovable Cloud tables (chores, shopping_items, events, notes, bills, bill_splits, bill_overrides, contributions, members); household id comes from my_context() at startup (src/lib/hub-db.ts setHouseholdId); MEMBERS/HOUSEHOLD in data.ts are mutated in place after load. UI state setters in Screens.tsx persist via diff-sync helpers in src/lib/hub-db.ts and reload on postgres_changes realtime.
+- Household data lives in Lovable Cloud tables; household id comes from my_context() at startup, and MEMBERS/HOUSEHOLD are mutated in place after load. Collection updates use usePersistedCollection outside replayable React state updaters, with a shared write queue and revision-guarded refreshes so StrictMode and realtime cannot duplicate or overwrite pending edits.
 - PIN login is verified by the Postgres function public.verify_pin (SECURITY DEFINER, sha256 via pgcrypto); members.pin_hash is not readable by anon. Do not reintroduce client-side PIN checks or server-fn PIN lookups (server-side Supabase URL in the sandbox points at a different backend than the browser).
 
 ## SaaS isolation (Fase 3)

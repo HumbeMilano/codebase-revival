@@ -27,6 +27,9 @@ export async function loadHubData(): Promise<HubData> {
     db().from("bill_overrides").select("*"),
     db().from("contributions").select("*").eq("household_id", HOUSEHOLD_ID),
   ]);
+  for (const result of [chores, items, events, notes, bills, splits, overrides, contributions]) {
+    if (result.error) throw result.error;
+  }
   const splitRows = splits.data ?? [];
   const overrideRows = overrides.data ?? [];
   return {
@@ -71,7 +74,8 @@ async function syncCollection(
   if (removed.length) await db().from(table).delete().in("id", removed);
   const prevById = new Map(prev.map((x) => [x.id, x]));
   for (let i = 0; i < next.length; i++) {
-    const item = next[i]!;
+    const item = next[i];
+    if (!item) continue;
     const before = prevById.get(item.id);
     const row = toRow(item as never, i);
     if (!before) await db().from(table).insert(row as never);
@@ -102,7 +106,8 @@ export async function syncBills(prev: LedgerBill[], next: LedgerBill[]) {
   if (removed.length) await db().from("bills").delete().in("id", removed);
   const prevById = new Map(prev.map((b) => [b.id, b]));
   for (let i = 0; i < next.length; i++) {
-    const b = next[i]!;
+    const b = next[i];
+    if (!b) continue;
     const before = prevById.get(b.id);
     const changed = before && JSON.stringify(before) !== JSON.stringify(b);
     if (before && !changed) continue;
