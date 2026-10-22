@@ -29,6 +29,7 @@
 
 ## Lista de pendientes (plan aprobado)
 - [x] Bloqueo de 5 minutos tras 5 PIN incorrectos en la entrada.
+- [x] Panel de administración del servicio en /admin (hogares, planes, suspensión, tablets, cuentas, administradores).
 - [ ] Gestión de miembros (añadir/editar/quitar, cambiar PIN y rol).
 - [ ] Vincular cuenta con persona al aceptar invitación.
 - [ ] Calendario y Notas guardados en la base de datos.

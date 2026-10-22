@@ -344,16 +344,22 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          plan: string
+          suspended: boolean
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          plan?: string
+          suspended?: boolean
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          plan?: string
+          suspended?: boolean
         }
         Relationships: []
       }
@@ -582,13 +588,86 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_list_accounts: {
+        Args: never
+        Returns: {
+          confirmed: boolean
+          created_at: string
+          email: string
+          household_name: string
+          is_admin: boolean
+          last_sign_in_at: string
+          user_id: string
+        }[]
+      }
+      admin_list_households: {
+        Args: never
+        Returns: {
+          accounts: number
+          created_at: string
+          devices: number
+          id: string
+          members: number
+          name: string
+          plan: string
+          suspended: boolean
+        }[]
+      }
+      admin_revoke_household_devices: {
+        Args: { _id: string }
+        Returns: undefined
+      }
+      admin_set_household: {
+        Args: { _id: string; _plan: string; _suspended: boolean }
+        Returns: undefined
+      }
+      admin_set_platform_admin: {
+        Args: { _grant: boolean; _user: string }
+        Returns: undefined
+      }
+      admin_stats: {
+        Args: never
+        Returns: {
+          accounts: number
+          devices: number
+          households: number
+          members: number
+          new_accounts_30d: number
+          new_households_30d: number
+          pro: number
+          suspended: number
+        }[]
+      }
+      am_platform_admin: { Args: never; Returns: boolean }
       authorize_finances: { Args: { _pin: string }; Returns: string }
       can_access_finances: { Args: { _household: string }; Returns: boolean }
+      claim_platform_admin: { Args: never; Returns: boolean }
       create_household: {
         Args: { _member_name: string; _name: string; _pin: string }
         Returns: string
@@ -599,6 +678,13 @@ export type Database = {
       }
       create_pairing_code: { Args: never; Returns: string }
       current_household_ids: { Args: never; Returns: string[] }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       household_members: {
         Args: never
         Returns: {
@@ -638,7 +724,9 @@ export type Database = {
         }[]
       }
       pair_device: { Args: { _code: string; _name: string }; Returns: string }
+      platform_admin_exists: { Args: never; Returns: boolean }
       redeem_invite: { Args: { _code: string; _pin: string }; Returns: string }
+      require_platform_admin: { Args: never; Returns: undefined }
       revoke_device: { Args: { _id: string }; Returns: undefined }
       revoke_finance_session: { Args: { _token: string }; Returns: undefined }
       revoke_invite: { Args: { _code: string }; Returns: undefined }
@@ -652,7 +740,7 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "platform_admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -779,6 +867,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["platform_admin"],
+    },
   },
 } as const
