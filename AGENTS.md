@@ -24,3 +24,4 @@
 - Adult PIN financial authorization uses a memory-only secret backed by finance_sessions, bound to the account auth session or paired device; revoke before logout and never trust a client role or boolean as database authorization.
 - Personal profiles store only owner-scoped private avatar paths and view/time preferences; roles stay in protected household members, never in editable profiles. A signup trigger provisions profiles, and private storage is restricted to the owner's UUID folder.
 - Registration preserves invitation codes through confirmation redirects; recovery has its own public route. Auth resolution revalidates with getUser and ignores stale results before rendering household content.
+- SaaS platform administration lives at /admin and goes only through SECURITY DEFINER admin_* RPCs gated by has_role(auth.uid(),'platform_admin') in public.user_roles; suspended households are excluded in current_household_ids() so suspension is enforced by RLS, not UI.
