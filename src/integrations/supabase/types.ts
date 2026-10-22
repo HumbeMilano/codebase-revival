@@ -192,6 +192,41 @@ export type Database = {
           },
         ]
       }
+      devices: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+          name: string
+          revoked: boolean
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id?: string
+          name: string
+          revoked?: boolean
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+          name?: string
+          revoked?: boolean
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devices_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           date: string
@@ -230,6 +265,35 @@ export type Database = {
           },
         ]
       }
+      household_accounts: {
+        Row: {
+          created_at: string
+          household_id: string
+          member_key: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          member_key: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          member_key?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_accounts_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       households: {
         Row: {
           created_at: string
@@ -247,6 +311,44 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      invites: {
+        Row: {
+          code: string
+          created_by: string
+          expires_at: string
+          household_id: string
+          member_name: string
+          role: string
+          used_at: string | null
+        }
+        Insert: {
+          code: string
+          created_by: string
+          expires_at: string
+          household_id: string
+          member_name: string
+          role?: string
+          used_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_by?: string
+          expires_at?: string
+          household_id?: string
+          member_name?: string
+          role?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invites_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       members: {
         Row: {
@@ -321,6 +423,38 @@ export type Database = {
           },
         ]
       }
+      pairing_codes: {
+        Row: {
+          code: string
+          expires_at: string
+          household_id: string
+          max_uses: number
+          uses: number
+        }
+        Insert: {
+          code: string
+          expires_at: string
+          household_id: string
+          max_uses?: number
+          uses?: number
+        }
+        Update: {
+          code?: string
+          expires_at?: string
+          household_id?: string
+          max_uses?: number
+          uses?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pairing_codes_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopping_items: {
         Row: {
           done: boolean
@@ -358,6 +492,46 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_household: {
+        Args: { _member_name: string; _name: string; _pin: string }
+        Returns: string
+      }
+      create_invite: {
+        Args: { _member_name: string; _role: string }
+        Returns: string
+      }
+      create_pairing_code: { Args: never; Returns: string }
+      current_household_ids: { Args: never; Returns: string[] }
+      household_members: {
+        Args: never
+        Returns: {
+          key: string
+          name: string
+          role: string
+        }[]
+      }
+      is_household_admin: { Args: { _household: string }; Returns: boolean }
+      list_devices: {
+        Args: never
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          revoked: boolean
+        }[]
+      }
+      my_context: {
+        Args: never
+        Returns: {
+          household_id: string
+          household_name: string
+          member_key: string
+          mode: string
+        }[]
+      }
+      pair_device: { Args: { _code: string; _name: string }; Returns: string }
+      redeem_invite: { Args: { _code: string; _pin: string }; Returns: string }
+      revoke_device: { Args: { _id: string }; Returns: undefined }
       verify_pin: {
         Args: { _admin_only?: boolean; _pin: string }
         Returns: {

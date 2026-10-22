@@ -6,9 +6,11 @@
 - [x] PIN verificado en servidor mediante función de base de datos (verify_pin); los cifrados ya no son legibles desde el navegador.
 - [x] Tareas, compras, calendario, notas y finanzas se guardan y sincronizan en tiempo real entre dispositivos.
 - [x] Verificado: login con PIN 2222, producto añadido persiste tras recargar, PIN incorrecto no entra.
-- [ ] Políticas de acceso son abiertas (demo de un solo hogar); endurecer por hogar cuando llegue el SaaS multi-cuenta.
+- [x] Datos aislados por hogar (cuentas y tablets emparejadas).
 - [ ] Verificar sincronización en vivo con dos navegadores abiertos a la vez.
 
 ## Fase 3 — SaaS
-- [ ] Registro de hogares, invitaciones y emparejamiento de tablet por código.
-- [ ] Roles y permisos reales por hogar; planes Free / Family Pro.
+- [x] Registro con correo, crear hogar o unirse con invitación, emparejar tablet por código, desvincular tablets.
+- [x] Tareas: crear, editar, eliminar (con deshacer).
+- [ ] Bloquear finanzas para hijos también a nivel de base de datos (hoy se oculta en pantalla).
+- [ ] Planes Free / Family Pro.

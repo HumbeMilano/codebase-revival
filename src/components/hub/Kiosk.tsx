@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { CloudSun, Delete, Lock, X } from "lucide-react";
 import photo from "@/assets/kiosk-photo.jpg";
-import { MEMBERS, memberBg, type Member } from "./data";
-import { supabase } from "@/integrations/supabase/client";
+import { HOUSEHOLD, MEMBERS, memberBg, type Member } from "./data";
+import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
 
 export function useClock() {
@@ -26,7 +26,7 @@ export function Avatar({ m, size = "md" }: { m: Member; size?: "sm" | "md" | "lg
 
 /** PIN-only entry: the PIN itself identifies who is logging in (PINs are unique). Verified on the server. */
 export async function findByPin(pin: string, adminOnly = false): Promise<Member | undefined> {
-  const { data } = await supabase.rpc("verify_pin", { _pin: pin, _admin_only: adminOnly });
+  const { data } = await db().rpc("verify_pin", { _pin: pin, _admin_only: adminOnly });
   const found = data?.[0];
   if (!found) return undefined;
   const meta = MEMBERS.find((m) => m.id === found.key);
@@ -128,7 +128,7 @@ export function Kiosk({ compact, onUnlock }: { compact: boolean; onUnlock: (m: M
 
       <div className={cn("relative flex h-full flex-col justify-between", compact ? "p-5" : "p-10")}>
         <div className="flex items-center justify-between">
-          <span className="rounded-full bg-primary-foreground/15 px-4 py-2 font-display text-sm font-bold backdrop-blur-xl">Familia Pérez</span>
+          <span className="rounded-full bg-primary-foreground/15 px-4 py-2 font-display text-sm font-bold backdrop-blur-xl">{HOUSEHOLD.name}</span>
           <span className="flex items-center gap-2 rounded-full bg-primary-foreground/15 px-4 py-2 text-sm font-semibold backdrop-blur-xl"><CloudSun className="size-4" /> 22° · Soleado</span>
         </div>
 
