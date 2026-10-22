@@ -39,7 +39,7 @@ def sql(query, *, user=None, device=None, finance=None, fail=None):
         prefix += 'SET ROLE authenticated;'
     elif device is not None:
         prefix += 'SET ROLE anon;'
-    result = execute(DOCKER + ['exec', '-i', NAME, 'psql', '-X', '-qAt', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], input=prefix + query)
+    result = execute(DOCKER + ['exec', '-i', NAME, 'psql', '-h', '127.0.0.1', '-X', '-qAt', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], input=prefix + query)
     if fail:
         assert result.returncode != 0 and fail in result.stderr, (query, result.stdout, result.stderr)
     else:
@@ -67,7 +67,9 @@ def run():
     assert started.returncode == 0, started.stderr
     deadline = time.monotonic() + 40
     while time.monotonic() < deadline:
-        if execute(DOCKER + ['exec', NAME, 'pg_isready', '-U', 'postgres']).returncode == 0:
+        # The image first starts a temporary Unix-socket-only server for initdb.
+        # Wait for TCP so migrations cannot race its shutdown and final startup.
+        if execute(DOCKER + ['exec', NAME, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres']).returncode == 0:
             break
         time.sleep(.2)
     else:
@@ -176,7 +178,7 @@ def run():
     def begin_demote(user, key, pause):
         claims = json.dumps({'sub': user, 'session_id': 'sql-test-' + user})
         query = f"BEGIN;SET request.jwt.claims='{claims}'; SET ROLE authenticated;SELECT update_member('{key}',NULL,'member',NULL);SELECT pg_sleep({pause});COMMIT;"
-        proc = subprocess.Popen(DOCKER + ['exec', '-i', NAME, 'psql', '-X', '-qAt', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=ENV)
+        proc = subprocess.Popen(DOCKER + ['exec', '-i', NAME, 'psql', '-h', '127.0.0.1', '-X', '-qAt', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=ENV)
         proc.stdin.write(query)
         proc.stdin.close()
         return proc
