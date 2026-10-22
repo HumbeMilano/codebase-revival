@@ -30,9 +30,9 @@
 ## Lista de pendientes (plan aprobado)
 - [x] Bloqueo de 5 minutos tras 5 PIN incorrectos en la entrada.
 - [x] Panel de administración del servicio en /admin (hogares, planes, suspensión, tablets, cuentas, administradores).
-- [ ] Gestión de miembros (añadir/editar/quitar, cambiar PIN y rol).
-- [ ] Vincular cuenta con persona al aceptar invitación.
-- [ ] Calendario y Notas guardados en la base de datos.
-- [ ] Mensajes de error sin conexión y estados vacíos.
+- [x] Gestión de miembros (añadir/editar/quitar, cambiar PIN y rol) en Hogar, con guardas: PIN único, no quitar a quien tiene cuenta, no dejar el hogar sin adultos. Verificado en la vista previa y en la base de datos.
+- [x] Vincular cuenta con persona al aceptar invitación: cada cuenta queda enlazada a su miembro (no se puede quitar ese miembro sin desvincular).
+- [x] Calendario y Notas guardados en la base de datos: verificado que siguen ahí tras recargar, con sincronización en vivo.
+- [x] Mensajes de error sin conexión y estados vacíos: aviso de sin conexión, aviso al fallar un guardado y estados vacíos en notas.
 - [ ] Publicar y probar en tablet y teléfonos reales.
 - [ ] Mejoras B y extras C (ver plan).
