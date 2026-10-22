@@ -27,7 +27,7 @@ function makeDeviceClient(token: string) {
   });
 }
 
-export function useDeviceMode(token: string | null) {
+export function setDeviceMode(token: string | null) {
   if (token) {
     mode = "device";
     deviceClient = makeDeviceClient(token);
@@ -46,5 +46,5 @@ export function db(): SupabaseClient<Database> {
 
 export function forgetDevice() {
   localStorage.removeItem(DEVICE_KEY);
-  useDeviceMode(null);
+  setDeviceMode(null);
 }

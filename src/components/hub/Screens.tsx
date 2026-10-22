@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Check, ListChecks, PiggyBank, Plus, Receipt, ShoppingBasket, Trash2 } from "lucide-react";
+import { ArrowUpRight, Check, ListChecks, Pencil, PiggyBank, Plus, Receipt, ShoppingBasket, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { eventWhen, type FamilyEvent, type FamilyNote } from "./planner-data";
 import { MEMBERS, memberBg, type Chore, type Member, type ShopItem } from "./data";
 import { loadHubData, syncBills, syncChores, syncContributions, syncEvents, syncItems, syncNotes } from "@/lib/hub-db";
 import { supabase } from "@/integrations/supabase/client";
+import { isDeviceMode } from "@/lib/db";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const byId = (id: string): Member => MEMBERS.find((m) => m.id === id) ?? MEMBERS[0]!;
@@ -95,8 +96,11 @@ export function useHubState(): HubState {
       .on("postgres_changes", { event: "*", schema: "public", table: "bill_overrides" }, () => void refresh())
       .on("postgres_changes", { event: "*", schema: "public", table: "contributions" }, () => void refresh())
       .subscribe();
+    // Paired tablets have no account session for realtime, so they poll.
+    const poll = isDeviceMode() ? setInterval(() => void refresh(), 8000) : undefined;
     return () => {
       active = false;
+      if (poll) clearInterval(poll);
       void supabase.removeChannel(channel);
     };
   }, []);
@@ -226,20 +230,42 @@ export function Dashboard({ s, user, compact, go, adultAuthorized = false }: { s
   );
 }
 
+const WHEN_OPTIONS = ["Hoy", "Mañana", "Esta semana"];
+
 export function Chores({ s, compact }: { s: HubState; compact: boolean }) {
   const [who, setWho] = useState<string>("all");
+  const [draft, setDraft] = useState<Chore | null>(null);
   const list = s.chores.filter((c) => who === "all" || c.memberId === who);
-  const groups = ["Hoy", "Mañana"];
+  const groups = [...WHEN_OPTIONS, ...Array.from(new Set(s.chores.map((c) => c.when))).filter((w) => !WHEN_OPTIONS.includes(w))];
+  const isNew = draft ? !s.chores.some((c) => c.id === draft.id) : false;
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draft || !draft.title.trim()) return;
+    const clean = { ...draft, title: draft.title.trim() };
+    s.setChores((cs) => (isNew ? [...cs, clean] : cs.map((c) => (c.id === clean.id ? clean : c))));
+    setDraft(null);
+  };
+  const remove = (chore: Chore) => {
+    const position = s.chores.findIndex((c) => c.id === chore.id);
+    s.setChores((cs) => cs.filter((c) => c.id !== chore.id));
+    setDraft(null);
+    toast(`"${chore.title}" eliminada`, {
+      action: { label: "Deshacer", onClick: () => s.setChores((cs) => [...cs.slice(0, position), chore, ...cs.slice(position)]) },
+    });
+  };
+  const field = "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-ring";
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setWho("all")} className={cn("rounded-full px-4 py-2 text-sm font-semibold transition", who === "all" ? "bg-primary text-primary-foreground" : "bg-card shadow-card")}>Todos</button>
         {MEMBERS.map((m) => (
           <button key={m.id} onClick={() => setWho(m.id)} className={cn("flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 text-sm font-semibold transition", who === m.id ? "bg-primary text-primary-foreground" : "bg-card shadow-card")}>
             <Avatar m={m} size="sm" /> {m.name}
           </button>
         ))}
+        <Button onClick={() => setDraft({ id: crypto.randomUUID(), title: "", memberId: who !== "all" ? who : MEMBERS[0]?.id ?? "", done: false, when: "Hoy" })} className="ml-auto rounded-full"><Plus /> Nueva tarea</Button>
       </div>
+      {!list.length && <p className="py-8 text-center text-sm text-muted-foreground">Sin tareas</p>}
       {groups.map((g) => {
         const items = list.filter((c) => c.when === g);
         if (!items.length) return null;
@@ -250,21 +276,40 @@ export function Chores({ s, compact }: { s: HubState; compact: boolean }) {
               {items.map((c) => {
                 const m = byId(c.memberId);
                 return (
-                  <button key={c.id} onClick={() => toggleChore(s, c.id)} className={cn("flex aspect-[4/3] flex-col justify-between rounded-[1.75rem] p-4 text-left shadow-card transition active:scale-[0.98]", c.done ? memberBg[m.color] : "bg-card")}>
+                  <div key={c.id} className={cn("relative flex aspect-[4/3] flex-col justify-between rounded-[1.75rem] p-4 shadow-card transition", c.done ? memberBg[m.color] : "bg-card")}>
                     <div className="flex items-start justify-between">
                       <Avatar m={m} size="sm" />
-                      <span className={cn("grid size-8 place-items-center rounded-full border-2 transition", c.done ? "border-foreground bg-foreground text-background" : "border-foreground/20")}>
-                        {c.done && <Check className="size-4" />}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setDraft({ ...c })} aria-label={`Editar ${c.title}`} className="grid size-8 place-items-center rounded-full text-foreground/60 hover:bg-foreground/10"><Pencil className="size-4" /></button>
+                        <button onClick={() => toggleChore(s, c.id)} aria-label={`Completar ${c.title}`} aria-pressed={c.done} className={cn("grid size-8 place-items-center rounded-full border-2 transition", c.done ? "border-foreground bg-foreground text-background" : "border-foreground/20")}>
+                          {c.done && <Check className="size-4" />}
+                        </button>
+                      </div>
                     </div>
-                    <p className={cn("font-display text-lg font-bold leading-tight", c.done && "line-through opacity-60")}>{c.title}</p>
-                  </button>
+                    <button onClick={() => toggleChore(s, c.id)} className={cn("text-left font-display text-lg font-bold leading-tight", c.done && "line-through opacity-60")}>{c.title}</button>
+                  </div>
                 );
               })}
             </div>
           </section>
         );
       })}
+      {draft && (
+        <div className="absolute inset-0 z-30 flex items-end justify-center bg-foreground/20 backdrop-blur-sm sm:items-center" onClick={() => setDraft(null)}>
+          <form role="dialog" aria-label={isNew ? "Nueva tarea" : "Editar tarea"} onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md space-y-4 rounded-t-3xl bg-card p-5 pb-8 shadow-card sm:rounded-3xl">
+            <header className="flex items-center justify-between"><h2 className="font-display text-xl font-bold">{isNew ? "Nueva tarea" : "Editar tarea"}</h2><Button type="button" variant="ghost" size="icon" aria-label="Cerrar" onClick={() => setDraft(null)}><X /></Button></header>
+            <label className="block text-sm font-semibold">Tarea
+              <div className="flex items-center gap-2"><input autoFocus aria-label="Título de la tarea" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} className={field} /><VoiceInput label="tarea" onText={(text) => setDraft((d) => d && { ...d, title: appendDictation(d.title, text) })} /></div>
+            </label>
+            <label className="block text-sm font-semibold">Persona<select value={draft.memberId} onChange={(e) => setDraft({ ...draft, memberId: e.target.value })} className={field}>{MEMBERS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+            <label className="block text-sm font-semibold">Cuándo<select value={draft.when} onChange={(e) => setDraft({ ...draft, when: e.target.value })} className={field}>{groups.map((w) => <option key={w}>{w}</option>)}</select></label>
+            <div className="flex gap-2">
+              {!isNew && <Button type="button" variant="ghost" onClick={() => remove(draft)} className="text-destructive"><Trash2 /> Eliminar</Button>}
+              <Button type="submit" disabled={!draft.title.trim()} className="ml-auto">Guardar</Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
