@@ -1,0 +1,328 @@
+import { expect, type Page, type Route } from "@playwright/test";
+
+export const HOME_ID = "10000000-0000-4000-8000-000000000001";
+const USER_ID = "20000000-0000-4000-8000-000000000001";
+const memberKey = "m_ana";
+type Row = Record<string, unknown>;
+type Change = {
+  id: string;
+  operation: "insert" | "update" | "delete";
+  expected_revision: number | null;
+  values: Row;
+};
+const user = {
+  id: USER_ID,
+  aud: "authenticated",
+  role: "authenticated",
+  email: "ana@example.invalid",
+  email_confirmed_at: "2026-01-01T00:00:00Z",
+  app_metadata: { provider: "email", providers: ["email"] },
+  user_metadata: {},
+  identities: [],
+  created_at: "2026-01-01T00:00:00Z",
+};
+const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+const token = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ sub: USER_ID, role: "authenticated", session_id: "homehub-e2e-session", exp: Math.floor(Date.now() / 1000) + 86_400 })}.test_signature`;
+
+/** A deterministic API double: all household records stay in test-runner memory.
+ * This verifies the browser's Auth/HTTP/state boundaries, not production RLS.
+ */
+export class HouseholdBackend {
+  rows: Record<string, Row[]> = Object.fromEntries(
+    [
+      "chores",
+      "shopping_items",
+      "events",
+      "notes",
+      "bills",
+      "bill_splits",
+      "bill_overrides",
+      "contributions",
+    ].map((table) => [table, []]),
+  );
+  failNextSave = false;
+  platformAdmin = false;
+  failAdminAction = false;
+  writeRequests = 0;
+  financeActive = false;
+  financialReadsWithoutGrant = 0;
+  unexpectedRequests: string[] = [];
+
+  async install(page: Page) {
+    await page.route("**/auth/v1/**", (route) => this.auth(route));
+    await page.route("**/rest/v1/**", (route) => this.data(route));
+    await page.route("**/storage/v1/**", (route) =>
+      route.fulfill({ status: 404, json: { message: "No photo in this fixture" } }),
+    );
+    await page.routeWebSocket(/\/realtime\/v1\//, (socket) => socket.close());
+  }
+
+  private async auth(route: Route) {
+    const { pathname } = new URL(route.request().url());
+    if (pathname.endsWith("/token")) {
+      return route.fulfill({
+        json: {
+          access_token: token,
+          token_type: "bearer",
+          expires_in: 86_400,
+          expires_at: Math.floor(Date.now() / 1000) + 86_400,
+          refresh_token: "e2e_refresh_token",
+          user,
+        },
+      });
+    }
+    if (pathname.endsWith("/user")) return route.fulfill({ json: user });
+    if (pathname.endsWith("/logout")) return route.fulfill({ status: 204 });
+    this.unexpectedRequests.push(pathname);
+    return route.fulfill({
+      status: 400,
+      json: { message: `Unexpected fixture auth request: ${pathname}` },
+    });
+  }
+
+  private async data(route: Route) {
+    const request = route.request();
+    const url = new URL(request.url());
+    const endpoint = url.pathname.split("/").at(-1) ?? "";
+    if (url.pathname.includes("/rpc/")) {
+      const args = (request.postDataJSON() ?? {}) as Row;
+      const result = await this.rpc(endpoint, args, request.headers());
+      return route.fulfill(result);
+    }
+    if (endpoint === "profiles") {
+      const profile = { id: USER_ID, avatar_path: null, preferred_view: "auto", time_format: "24" };
+      return route.fulfill({
+        json: request.headers()["accept"]?.includes("vnd.pgrst.object") ? profile : [profile],
+      });
+    }
+    if (!(endpoint in this.rows)) {
+      this.unexpectedRequests.push(url.pathname);
+      return route.fulfill({
+        status: 400,
+        json: { message: `Unexpected fixture data request: ${endpoint}` },
+      });
+    }
+    if (request.method() !== "GET") {
+      this.unexpectedRequests.push(`${request.method()} ${endpoint}`);
+      return route.fulfill({
+        status: 400,
+        json: { message: "Household writes must use transactional RPCs" },
+      });
+    }
+    if (
+      ["bills", "bill_splits", "bill_overrides", "contributions"].includes(endpoint) &&
+      request.headers()["x-device-token"] &&
+      (!this.financeActive || request.headers()["x-finance-token"] !== "fixture-finance-token")
+    ) {
+      this.financialReadsWithoutGrant++;
+      return route.fulfill({ json: [], headers: { "Content-Range": "*/0" } });
+    }
+    let rows = [...(this.rows[endpoint] ?? [])];
+    for (const [key, value] of url.searchParams) {
+      if (value.startsWith("eq.")) rows = rows.filter((row) => String(row[key]) === value.slice(3));
+      if (value.startsWith("in.(")) {
+        const ids = value
+          .slice(4, -1)
+          .split(",")
+          .map((id) => id.replaceAll('"', ""));
+        rows = rows.filter((row) => ids.includes(String(row[key])));
+      }
+    }
+    const total = rows.length;
+    const offset = Number(url.searchParams.get("offset") ?? 0);
+    const limit = Number(url.searchParams.get("limit") ?? 500);
+    rows = rows.slice(offset, offset + limit);
+    return route.fulfill({
+      json: rows,
+      headers: {
+        "Content-Range": `${offset}-${Math.max(offset, offset + rows.length - 1)}/${total}`,
+      },
+    });
+  }
+
+  private async rpc(
+    name: string,
+    args: Row,
+    headers: Record<string, string>,
+  ): Promise<{ status?: number; json?: unknown }> {
+    const member = { key: memberKey, name: "Ana", role: "admin" };
+    switch (name) {
+      case "my_context":
+        return {
+          json: [
+            {
+              household_id: HOME_ID,
+              household_name: "Hogar de prueba",
+              member_key: headers["x-device-token"] ? null : memberKey,
+              mode: headers["x-device-token"] ? "device" : "account",
+            },
+          ],
+        };
+      case "household_members":
+        return { json: [member, { key: "m_nico", name: "Nico", role: "member" }] };
+      case "pair_device":
+        return args["_code"] === "ABCDEF123456"
+          ? { json: "fixture-device-token" }
+          : { status: 400, json: { message: "Invalid or expired code" } };
+      case "pin_lock_status":
+        return { json: { locked: false, retry_after: 0 } };
+      case "verify_pin":
+        return {
+          json:
+            args["_pin"] === "1234"
+              ? [member]
+              : args["_pin"] === "5678" && !args["_admin_only"]
+                ? [{ key: "m_nico", name: "Nico", role: "member" }]
+                : [],
+        };
+      case "authorize_finances":
+        this.financeActive = args["_pin"] === "1234";
+        return { json: this.financeActive ? "fixture-finance-token" : null };
+      case "revoke_finance_session":
+        this.financeActive = false;
+        return { json: null };
+      case "am_platform_admin":
+        return { json: this.platformAdmin };
+      case "admin_stats":
+        return {
+          json: [
+            {
+              households: 1,
+              suspended: 0,
+              pro: 0,
+              accounts: 1,
+              members: 2,
+              devices: 0,
+              new_households_30d: 1,
+              new_accounts_30d: 1,
+            },
+          ],
+        };
+      case "admin_list_households":
+        return {
+          json: [
+            {
+              id: HOME_ID,
+              name: "Hogar de prueba",
+              plan: "free",
+              suspended: false,
+              members: 2,
+              accounts: 1,
+              devices: 0,
+              created_at: "2026-01-01",
+            },
+          ],
+        };
+      case "admin_list_accounts":
+        return {
+          json: [
+            {
+              user_id: USER_ID,
+              email: user.email,
+              confirmed: true,
+              household_name: "Hogar de prueba",
+              is_admin: true,
+              created_at: "2026-01-01",
+              last_sign_in_at: "2026-01-01",
+            },
+          ],
+        };
+      case "admin_set_household":
+        return this.failAdminAction
+          ? { status: 503, json: { message: "Fixture action unavailable" } }
+          : { json: null };
+      case "list_devices":
+      case "list_invites":
+        return { json: [] };
+      case "save_collection": {
+        this.writeRequests += 1;
+        if (this.failNextSave) {
+          this.failNextSave = false;
+          return {
+            status: 503,
+            json: { message: "Simulated save failure", code: "FIXTURE_FAILURE" },
+          };
+        }
+        const table = String(args["_table"]);
+        const next = [...(this.rows[table] ?? [])];
+        const changed: Row[] = [];
+        for (const change of args["_changes"] as Change[]) {
+          const index = next.findIndex((row) => row["id"] === change.id);
+          if (
+            change.operation !== "insert" &&
+            (index < 0 || next[index]?.["revision"] !== change.expected_revision)
+          )
+            return { status: 409, json: { message: "REVISION_CONFLICT", code: "40001" } };
+          if (change.operation === "delete") next.splice(index, 1);
+          else {
+            const row = {
+              ...(index >= 0 ? next[index] : {}),
+              ...change.values,
+              id: change.id,
+              household_id: HOME_ID,
+              revision: Number(index >= 0 ? next[index]?.["revision"] : 0) + 1,
+            };
+            if (index >= 0) next[index] = row;
+            else next.push(row);
+            changed.push(row);
+          }
+        }
+        this.rows[table] = next;
+        return { json: changed };
+      }
+      case "save_bill": {
+        this.writeRequests += 1;
+        const bill = args["_bill"] as Row;
+        const previous = this.rows["bills"]!.find((row) => row["id"] === bill["id"]);
+        const { splits, overrides, ...fields } = bill;
+        const row: Row = {
+          ...fields,
+          household_id: HOME_ID,
+          revision: Number(previous?.["revision"] ?? 0) + 1,
+        };
+        this.rows["bills"] = [
+          ...this.rows["bills"]!.filter((item) => item["id"] !== row["id"]),
+          row,
+        ];
+        this.rows["bill_splits"] = [
+          ...this.rows["bill_splits"]!.filter((item) => item["bill_id"] !== row["id"]),
+          ...(splits as Row[]).map((split) => ({
+            ...split,
+            id: crypto.randomUUID(),
+            bill_id: row["id"],
+          })),
+        ];
+        this.rows["bill_overrides"] = [
+          ...this.rows["bill_overrides"]!.filter((item) => item["bill_id"] !== row["id"]),
+          ...(overrides as Row[]).map((override) => ({ ...override, bill_id: row["id"] })),
+        ];
+        return { json: row };
+      }
+      case "delete_bill": {
+        this.rows["bills"] = this.rows["bills"]!.filter((row) => row["id"] !== args["_id"]);
+        return { json: null };
+      }
+      default:
+        this.unexpectedRequests.push(`rpc/${name}`);
+        return { status: 400, json: { message: `Unexpected fixture RPC: ${name}` } };
+    }
+  }
+}
+
+export async function signIn(page: Page) {
+  await page.goto("/");
+  await page.getByLabel("Correo", { exact: true }).fill("ana@example.invalid");
+  await page.getByLabel("Contraseña", { exact: true }).fill("test-password");
+  await page.locator("form").getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(page.getByText("Hola, Ana", { exact: true }).first()).toBeVisible();
+}
+
+export async function section(page: Page, label: string) {
+  await expect(page.getByRole("navigation").first()).toBeVisible({ timeout: 30000 });
+  let button = page.getByRole("button", { name: label, exact: true }).first();
+  if (!(await button.isVisible())) {
+    await page.getByRole("button", { name: "Más", exact: true }).click();
+    button = page.getByRole("button", { name: label, exact: true }).first();
+  }
+  await button.click();
+}

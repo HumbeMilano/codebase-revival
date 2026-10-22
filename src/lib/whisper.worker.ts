@@ -11,13 +11,18 @@ const reply = (message: WhisperReply) => self.postMessage(message);
 self.onmessage = async (event: MessageEvent<WhisperRequest>) => {
   try {
     if (event.data.type === "load") {
-      transcriber = await pipeline<"automatic-speech-recognition">("automatic-speech-recognition", WHISPER_MODEL, {
-        device: "wasm",
-        dtype: "q8",
-        progress_callback: (progress) => {
-          if (progress.status === "progress") reply({ type: "progress", progress: Math.round(progress.progress) });
+      transcriber = await pipeline<"automatic-speech-recognition">(
+        "automatic-speech-recognition",
+        WHISPER_MODEL,
+        {
+          device: "wasm",
+          dtype: "q8",
+          progress_callback: (progress) => {
+            if (progress.status === "progress")
+              reply({ type: "progress", progress: Math.round(progress.progress) });
+          },
         },
-      });
+      );
       reply({ type: "ready" });
       return;
     }
@@ -29,8 +34,15 @@ self.onmessage = async (event: MessageEvent<WhisperRequest>) => {
       max_new_tokens: 128,
       repetition_penalty: 1.1,
     });
-    reply({ type: "result", text: (Array.isArray(result) ? result[0]?.text : result.text)?.trim() ?? "" });
+    reply({
+      type: "result",
+      text: (Array.isArray(result) ? result[0]?.text : result.text)?.trim() ?? "",
+    });
   } catch {
-    reply({ type: "error", message: "No se pudo completar el dictado local. Comprueba la conexión para descargar el modelo o vuelve a intentarlo." });
+    reply({
+      type: "error",
+      message:
+        "No se pudo completar el dictado local. Comprueba la conexión para descargar el modelo o vuelve a intentarlo.",
+    });
   }
 };

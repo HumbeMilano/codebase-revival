@@ -6,3 +6,9 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+playwright-report
+test-results
+
+# Applied legacy migration artifacts are immutable.
+drizzle/migrations/

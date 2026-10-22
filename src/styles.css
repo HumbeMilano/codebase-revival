@@ -102,7 +102,9 @@
   --sidebar-border: oklch(0.22 0.005 285 / 7%);
   --sidebar-ring: oklch(0.22 0.005 285);
   --surface-glass: oklch(1 0 0 / 72%);
-  --gradient-glow: radial-gradient(60% 80% at 0% 0%, oklch(0.89 0.05 170 / 70%), transparent 60%), radial-gradient(50% 70% at 100% 100%, oklch(0.9 0.08 70 / 60%), transparent 60%);
+  --gradient-glow:
+    radial-gradient(60% 80% at 0% 0%, oklch(0.89 0.05 170 / 70%), transparent 60%),
+    radial-gradient(50% 70% at 100% 100%, oklch(0.9 0.08 70 / 60%), transparent 60%);
   --gradient-scrim: linear-gradient(180deg, transparent 40%, oklch(0.2 0.01 60 / 55%));
   --shadow-card: 0 1px 2px oklch(0 0 0 / 4%), 0 12px 32px -16px oklch(0.3 0.02 60 / 18%);
   --shadow-glow: 0 10px 24px -10px oklch(0.22 0.005 285 / 45%);
@@ -152,12 +154,25 @@
 }
 
 @keyframes kenburns {
-  from { transform: scale(1); }
-  to { transform: scale(1.12) translate(-2%, -1%); }
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.12) translate(-2%, -1%);
+  }
 }
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-8px); }
-  75% { transform: translateX(8px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(8px);
+  }
 }
-body { font-family: var(--font-sans); }
+body {
+  font-family: var(--font-sans);
+}

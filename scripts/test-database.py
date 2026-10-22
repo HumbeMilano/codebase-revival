@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""Integration tests against a disposable, network-isolated PostgreSQL container.
+
+Requires Docker and Python 3 only. No real project credentials are used. The
+Supabase scaffold provides platform schemas, not Auth/Storage HTTP services.
+"""
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+import uuid
+
+ROOT = Path(__file__).resolve().parents[1]
+ENV = os.environ.copy()
+for selector in ('DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH'):
+    ENV.pop(selector, None)
+DOCKER = ['docker', '--host=unix:///var/run/docker.sock']
+NAME = 'homehub-sql-test-' + uuid.uuid4().hex[:10]
+USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+USER_C = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+COUNT = 0
+
+
+def execute(command, **kwargs):
+    return subprocess.run(command, env=ENV, text=True, capture_output=True, **kwargs)
+
+
+def sql(query, *, user=None, device=None, finance=None, fail=None):
+    claims = {'sub': user, 'session_id': 'sql-test-' + user} if user else {}
+    headers = {}
+    if device:
+        headers['x-device-token'] = device
+    if finance:
+        headers['x-finance-token'] = finance
+    prefix = f"SET request.jwt.claims='{json.dumps(claims)}'; SET request.headers='{json.dumps(headers)}';"
+    if user:
+        prefix += 'SET ROLE authenticated;'
+    elif device is not None:
+        prefix += 'SET ROLE anon;'
+    result = execute(DOCKER + ['exec', '-i', NAME, 'psql', '-X', '-qAt', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], input=prefix + query)
+    if fail:
+        assert result.returncode != 0 and fail in result.stderr, (query, result.stdout, result.stderr)
+    else:
+        assert result.returncode == 0, (query, result.stdout, result.stderr)
+    return result.stdout.strip()
+
+
+def check(label, actual, expected):
+    global COUNT
+    assert actual == expected, (label, actual, expected)
+    COUNT += 1
+    print('PASS', label, flush=True)
+
+
+def j(value):
+    return json.dumps(value).replace("'", "''")
+
+
+def collection(table, hid, changes, *, user=USER_A, fail=None):
+    return sql(f"SELECT save_collection('{table}','{hid}','{j(changes)}'::jsonb);", user=user, fail=fail)
+
+
+def run():
+    started = execute(DOCKER + ['run', '--name', NAME, '--network', 'none', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', '-d', os.environ.get('HOMEHUB_TEST_POSTGRES_IMAGE', 'postgres:17-alpine')])
+    assert started.returncode == 0, started.stderr
+    deadline = time.monotonic() + 40
+    while time.monotonic() < deadline:
+        if execute(DOCKER + ['exec', NAME, 'pg_isready', '-U', 'postgres']).returncode == 0:
+            break
+        time.sleep(.2)
+    else:
+        raise RuntimeError('PostgreSQL did not become ready')
+    legacy = [ROOT / 'scripts/database-bootstrap.sql', *sorted((ROOT / 'drizzle/migrations').glob('*.sql'))]
+    for path in legacy:
+        sql(path.read_text())
+    sql("INSERT INTO pairing_codes(code,household_id,expires_at,max_uses) VALUES('PEREZ1','11111111-1111-1111-1111-111111111111',now()+interval '1 year',9999);")
+    for path in sorted((ROOT / 'supabase/migrations').glob('*.sql')):
+        sql(path.read_text())
+    sql((ROOT / 'scripts/validate-constraints.sql').read_text())
+    check('all integrity constraints validate on a clean installation', sql("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='public' AND NOT c.convalidated;"), '0')
+    check('legacy demo pairing credentials are expired without deleting history', sql("SELECT expires_at<=now() FROM pairing_codes WHERE code='PEREZ1';"), 't')
+    sql("SELECT pair_device('PEREZ1','Forbidden demo');", device='', fail='Invalid or expired code')
+    check('all migrations preserve the seeded household', sql("SELECT count(*) FROM households WHERE name='Familia Pérez';"), '1')
+    check('private avatar bucket is provisioned with limits', sql("SELECT count(*) FROM storage.buckets WHERE id='personal-avatars' AND NOT public AND file_size_limit=2097152;"), '1')
+    sql(f"INSERT INTO auth.users(id,email) VALUES('{USER_A}','a@example.invalid'),('{USER_B}','b@example.invalid'),('{USER_C}','c@example.invalid');")
+    sql('SELECT claim_platform_admin();', user=USER_A, fail='permission denied')
+    check('ordinary account cannot claim global administration', sql('SELECT count(*) FROM user_roles;'), '0')
+    hid = sql("SELECT create_household('Test Home','Adult A','1234');", user=USER_A)
+    member_a = sql('SELECT member_key FROM my_context();', user=USER_A)
+    invite = sql("SELECT create_invite('Adult B','admin');", user=USER_A)
+    check('invitation joins correct household', sql(f"SELECT redeem_invite('{invite}','5678');", user=USER_B), hid)
+    member_b = sql('SELECT member_key FROM my_context();', user=USER_B)
+    child = sql("SELECT create_member('Child','member','2468');", user=USER_A)
+    foreign_hid = sql("SELECT create_household('Other Home','Other Adult','4321');", user=USER_C)
+    foreign_member = sql('SELECT member_key FROM my_context();', user=USER_C)
+    rowid = str(uuid.uuid4())
+    changes = [{'id': rowid, 'operation': 'insert', 'expected_revision': None, 'values': {'name': 'Milk', 'done': False, 'position': 0}}]
+    rows = json.loads(collection('shopping_items', hid, changes))
+    check('atomic collection insert starts at revision one', rows[0]['revision'], 1)
+    rows = json.loads(collection('shopping_items', hid, [{'id': rowid, 'operation': 'update', 'expected_revision': 1, 'values': {'done': True}}]))
+    check('partial update increments revision and preserves name', (rows[0]['revision'], rows[0]['name'], rows[0]['done']), (2, 'Milk', True))
+    collection('shopping_items', hid, [{'id': rowid, 'expected_revision': 2, 'values': {'name': 'Missing operation'}}], fail='Invalid change')
+    collection('shopping_items', hid, [{'id': rowid, 'operation': 'update', 'expected_revision': 1, 'values': {'name': 'Stale'}}], fail='Record changed')
+    check('stale edit preserves latest record', sql(f"SELECT name FROM shopping_items WHERE id='{rowid}';", user=USER_A), 'Milk')
+    second = str(uuid.uuid4())
+    collection('shopping_items', hid, [
+        {'id': second, 'operation': 'insert', 'expected_revision': None, 'values': {'name': 'Bread'}},
+        {'id': rowid, 'operation': 'update', 'expected_revision': 1, 'values': {'name': 'Stale'}},
+    ], fail='Record changed')
+    check('failed batch rolls back its earlier insert', sql(f"SELECT count(*) FROM shopping_items WHERE id='{second}';", user=USER_A), '0')
+    sql(f"UPDATE shopping_items SET done=false WHERE id='{rowid}';", user=USER_A, fail='permission denied')
+    check('cross-household reads remain isolated', sql(f"SELECT count(*) FROM shopping_items WHERE household_id='{hid}';", user=USER_C), '0')
+    collection('shopping_items', foreign_hid, changes, fail='Household access denied')
+    collection('shopping_items', hid, [{'id': str(uuid.uuid4()), 'operation': 'insert', 'values': {'name': 'Bad', 'household_id': foreign_hid}}], fail='Invalid fields')
+    check('RPC cannot call internal privileged helpers', sql("SELECT has_schema_privilege('authenticated','homehub_private','USAGE');"), 'f')
+    # All financial subrecords are one transaction and all effective amounts validate.
+    billid = str(uuid.uuid4())
+    bill = {'id': billid, 'name': 'Rent', 'category': 'Vivienda', 'base': 100, 'due_day': 31, 'auto_pay': False, 'position': 0, 'splits': [{'person_key': member_a, 'type': 'amount', 'value': 100}], 'overrides': []}
+    saved = json.loads(sql(f"SELECT save_bill('{hid}','{j(bill)}'::jsonb,NULL);", user=USER_A))
+    check('atomic bill insert returns its revision', saved['revision'], 1)
+    invalid = {**bill, 'name': 'Should roll back', 'overrides': [{'month': 'bad-month', 'amount': 100}]}
+    sql(f"SELECT save_bill('{hid}','{j(invalid)}'::jsonb,1);", user=USER_A, fail='override_month_valid')
+    check('failed replacement keeps original bill and split', sql(f"SELECT name||':'||(SELECT count(*) FROM bill_splits WHERE bill_id='{billid}') FROM bills WHERE id='{billid}';", user=USER_A), 'Rent:1')
+    invalid = {**bill, 'overrides': [{'month': '2026-10', 'amount': 50}]}
+    sql(f"SELECT save_bill('{hid}','{j(invalid)}'::jsonb,1);", user=USER_A, fail='Split total must match')
+    invalid = {**bill, 'splits': [{'person_key': foreign_member, 'type': 'equal', 'value': 0}]}
+    sql(f"SELECT save_bill('{hid}','{j(invalid)}'::jsonb,1);", user=USER_A, fail='Invalid split or household member')
+    invalid = {**bill, 'due_day': 99}
+    sql(f"SELECT save_bill('{hid}','{j(invalid)}'::jsonb,1);", user=USER_A, fail='bills_due_day_valid')
+    check('invalid financial records never replace originals', sql(f"SELECT revision FROM bills WHERE id='{billid}';", user=USER_A), '1')
+    saved = json.loads(sql(f"SELECT save_bill('{hid}','{j({**bill, 'name':'New Rent'})}'::jsonb,1);", user=USER_A))
+    check('bill update increments revision', saved['revision'], 2)
+    sql(f"SELECT delete_bill('{billid}',1);", user=USER_A, fail='Record changed')
+    contribution = [{'id': str(uuid.uuid4()), 'operation': 'insert', 'values': {'person_key': 'papa', 'amount': 50, 'month': '2026-10'}}]
+    collection('contributions', hid, contribution, fail='contribution_member_valid')
+    check('invalid member cannot silently receive an aporte', sql(f"SELECT count(*) FROM contributions WHERE household_id='{hid}';", user=USER_A), '0')
+    sql(f"SELECT delete_member('{member_a}');", user=USER_B, fail='linked account')
+    # Failed PIN entries are committed and common to both public PIN endpoints.
+    for _ in range(4):
+        check('invalid PIN returns no identity', sql("SELECT count(*) FROM verify_pin('0000');", user=USER_A), '0')
+    check('valid child PIN does not erase adult guesses', sql("SELECT count(*) FROM verify_pin('2468');", user=USER_A), '1')
+    check('fifth invalid attempt commits', sql("SELECT count(*) FROM verify_pin('0000');", user=USER_A), '0')
+    check('shared budget is locked', json.loads(sql('SELECT pin_lock_status();', user=USER_A))['locked'], True)
+    check('valid adult PIN is blocked at verification', sql("SELECT count(*) FROM verify_pin('1234');", user=USER_A), '0')
+    check('direct financial authorization cannot bypass lockout', sql("SELECT authorize_finances('1234') IS NULL;", user=USER_A), 't')
+    sql(f"UPDATE pin_attempts SET created_at=now()-interval '6 minutes' WHERE household_id='{hid}';")
+    code = sql('SELECT create_pairing_code();', user=USER_A)
+    check('pairing code uses a longer cryptographic token', len(code), 12)
+    device = sql(f"SELECT pair_device('{code}','Test tablet');", device='')
+    token = sql("SELECT authorize_finances('1234');", device=device)
+    check('paired adult grant enables finances', sql(f"SELECT can_access_finances('{hid}');", device=device, finance=token), 't')
+    check('finance grant lifetime is bounded', sql(f"SELECT expires_at<=now()+interval '15 minutes' AND authorized_by IS NOT NULL FROM finance_sessions WHERE household_id='{hid}' ORDER BY created_at DESC LIMIT 1;"), 't')
+    sql(f"UPDATE finance_sessions SET expires_at=now()-interval '1 second' WHERE household_id='{hid}';")
+    check('expired grant is rejected by the server', sql(f"SELECT can_access_finances('{hid}');", device=device, finance=token), 'f')
+    token = sql("SELECT authorize_finances('1234');", device=device)
+    sql(f"SELECT update_member('{member_a}',NULL,NULL,'1357');", user=USER_A)
+    check('adult PIN change revokes tablet grants', sql(f"SELECT can_access_finances('{hid}');", device=device, finance=token), 'f')
+    sql(f"UPDATE households SET suspended=true WHERE id='{hid}';")
+    sql('SELECT household_members();', user=USER_A, fail='Household suspended')
+    sql("SELECT create_invite('Forbidden','member');", user=USER_A, fail='Household suspended')
+    sql('SELECT my_context();', device=device, fail='Household suspended')
+    check('suspension removes table access', sql(f"SELECT count(*) FROM shopping_items WHERE household_id='{hid}';", user=USER_A), '0')
+    sql(f"UPDATE households SET suspended=false WHERE id='{hid}';")
+    sql(f"UPDATE devices SET revoked=true WHERE household_id='{hid}';")
+    sql('SELECT my_context();', device=device, fail='Device revoked')
+    check('revocation immediately removes household membership', sql('SELECT count(*) FROM current_household_ids();', device=device), '0')
+    # Leave preserves member/history; last adult account cannot abandon management.
+    sql('SELECT leave_household();', user=USER_B)
+    check('leave keeps the historical member', sql(f"SELECT count(*) FROM members WHERE household_id='{hid}' AND key='{member_b}';"), '1')
+    sql('SELECT leave_household();', user=USER_A, fail='last adult account')
+    sql(f"INSERT INTO household_accounts(user_id,household_id,member_key) VALUES('{USER_B}','{hid}','{member_b}');")
+    # Transaction A changes one adult while transaction B waits for the household
+    # lock. B must re-check and refuse removing the final connected adult.
+    def begin_demote(user, key, pause):
+        claims = json.dumps({'sub': user, 'session_id': 'sql-test-' + user})
+        query = f"BEGIN;SET request.jwt.claims='{claims}'; SET ROLE authenticated;SELECT update_member('{key}',NULL,'member',NULL);SELECT pg_sleep({pause});COMMIT;"
+        proc = subprocess.Popen(DOCKER + ['exec', '-i', NAME, 'psql', '-X', '-qAt', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=ENV)
+        proc.stdin.write(query)
+        proc.stdin.close()
+        return proc
+    first = begin_demote(USER_A, member_a, 1)
+    time.sleep(.2)
+    second = begin_demote(USER_B, member_b, 0)
+    first.wait(timeout=10)
+    second.wait(timeout=10)
+    check('first adult change succeeds', first.returncode, 0)
+    check('concurrent last-adult change is rejected', second.returncode != 0, True)
+    check('concurrent changes retain one adult', sql(f"SELECT count(*) FROM members WHERE household_id='{hid}' AND role='admin';"), '1')
+    # A child linked account cannot access the retained financial rows.
+    check('child account cannot read household finances', sql(f"SELECT count(*) FROM bills WHERE household_id='{hid}';", user=USER_A), '0')
+    sql(f"SELECT save_bill('{hid}','{j(bill)}'::jsonb,2);", user=USER_A, fail='Financial authorization required')
+    # Histories without an account also prevent destructive member deletion.
+    sql(f"DELETE FROM household_accounts WHERE household_id='{hid}' AND member_key='{member_a}';")
+    sql(f"SELECT delete_member('{member_a}');", user=USER_B, fail='household history')
+    print(f'\n{COUNT} database checks passed (plus negative permission/validation assertions).', flush=True)
+
+
+if __name__ == '__main__':
+    try:
+        run()
+    finally:
+        execute(DOCKER + ['rm', '-f', NAME])

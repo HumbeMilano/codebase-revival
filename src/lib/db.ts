@@ -2,75 +2,138 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
-/** A paired tablet has no account; it proves its household with a device token header checked by RLS. */
 export const DEVICE_KEY = "homehub-device-token";
+const FINANCE_TTL = 15 * 60 * 1000;
+type Connection = {
+  client: SupabaseClient<Database>;
+  mode: "account" | "device";
+  identity: string;
+  accessToken: string | null;
+  deviceToken: string | null;
+  financeToken: string | null;
+  expiresAt: number;
+  valid: boolean;
+};
+let current: Connection | null = null;
+let connectionSerial = 0;
+let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+const financeChanged = () => {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("homehub-finance-access"));
+};
+export const getDeviceToken = () =>
+  typeof window === "undefined" ? null : localStorage.getItem(DEVICE_KEY);
+export const currentDbIdentity = () => current?.identity ?? null;
+export const isDeviceMode = () => current?.mode === "device";
+export const hasFinanceToken = () =>
+  Boolean(current?.financeToken && current.expiresAt > Date.now());
 
-let mode: "account" | "device" = "account";
-let deviceClient: SupabaseClient<Database> | null = null;
-let financeToken: string | null = null;
-let financeClient: SupabaseClient<Database> | null = null;
-
-export const getDeviceToken = () => (typeof window === "undefined" ? null : localStorage.getItem(DEVICE_KEY));
-
-function makeDeviceClient(token: string | null) {
-  const url = import.meta.env["VITE_SUPABASE_URL"] as string;
-  const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string;
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false, storageKey: "homehub-device" },
-    global: {
-      fetch: async (input, init) => {
-        const h = new Headers(init?.headers);
-        if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`) h.delete("Authorization");
-        h.set("apikey", key);
-        if (token) h.set("x-device-token", token);
-        else {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) h.set("Authorization", `Bearer ${session.access_token}`);
-        }
-        if (financeToken) h.set("x-finance-token", financeToken);
-        return fetch(input, { ...init, headers: h });
+/** Build a candidate without changing the active household or authentication context. */
+export function prepareDbContext(options: {
+  accessToken: string | null;
+  deviceToken: string | null;
+  identity: string;
+}) {
+  const mode: "device" | "account" = options.deviceToken ? "device" : "account";
+  const reused = current?.valid && current.identity === options.identity && current.mode === mode;
+  const connection: Connection =
+    reused && current
+      ? current
+      : {
+          client: null as unknown as SupabaseClient<Database>,
+          mode,
+          identity: options.identity,
+          accessToken: options.accessToken,
+          deviceToken: options.deviceToken,
+          financeToken: null,
+          expiresAt: 0,
+          valid: true,
+        };
+  if (!reused) {
+    const url = import.meta.env["VITE_SUPABASE_URL"] as string;
+    const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string;
+    connection.client = createClient<Database>(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        storageKey: `homehub-${mode}-${++connectionSerial}`,
       },
+      global: {
+        fetch: (input, init) => {
+          if (!connection.valid)
+            return Promise.reject(new Error("La sesión ha cambiado. Vuelve a abrir el hogar."));
+          const headers = new Headers(input instanceof Request ? input.headers : undefined);
+          new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
+          headers.set("apikey", key);
+          headers.delete("Authorization");
+          if (connection.accessToken)
+            headers.set("Authorization", `Bearer ${connection.accessToken}`);
+          else if (!key.startsWith("sb_")) headers.set("Authorization", `Bearer ${key}`);
+          if (connection.deviceToken) headers.set("x-device-token", connection.deviceToken);
+          else headers.delete("x-device-token");
+          if (connection.financeToken && connection.expiresAt > Date.now())
+            headers.set("x-finance-token", connection.financeToken);
+          else headers.delete("x-finance-token");
+          return fetch(input, { ...init, headers });
+        },
+      },
+    });
+  }
+  return {
+    client: connection.client,
+    mode,
+    activate() {
+      if (current !== connection) {
+        if (current) current.valid = false;
+        if (expiryTimer) clearTimeout(expiryTimer);
+        current = connection;
+      }
+      connection.accessToken = options.accessToken;
     },
-  });
+    discard() {
+      if (!reused && current !== connection) connection.valid = false;
+    },
+  };
 }
 
-export function setDeviceMode(token: string | null) {
-  financeToken = null;
-  financeClient = null;
-  if (token) {
-    mode = "device";
-    deviceClient = makeDeviceClient(token);
-  } else {
-    mode = "account";
-    deviceClient = null;
-  }
+export function invalidateDbContext() {
+  if (current) current.valid = false;
+  current = null;
+  if (expiryTimer) clearTimeout(expiryTimer);
+  financeChanged();
 }
 
-export const isDeviceMode = () => mode === "device";
-
-/** Client for household data: device client on a paired tablet, otherwise the signed-in account. */
-export function db(): SupabaseClient<Database> {
-  return mode === "device" && deviceClient ? deviceClient : financeClient ?? supabase;
+/** Household clients remain bound to their identity, including queued writes. */
+export const db = (): SupabaseClient<Database> => current?.client ?? supabase;
+export function updateAccountToken(accessToken: string) {
+  if (current?.mode === "account") current.accessToken = accessToken;
 }
-
 export function setFinanceToken(token: string) {
-  financeToken = token;
-  if (mode === "account") financeClient = makeDeviceClient(null);
-  window.dispatchEvent(new Event("homehub-finance-access"));
+  if (!current) throw new Error("Abre un hogar antes de autorizar las finanzas.");
+  current.financeToken = token;
+  current.expiresAt = Date.now() + FINANCE_TTL;
+  if (expiryTimer) clearTimeout(expiryTimer);
+  expiryTimer = setTimeout(() => {
+    if (current) {
+      current.financeToken = null;
+      current.expiresAt = 0;
+    }
+    financeChanged();
+  }, FINANCE_TTL);
+  financeChanged();
 }
-
 export async function clearFinanceAccess() {
-  const token = financeToken;
-  if (token) {
-    const { error } = await db().rpc("revoke_finance_session", { _token: token });
+  if (current?.financeToken) {
+    const { error } = await current.client.rpc("revoke_finance_session", {
+      _token: current.financeToken,
+    });
     if (error) throw error;
+    current.financeToken = null;
+    current.expiresAt = 0;
   }
-  financeToken = null;
-  financeClient = null;
-  window.dispatchEvent(new Event("homehub-finance-access"));
+  if (expiryTimer) clearTimeout(expiryTimer);
+  financeChanged();
 }
-
 export function forgetDevice() {
   localStorage.removeItem(DEVICE_KEY);
-  setDeviceMode(null);
+  invalidateDbContext();
 }
