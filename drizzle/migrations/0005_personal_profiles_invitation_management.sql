@@ -1,0 +1,47 @@
+CREATE TABLE public.profiles (id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,avatar_path text,preferred_view text NOT NULL DEFAULT 'auto' CHECK(preferred_view IN ('auto','mobile','tablet')),time_format text NOT NULL DEFAULT '24' CHECK(time_format IN ('12','24')),CHECK(avatar_path IS NULL OR (avatar_path LIKE id::text||'/%' AND length(avatar_path)<300)));
+GRANT SELECT,INSERT,UPDATE ON public.profiles TO authenticated;
+GRANT ALL ON public.profiles TO service_role;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own profile" ON public.profiles FOR ALL TO authenticated USING(id=auth.uid()) WITH CHECK(id=auth.uid());
+CREATE OR REPLACE FUNCTION public.create_personal_profile() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ BEGIN INSERT INTO public.profiles(id) VALUES(NEW.id) ON CONFLICT DO NOTHING; RETURN NEW; END $$;
+REVOKE ALL ON FUNCTION public.create_personal_profile() FROM PUBLIC;
+CREATE TRIGGER homehub_personal_profile AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.create_personal_profile();
+INSERT INTO public.profiles(id) SELECT id FROM auth.users ON CONFLICT DO NOTHING;
+CREATE POLICY "own avatar read" ON storage.objects FOR SELECT TO authenticated USING(bucket_id='personal-avatars' AND (storage.foldername(name))[1]=auth.uid()::text);
+CREATE POLICY "own avatar upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK(bucket_id='personal-avatars' AND (storage.foldername(name))[1]=auth.uid()::text);
+CREATE POLICY "own avatar update" ON storage.objects FOR UPDATE TO authenticated USING(bucket_id='personal-avatars' AND (storage.foldername(name))[1]=auth.uid()::text) WITH CHECK(bucket_id='personal-avatars' AND (storage.foldername(name))[1]=auth.uid()::text);
+CREATE POLICY "own avatar delete" ON storage.objects FOR DELETE TO authenticated USING(bucket_id='personal-avatars' AND (storage.foldername(name))[1]=auth.uid()::text);
+ALTER TABLE public.invites ADD COLUMN revoked_at timestamptz;
+CREATE OR REPLACE FUNCTION public.list_invites() RETURNS TABLE(code text,member_name text,role text,expires_at timestamptz,used_at timestamptz,revoked_at timestamptz) LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$ SELECT i.code,i.member_name,i.role,i.expires_at,i.used_at,i.revoked_at FROM public.invites i WHERE i.household_id=(SELECT c.household_id FROM public.my_context() c WHERE c.mode='account') AND public.is_household_admin(i.household_id) ORDER BY i.expires_at DESC $$;
+REVOKE ALL ON FUNCTION public.list_invites() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.list_invites() TO authenticated;
+CREATE OR REPLACE FUNCTION public.revoke_invite(_code text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ BEGIN UPDATE public.invites SET revoked_at=now() WHERE code=_code AND used_at IS NULL AND public.is_household_admin(household_id); END $$;
+REVOKE ALL ON FUNCTION public.revoke_invite(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.revoke_invite(text) TO authenticated;
+CREATE OR REPLACE FUNCTION public.create_invite(_member_name text,_role text) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ DECLARE hid uuid;c text; BEGIN
+ SELECT household_id INTO hid FROM public.my_context() WHERE mode='account';
+ IF hid IS NULL OR NOT public.is_household_admin(hid) THEN RAISE EXCEPTION 'Only adults can invite'; END IF;
+ IF _role IS NULL OR _role NOT IN ('admin','member') THEN RAISE EXCEPTION 'Invalid role'; END IF;
+ IF _member_name IS NULL OR length(trim(_member_name)) NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'Name required'; END IF;
+ c:=upper(encode(extensions.gen_random_bytes(8),'hex'));
+ INSERT INTO public.invites(code,household_id,member_name,role,created_by,expires_at) VALUES(c,hid,trim(_member_name),_role,auth.uid(),now()+interval '7 days'); RETURN c; END $$;
+CREATE OR REPLACE FUNCTION public.redeem_invite(_code text,_pin text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ DECLARE inv public.invites;mkey text:='m_'||encode(extensions.gen_random_bytes(8),'hex'); BEGIN
+ IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Not signed in'; END IF;
+ IF _pin IS NULL OR _pin !~ '^[0-9]{4}$' THEN RAISE EXCEPTION 'PIN must be 4 digits'; END IF;
+ SELECT * INTO inv FROM public.invites WHERE code=upper(trim(_code)) AND used_at IS NULL AND revoked_at IS NULL AND expires_at>now() FOR UPDATE;
+ IF inv.code IS NULL THEN RAISE EXCEPTION 'Invalid or expired invite'; END IF;
+ IF EXISTS(SELECT 1 FROM public.household_accounts WHERE user_id=auth.uid()) THEN RAISE EXCEPTION 'Already in household'; END IF;
+ IF EXISTS(SELECT 1 FROM public.members WHERE household_id=inv.household_id AND pin_hash=encode(extensions.digest(_pin,'sha256'),'hex')) THEN RAISE EXCEPTION 'PIN already in use'; END IF;
+ INSERT INTO public.members(household_id,key,name,role,pin_hash) VALUES(inv.household_id,mkey,inv.member_name,inv.role,encode(extensions.digest(_pin,'sha256'),'hex'));
+ INSERT INTO public.household_accounts(user_id,household_id,member_key) VALUES(auth.uid(),inv.household_id,mkey);
+ UPDATE public.invites SET used_at=now() WHERE code=inv.code; RETURN inv.household_id; END $$;
+CREATE OR REPLACE FUNCTION public.create_household(_name text,_member_name text,_pin text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ DECLARE hid uuid;mkey text:='m_'||encode(extensions.gen_random_bytes(8),'hex'); BEGIN
+ IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Not signed in'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text,0));
+ IF EXISTS(SELECT 1 FROM public.household_accounts WHERE user_id=auth.uid()) THEN RAISE EXCEPTION 'Already in household'; END IF;
+ IF _pin IS NULL OR _pin !~ '^[0-9]{4}$' THEN RAISE EXCEPTION 'PIN must be 4 digits'; END IF;
+ IF _name IS NULL OR _member_name IS NULL OR length(trim(_name)) NOT BETWEEN 1 AND 100 OR length(trim(_member_name)) NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'Name required'; END IF;
+ INSERT INTO public.households(name) VALUES(trim(_name)) RETURNING id INTO hid;
+ INSERT INTO public.members(household_id,key,name,role,pin_hash) VALUES(hid,mkey,trim(_member_name),'admin',encode(extensions.digest(_pin,'sha256'),'hex'));
+ INSERT INTO public.household_accounts(user_id,household_id,member_key) VALUES(auth.uid(),hid,mkey); RETURN hid; END $$;
+CREATE OR REPLACE FUNCTION public.current_household_ids() RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$ SELECT household_id FROM public.household_accounts WHERE user_id=auth.uid() UNION SELECT household_id FROM public.devices WHERE auth.uid() IS NULL AND NOT revoked AND token_hash=encode(extensions.digest(coalesce(nullif(current_setting('request.headers',true),'')::json->>'x-device-token',''),'sha256'),'hex') AND coalesce(nullif(current_setting('request.headers',true),'')::json->>'x-device-token','')<>'' $$;
