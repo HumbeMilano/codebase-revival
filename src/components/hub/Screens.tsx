@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Check, ListChecks, Pencil, PiggyBank, Plus, Receipt, ShoppingBasket, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,8 @@ import { MEMBERS, memberBg, type Chore, type Member, type ShopItem } from "./dat
 import { loadHubData, syncBills, syncChores, syncContributions, syncEvents, syncItems, syncNotes } from "@/lib/hub-db";
 import { supabase } from "@/integrations/supabase/client";
 import { isDeviceMode } from "@/lib/db";
+import { usePersistedCollection, type SyncGuard } from "@/lib/persisted-collection";
+import { addShoppingItem } from "@/lib/shopping";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const byId = (id: string): Member => MEMBERS.find((m) => m.id === id) ?? MEMBERS[0]!;
@@ -46,33 +48,27 @@ export interface HubState {
   setContributions: React.Dispatch<React.SetStateAction<Contribution[]>>;
 }
 
-/** Wraps a state setter so every change is also persisted to the household database. */
-function persisted<T extends { id: string }[]>(
-  setState: React.Dispatch<React.SetStateAction<T>>,
-  sync: (prev: T, next: T) => Promise<void>,
-): React.Dispatch<React.SetStateAction<T>> {
-  return (update) =>
-    setState((prev) => {
-      const next = typeof update === "function" ? (update as (p: T) => T)(prev) : update;
-      if (next !== prev) void sync(prev, next).catch(() => toast.error("No se pudo guardar. Revisa la conexión."));
-      return next;
-    });
-}
+const saveError = () => { toast.error("No se pudo guardar. Revisa la conexión."); };
 
 export function useHubState(): HubState {
-  const [events, setEventsRaw] = useState<FamilyEvent[]>([]);
-  const [notes, setNotesRaw] = useState<FamilyNote[]>([]);
-  const [chores, setChoresRaw] = useState<Chore[]>([]);
-  const [items, setItemsRaw] = useState<ShopItem[]>([]);
-  const [bills, setBillsRaw] = useState<LedgerBill[]>([]);
-  const [contributions, setContributionsRaw] = useState<Contribution[]>([]);
+  const guard = useRef<SyncGuard>({ revision: 0, pending: 0, queue: Promise.resolve() }).current;
+  const [events, setEvents, setEventsRaw] = usePersistedCollection<FamilyEvent[]>([], syncEvents, guard, saveError);
+  const [notes, setNotes, setNotesRaw] = usePersistedCollection<FamilyNote[]>([], syncNotes, guard, saveError);
+  const [chores, setChores, setChoresRaw] = usePersistedCollection<Chore[]>([], syncChores, guard, saveError);
+  const [items, setItems, setItemsRaw] = usePersistedCollection<ShopItem[]>([], syncItems, guard, saveError);
+  const [bills, setBills, setBillsRaw] = usePersistedCollection<LedgerBill[]>([], syncBills, guard, saveError);
+  const [contributions, setContributions, setContributionsRaw] = usePersistedCollection<Contribution[]>([], syncContributions, guard, saveError);
 
   useEffect(() => {
     let active = true;
+    let request = 0;
     const refresh = async () => {
+      if (guard.pending) return;
+      const revision = guard.revision;
+      const id = ++request;
       try {
         const data = await loadHubData();
-        if (!active) return;
+        if (!active || guard.pending || revision !== guard.revision || id !== request) return;
         setEventsRaw(data.events);
         setNotesRaw(data.notes);
         setChoresRaw(data.chores);
@@ -97,7 +93,7 @@ export function useHubState(): HubState {
       .on("postgres_changes", { event: "*", schema: "public", table: "contributions" }, () => void refresh())
       .subscribe();
     // Paired tablets have no account session for realtime, so they poll.
-    const poll = isDeviceMode() ? setInterval(() => void refresh(), 8000) : undefined;
+    const poll = setInterval(() => void refresh(), isDeviceMode() ? 8000 : 5000);
     return () => {
       active = false;
       if (poll) clearInterval(poll);
@@ -105,12 +101,6 @@ export function useHubState(): HubState {
     };
   }, []);
 
-  const setEvents = useMemo(() => persisted(setEventsRaw, syncEvents), []);
-  const setNotes = useMemo(() => persisted(setNotesRaw, syncNotes), []);
-  const setChores = useMemo(() => persisted(setChoresRaw, syncChores), []);
-  const setItems = useMemo(() => persisted(setItemsRaw, syncItems), []);
-  const setBills = useMemo(() => persisted(setBillsRaw, syncBills), []);
-  const setContributions = useMemo(() => persisted(setContributionsRaw, syncContributions), []);
   return { events, setEvents, notes, setNotes, chores, setChores, items, setItems, bills, setBills, contributions, setContributions };
 }
 
@@ -319,7 +309,8 @@ export function Shopping({ s }: { s: HubState; compact: boolean }) {
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    s.setItems((xs) => [...xs, { id: crypto.randomUUID(), name: name.trim(), done: false }]);
+    const item = { id: crypto.randomUUID(), name: name.trim(), done: false };
+    s.setItems((xs) => addShoppingItem(xs, item));
     setName("");
   };
   const remove = (item: ShopItem) => {

@@ -1,5 +1,9 @@
 # Roadmap
 
+## Corrección de compras
+- [ ] Evitar productos duplicados y escrituras repetidas; limpiar copias existentes.
+- [ ] Verificar añadir, marcar, borrar y sincronizar entre dos navegadores.
+
 ## Fase 2 — Backend real (en curso)
 - [x] Esquema multi-hogar en la base de datos: hogares, miembros (PIN cifrado), tareas, compras, eventos, notas, bills, repartos, ajustes mensuales y aportes.
 - [x] Datos de ejemplo de la Familia Pérez cargados en la base de datos.
