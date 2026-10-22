@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Copy, Home, KeyRound, Mail, Tablet, Trash2, UserPlus } from "lucide-react";
+import { Copy, Home, KeyRound, Mail, Pencil, Tablet, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DEVICE_KEY } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { credentials, invitationCode, INVITATION_KEY, readPendingInvite } from "@/lib/account-validation";
+import { Avatar } from "./Kiosk";
+import { MEMBERS, type Role } from "./data";
 
 const field = "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-ring";
 const pinField = (v: string) => v.replace(/\D/g, "").slice(0, 4);
@@ -16,6 +18,12 @@ const errMsg = (e: { message?: string } | null) => {
   if (m.includes("Already in household")) return "Esta cuenta ya pertenece a un hogar";
   if (m.includes("Name required")) return "Escribe un nombre válido";
   if (m.includes("PIN already")) return "Ese PIN ya lo usa otra persona del hogar";
+  if (m.includes("PIN must be 4 digits")) return "El PIN debe tener 4 números";
+  if (m.includes("Only adults")) return "Solo un adulto puede hacerlo";
+  if (m.includes("Cannot remove the last adult")) return "Debe quedar al menos un adulto en el hogar";
+  if (m.includes("Member has a linked account")) return "Esta persona tiene una cuenta vinculada y no se puede quitar";
+  if (m.includes("Member not found")) return "No se encontró a esa persona";
+  if (m.includes("Invalid role")) return "Rol no válido";
   if (m.includes("Invalid or expired")) return "Código no válido o caducado";
   if (m.includes("duplicate key") && m.includes("pin")) return "Ese PIN ya lo usa otra persona del hogar";
   return m || "Algo salió mal";
