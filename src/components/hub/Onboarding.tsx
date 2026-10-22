@@ -220,7 +220,7 @@ export function HouseholdSettings() {
     if (!editing) return;
     if (editing.pin && editing.pin.length !== 4) { toast.error("El PIN debe tener 4 números"); return; }
     setBusy(true);
-    const { error } = await supabase.rpc("update_member", { _key: editing.key, _name: editing.name, _role: editing.role, _pin: editing.pin || null });
+    const { error } = await supabase.rpc("update_member", { _key: editing.key, _name: editing.name, _role: editing.role, _pin: editing.pin || undefined });
     setBusy(false);
     if (error) { toast.error(errMsg(error)); return; }
     setEditing(null);
