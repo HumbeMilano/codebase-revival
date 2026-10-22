@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FamilyCalendar, FamilyNotes } from "./Planner";
 import { MEMBERS, setMembers } from "./data";
 
-vi.mock("./VoiceInput", () => ({ VoiceInput: () => null }));
 vi.mock("./Kiosk", () => ({ Avatar: () => <span>avatar</span> }));
 const user = { id: "ana", name: "Ana", role: "admin" as const, color: "member-1" };
 beforeEach(() => {

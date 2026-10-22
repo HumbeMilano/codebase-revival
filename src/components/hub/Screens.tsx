@@ -14,8 +14,6 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { VoiceInput } from "./VoiceInput";
-import { appendDictation } from "@/lib/dictation";
 import { canViewFinances } from "@/lib/finance-visibility";
 import { monthKey, monthSummary, type Contribution, type LedgerBill } from "@/lib/ledger";
 import { Avatar } from "./Kiosk";
@@ -33,6 +31,11 @@ import { addShoppingItem } from "@/lib/shopping";
 import { persistenceErrorMessage } from "@/lib/persistence-errors";
 import { dateKey, parseDate, upcomingEvents } from "./planner-data";
 import { useToday } from "@/hooks/use-today";
+import { isChoreArchived } from "@/lib/chore-archive";
+import { useClock } from "./Kiosk";
+import { useOfflineShopping } from "@/hooks/use-offline-shopping";
+import type { ShoppingContext } from "@/lib/offline-shopping";
+import { db } from "@/lib/db";
 import {
   Dialog,
   DialogContent,
@@ -89,6 +92,7 @@ export interface HubState {
   setChores: PersistedSetter<Chore[]>;
   items: ShopItem[];
   setItems: PersistedSetter<ShopItem[]>;
+  shoppingSync?: ReturnType<typeof useOfflineShopping>;
   bills: LedgerBill[];
   setBills: PersistedSetter<LedgerBill[]>;
   contributions: Contribution[];
@@ -102,7 +106,14 @@ const saveError = (error: unknown) => {
 export function useHubState({
   includeFinances = false,
   onContextRefresh,
-}: { includeFinances?: boolean; onContextRefresh?: () => Promise<void> } = {}): HubState {
+  shoppingContext = null,
+}: {
+  includeFinances?: boolean;
+  onContextRefresh?: () => Promise<void>;
+  shoppingContext?: ShoppingContext | null;
+} = {}): HubState {
+  const shopping = useOfflineShopping(shoppingContext, db());
+  const { replace: replaceOfflineShopping } = shopping;
   const [binding] = useState(() => bindHubPersistence());
   const guard = useRef<SyncGuard>({ revision: 0, pending: 0, queue: Promise.resolve() }).current;
   const [events, setEvents, setEventsRaw, eventStatus] = usePersistedCollection<FamilyEvent[]>(
@@ -170,7 +181,8 @@ export function useHubState({
         setEventsRaw(data.events);
         setNotesRaw(data.notes);
         setChoresRaw(data.chores);
-        setItemsRaw(data.items);
+        if (shoppingContext) await replaceOfflineShopping(data.items);
+        else setItemsRaw(data.items);
         setBillsRaw(data.bills);
         setContributionsRaw(data.contributions);
         failures = 0;
@@ -297,6 +309,8 @@ export function useHubState({
     setItemsRaw,
     setBillsRaw,
     setContributionsRaw,
+    shoppingContext,
+    replaceOfflineShopping,
   ]);
   useEffect(() => {
     if (!includeFinances) {
@@ -327,8 +341,9 @@ export function useHubState({
     setNotes,
     chores,
     setChores,
-    items,
-    setItems,
+    items: shoppingContext ? shopping.items : items,
+    setItems: shoppingContext ? shopping.setItems : setItems,
+    ...(shoppingContext ? { shoppingSync: shopping } : {}),
     bills,
     setBills,
     contributions,
@@ -451,7 +466,8 @@ export function Dashboard({
   adultAuthorized?: boolean;
 }) {
   const now = useToday();
-  const today = s.chores.filter(
+  const currentChores = s.chores.filter((chore) => !isChoreArchived(chore, now.getTime()));
+  const today = currentChores.filter(
     (c) => c.dueDate === dateKey(now) || (!c.done && !!c.dueDate && c.dueDate < dateKey(now)),
   );
   const remaining = today.filter((c) => !c.done).length;
@@ -539,7 +555,7 @@ export function Dashboard({
           <section aria-label="La familia hoy">
             <div className="grid grid-cols-4 gap-2">
               {MEMBERS.map((m) => {
-                const list = s.chores.filter((c) => c.memberId === m.id);
+                const list = currentChores.filter((c) => c.memberId === m.id);
                 const done = list.filter((c) => c.done).length;
                 return (
                   <Button
@@ -668,6 +684,8 @@ export function Chores({
 }) {
   const today = useToday();
   const [who, setWho] = useState("all");
+  const [taskView, setTaskView] = useState<"active" | "archived">("active");
+  const now = useClock();
   const [draft, setDraft] = useState<Chore | null>(null);
   const [busy, setBusy] = useState(false);
   const fresh = useCallback(
@@ -684,7 +702,11 @@ export function Chores({
   useEffect(() => {
     if (createRequest) setDraft(fresh());
   }, [createRequest, fresh]);
-  const list = s.chores.filter((c) => who === "all" || c.memberId === who);
+  const list = s.chores.filter(
+    (c) =>
+      (who === "all" || c.memberId === who) &&
+      isChoreArchived(c, now ?? Date.now()) === (taskView === "archived"),
+  );
   const isNew = draft ? !s.chores.some((c) => c.id === draft.id) : false;
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -723,6 +745,25 @@ export function Chores({
     "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-ring";
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2" aria-label="Vista de tareas">
+        <Button
+          variant={taskView === "active" ? "default" : "outline"}
+          onClick={() => setTaskView("active")}
+          className="rounded-full"
+        >
+          Actuales
+        </Button>
+        <Button
+          variant={taskView === "archived" ? "default" : "outline"}
+          onClick={() => setTaskView("archived")}
+          className="rounded-full"
+        >
+          Archivadas
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Las tareas realizadas se archivan a los 3 días.
+        </p>
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant={who === "all" ? "default" : "outline"}
@@ -753,7 +794,9 @@ export function Chores({
       </div>
       {!list.length && (
         <p className="rounded-2xl bg-card py-12 text-center text-muted-foreground">
-          No hay tareas. Añade la primera para organizar el hogar.
+          {taskView === "archived"
+            ? "No hay tareas archivadas. Las realizadas aparecerán aquí después de 3 días."
+            : "No hay tareas. Añade la primera para organizar el hogar."}
         </p>
       )}
       {CHORE_GROUPS.map((group) => {
@@ -855,14 +898,6 @@ export function Chores({
                     onChange={(event) => setDraft({ ...draft, title: event.target.value })}
                     className={field}
                   />
-                  <VoiceInput
-                    label="tarea"
-                    onText={(text) =>
-                      setDraft((old) =>
-                        old ? { ...old, title: appendDictation(old.title, text) } : old,
-                      )
-                    }
-                  />
                 </div>
               </label>
               <label className="block text-sm font-semibold">
@@ -921,7 +956,7 @@ export function Shopping({
   s,
   createRequest = 0,
 }: {
-  s: HubState;
+  s: Pick<HubState, "items" | "setItems" | "shoppingSync">;
   compact: boolean;
   createRequest?: number;
 }) {
@@ -972,6 +1007,62 @@ export function Shopping({
   };
   return (
     <div className="mx-auto max-w-2xl space-y-4">
+      {s.shoppingSync && (
+        <section
+          className="space-y-2 rounded-2xl bg-secondary p-4 text-sm"
+          aria-label="Sincronización de compras"
+        >
+          <p role="status">
+            {s.shoppingSync.loading
+              ? "Preparando almacenamiento local…"
+              : s.shoppingSync.syncing
+                ? "Sincronizando compras…"
+                : s.shoppingSync.pending
+                  ? `${s.shoppingSync.pending} cambios guardados en este dispositivo, pendientes de sincronizar.`
+                  : "Lista guardada en este dispositivo para usar sin conexión."}
+          </p>
+          {s.shoppingSync.error && <p role="alert">{s.shoppingSync.error}</p>}
+          {s.shoppingSync.conflict ? (
+            <div className="space-y-2">
+              <p>
+                Si aplicas tus cambios, tendrán prioridad en los productos que modificaste. Los
+                demás productos del hogar se conservarán.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={s.shoppingSync.syncing || navigator.onLine === false}
+                  onClick={() => void s.shoppingSync?.resolve(true)}
+                >
+                  Aplicar mis cambios
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={s.shoppingSync.syncing || navigator.onLine === false}
+                  onClick={() => void s.shoppingSync?.resolve(false)}
+                >
+                  Usar la lista del hogar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            !!s.shoppingSync.pending && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={s.shoppingSync.syncing || navigator.onLine === false}
+                onClick={() => void s.shoppingSync?.sync()}
+              >
+                Sincronizar ahora
+              </Button>
+            )
+          )}
+        </section>
+      )}
       <form
         onSubmit={(event) => void add(event)}
         className="flex items-center gap-2 rounded-2xl bg-card p-2 pl-4 shadow-card"
@@ -984,10 +1075,6 @@ export function Shopping({
           onChange={(event) => setName(event.target.value)}
           placeholder="Añadir producto"
           className="min-w-0 flex-1 bg-transparent text-base outline-none"
-        />
-        <VoiceInput
-          label="producto"
-          onText={(text) => setName((old) => appendDictation(old, text))}
         />
         <Button
           type="submit"

@@ -4,7 +4,7 @@ export const invitationCode = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z0-9]{8,16}$/, "Código de invitación no válido");
+  .regex(/^[A-Z0-9]{8,32}$/, "Código de invitación no válido");
 export const personalPreferences = z.object({
   preferred_view: z.enum(["auto", "mobile", "tablet"]),
   time_format: z.enum(["12", "24"]),

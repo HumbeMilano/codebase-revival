@@ -185,6 +185,7 @@ export function bindHubPersistence(
         done: row.done,
         when: row.when_label,
         dueDate: row.due_date,
+        completedAt: row.completed_at,
         position: row.position,
         revision: row.revision,
       })),
@@ -245,6 +246,7 @@ export function bindHubPersistence(
         personId: row.person_key,
         amount: Number(row.amount),
         month: row.month,
+        date: row.occurred_on,
         note: row.note,
         revision: row.revision,
       })),
@@ -314,7 +316,14 @@ export function bindHubPersistence(
       const row = changed.get(item.id);
       if (!row) return item;
       return table === "chores" || table === "shopping_items"
-        ? { ...item, revision: row.revision, position: row.position ?? positions.get(item.id)! }
+        ? {
+            ...item,
+            revision: row.revision,
+            position: row.position ?? positions.get(item.id)!,
+            ...(table === "chores"
+              ? { completedAt: (row as unknown as { completed_at: string | null }).completed_at }
+              : {}),
+          }
         : { ...item, revision: row.revision };
     });
   };
@@ -415,6 +424,7 @@ export function bindHubPersistence(
         person_key: item.personId,
         amount: item.amount,
         month: item.month,
+        occurred_on: item.date ?? null,
         note: item.note ?? "",
       })),
     syncBills,

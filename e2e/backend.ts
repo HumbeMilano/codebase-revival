@@ -47,6 +47,8 @@ export class HouseholdBackend {
   financeActive = false;
   financialReadsWithoutGrant = 0;
   unexpectedRequests: string[] = [];
+  shoppingReceipts = new Map<string, unknown>();
+  photos: Row[] = [];
 
   async install(page: Page) {
     await page.route("**/auth/v1/**", (route) => this.auth(route));
@@ -54,11 +56,39 @@ export class HouseholdBackend {
     await page.route("**/storage/v1/**", (route) =>
       route.fulfill({ status: 404, json: { message: "No photo in this fixture" } }),
     );
+    await page.route("**/functions/v1/household-photos", (route) =>
+      route.fulfill({ json: { photos: this.photos } }),
+    );
     await page.routeWebSocket(/\/realtime\/v1\//, (socket) => socket.close());
   }
 
   private async auth(route: Route) {
     const { pathname } = new URL(route.request().url());
+    if (pathname.endsWith("/passkeys/authentication/options")) {
+      return route.fulfill({
+        json: {
+          challenge_id: crypto.randomUUID(),
+          options: {
+            challenge: "Y2hhbGxlbmdl",
+            rpId: "127.0.0.1",
+            timeout: 60000,
+            userVerification: "required",
+          },
+        },
+      });
+    }
+    if (pathname.endsWith("/passkeys/authentication/verify")) {
+      return route.fulfill({
+        json: {
+          access_token: token,
+          token_type: "bearer",
+          expires_in: 86400,
+          refresh_token: "temporary_pairing_refresh",
+          user,
+        },
+      });
+    }
+    if (pathname.endsWith("/passkeys")) return route.fulfill({ json: [] });
     if (pathname.endsWith("/token")) {
       return route.fulfill({
         json: {
@@ -160,10 +190,10 @@ export class HouseholdBackend {
         };
       case "household_members":
         return { json: [member, { key: "m_nico", name: "Nico", role: "member" }] };
-      case "pair_device":
-        return args["_code"] === "ABCDEF123456"
-          ? { json: "fixture-device-token" }
-          : { status: 400, json: { message: "Invalid or expired code" } };
+      case "pair_tablet_with_passkey":
+        return { json: "fixture-device-token" };
+      case "list_household_photos":
+        return { json: this.photos.map(({ url, ...photo }) => photo) };
       case "pin_lock_status":
         return { json: { locked: false, retry_after: 0 } };
       case "verify_pin":
@@ -233,7 +263,19 @@ export class HouseholdBackend {
           : { json: null };
       case "list_devices":
       case "list_invites":
+      case "list_email_invites":
         return { json: [] };
+      case "sync_shopping": {
+        const id = String(args["_mutation_id"]);
+        if (this.shoppingReceipts.has(id)) return { json: this.shoppingReceipts.get(id) };
+        const saved = await this.rpc(
+          "save_collection",
+          { ...args, _table: "shopping_items" },
+          headers,
+        );
+        if (!saved.status) this.shoppingReceipts.set(id, saved.json);
+        return saved;
+      }
       case "save_collection": {
         this.writeRequests += 1;
         if (this.failNextSave) {
@@ -255,13 +297,17 @@ export class HouseholdBackend {
             return { status: 409, json: { message: "REVISION_CONFLICT", code: "40001" } };
           if (change.operation === "delete") next.splice(index, 1);
           else {
-            const row = {
+            const row: Row = {
               ...(index >= 0 ? next[index] : {}),
               ...change.values,
               id: change.id,
               household_id: HOME_ID,
               revision: Number(index >= 0 ? next[index]?.["revision"] : 0) + 1,
             };
+            if (table === "chores")
+              row["completed_at"] = row["done"]
+                ? (next[index]?.["completed_at"] ?? new Date().toISOString())
+                : null;
             if (index >= 0) next[index] = row;
             else next.push(row);
             changed.push(row);
@@ -315,6 +361,32 @@ export async function signIn(page: Page) {
   await page.getByLabel("Contraseña", { exact: true }).fill("test-password");
   await page.locator("form").getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page.getByText("Hola, Ana", { exact: true }).first()).toBeVisible();
+}
+
+/** The browser boundary is synthetic; Postgres tests separately enforce fresh
+ * signed passkey claims. A real QR/Bluetooth ceremony still needs physical devices. */
+export async function mockTabletPasskey(page: Page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "PublicKeyCredential", { configurable: true, value: class {} });
+    Object.defineProperty(navigator, "credentials", {
+      configurable: true,
+      value: {
+        get: async () => ({
+          id: "fixture-passkey",
+          rawId: new Uint8Array([1, 2, 3]).buffer,
+          type: "public-key",
+          authenticatorAttachment: "cross-platform",
+          response: {
+            clientDataJSON: new Uint8Array([1]).buffer,
+            authenticatorData: new Uint8Array([2]).buffer,
+            signature: new Uint8Array([3]).buffer,
+            userHandle: null,
+          },
+          getClientExtensionResults: () => ({}),
+        }),
+      },
+    });
+  });
 }
 
 export async function section(page: Page, label: string) {

@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { clearFinanceAccess } from "@/lib/db";
 import { personalPreferences } from "@/lib/account-validation";
+import { PasskeySettings } from "./PasskeySettings";
 
 const field = "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base";
 export function PersonalProfile({
@@ -323,6 +324,7 @@ export function PersonalProfile({
           {busy ? "Guardando…" : "Guardar preferencias"}
         </Button>
       </form>
+      <PasskeySettings />
       <section className="rounded-2xl border p-4">
         <h2 className="font-display font-semibold">Tu cuenta y el hogar</h2>
         <p className="mt-2 text-sm text-muted-foreground">

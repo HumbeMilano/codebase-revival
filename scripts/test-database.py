@@ -28,8 +28,11 @@ def execute(command, **kwargs):
     return subprocess.run(command, env=ENV, text=True, capture_output=True, **kwargs)
 
 
-def sql(query, *, user=None, device=None, finance=None, fail=None):
+def sql(query, *, user=None, device=None, finance=None, fail=None, passkey=False, session_id=None, passkey_age=0):
     claims = {'sub': user, 'session_id': 'sql-test-' + user} if user else {}
+    if user and passkey:
+        claims['amr'] = [{'method': 'passkey', 'timestamp': int(time.time())-passkey_age}]
+        claims['session_id'] = session_id or str(uuid.uuid4())
     headers = {}
     if device:
         headers['x-device-token'] = device
@@ -109,15 +112,15 @@ def run():
     sql((ROOT / 'scripts/validate-constraints.sql').read_text())
     check('all integrity constraints validate on a clean installation', sql("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='public' AND NOT c.convalidated;"), '0')
     check('legacy demo pairing credentials are expired without deleting history', sql("SELECT expires_at<=now() FROM pairing_codes WHERE code='PEREZ1';"), 't')
-    sql("SELECT pair_device('PEREZ1','Forbidden demo');", device='', fail='Invalid or expired code')
+    sql("SELECT pair_device('PEREZ1','Forbidden demo');", device='', fail='permission denied')
     check('all migrations preserve the seeded household', sql("SELECT count(*) FROM households WHERE name='Familia Pérez';"), '1')
     check('private avatar bucket is provisioned with limits', sql("SELECT count(*) FROM storage.buckets WHERE id='personal-avatars' AND NOT public AND file_size_limit=2097152;"), '1')
-    sql(f"INSERT INTO auth.users(id,email) VALUES('{USER_A}','a@example.invalid'),('{USER_B}','b@example.invalid'),('{USER_C}','c@example.invalid');")
+    sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{USER_A}','a@example.invalid',now()),('{USER_B}','b@example.invalid',now()),('{USER_C}','c@example.invalid',now());")
     sql('SELECT claim_platform_admin();', user=USER_A, fail='permission denied')
     check('ordinary account cannot claim global administration', sql('SELECT count(*) FROM user_roles;'), '0')
     hid = sql("SELECT create_household('Test Home','Adult A','1234');", user=USER_A)
     member_a = sql('SELECT member_key FROM my_context();', user=USER_A)
-    invite = sql("SELECT create_invite('Adult B','admin');", user=USER_A)
+    invite = sql("SELECT prepare_email_invite('Adult B','admin','b@example.invalid')->>'code';", user=USER_A)
     check('invitation joins correct household', sql(f"SELECT redeem_invite('{invite}','5678');", user=USER_B), hid)
     member_b = sql('SELECT member_key FROM my_context();', user=USER_B)
     child = sql("SELECT create_member('Child','member','2468');", user=USER_A)
@@ -165,6 +168,60 @@ def run():
     collection('contributions', hid, contribution, fail='contribution_member_valid')
     check('invalid member cannot silently receive an aporte', sql(f"SELECT count(*) FROM contributions WHERE household_id='{hid}';", user=USER_A), '0')
     sql(f"SELECT delete_member('{member_a}');", user=USER_B, fail='linked account')
+    # Daily use features: timestamp provenance, dates, durable retries, recipient binding and photos.
+    chore_id = str(uuid.uuid4())
+    row = json.loads(collection('chores', hid, [{'id': chore_id, 'operation': 'insert', 'values': {'title':'Archive me','member_key':member_a,'done':False}}]))[0]
+    check('new incomplete task has no completion timestamp', row['completed_at'], None)
+    row = json.loads(collection('chores', hid, [{'id': chore_id, 'operation':'update','expected_revision':1,'values':{'done':True}}]))[0]
+    completed_at = row['completed_at']
+    check('completing a task stamps server time', bool(completed_at), True)
+    row = json.loads(collection('chores', hid, [{'id': chore_id, 'operation':'update','expected_revision':2,'values':{'title':'Keep completion'}}]))[0]
+    check('editing a completed task does not postpone archival', row['completed_at'], completed_at)
+    collection('chores', hid, [{'id':chore_id,'operation':'update','expected_revision':3,'values':{'completed_at':'2099-01-01'}}], fail='Invalid fields')
+    row = json.loads(collection('chores', hid, [{'id':chore_id,'operation':'update','expected_revision':3,'values':{'done':False}}]))[0]
+    check('restoring a task clears its completion timestamp', row['completed_at'], None)
+    contribution_id = str(uuid.uuid4())
+    value = {'person_key':member_a,'amount':12.34,'month':'2026-10','occurred_on':'2026-10-20'}
+    row = json.loads(collection('contributions', hid, [{'id':contribution_id,'operation':'insert','values':value}]))[0]
+    check('contribution retains the selected date', row['occurred_on'], '2026-10-20')
+    collection('contributions', hid, [{'id':contribution_id,'operation':'update','expected_revision':1,'values':{'occurred_on':'2026-11-01'}}], fail='contribution_date_month')
+    mutation_id = str(uuid.uuid4()); offline_item = str(uuid.uuid4())
+    changes = [{'id':offline_item,'operation':'insert','expected_revision':None,'values':{'name':'Offline apples','done':False}}]
+    query = f"SELECT sync_shopping('{hid}','{mutation_id}','{j(changes)}'::jsonb,'{member_a}');"
+    response = sql(query,user=USER_A)
+    check('lost-response shopping retry returns the original receipt', sql(query,user=USER_A), response)
+    check('shopping retry inserts exactly one product', sql(f"SELECT count(*) FROM shopping_items WHERE id='{offline_item}';"), '1')
+    sql(f"SELECT sync_shopping('{hid}','{mutation_id}','[]'::jsonb,'{member_a}');",user=USER_A,fail='Mutation identity reused')
+    sql(f"SELECT sync_shopping('{hid}','{uuid.uuid4()}','[]'::jsonb,'wrong-member');",user=USER_A,fail='member changed')
+    sql(query,user=USER_C,fail='Household access denied')
+    email_invite = sql("SELECT prepare_email_invite('New person','member','newperson@example.invalid')->>'code';",user=USER_A)
+    sql(f"SELECT redeem_invite('{email_invite}','9999');",user=USER_C,fail='different verified email')
+    check('email invitation uses a stronger random credential',len(email_invite),32)
+    sql("SELECT prepare_email_invite('New person','member','newperson@example.invalid');",user=USER_A,fail='Wait a minute')
+    check('unaccepted email remains pending',sql(f"SELECT delivery_status FROM invites WHERE code='{email_invite}';"),'pending')
+    delivery = sql(f"SELECT email_delivery_id FROM invites WHERE code='{email_invite}';")
+    sql(f"SELECT mark_invite_email_sent('{email_invite}','provider-one','{delivery}');",user=USER_A)
+    sql(f"UPDATE invites SET last_email_attempt_at=now()-interval '2 minutes' WHERE code='{email_invite}';")
+    resent = json.loads(sql(f"SELECT prepare_email_invite('New person','member','newperson@example.invalid','{email_invite}');",user=USER_A))
+    check('intentional resend creates a new provider delivery identity',resent['delivery_id']!=delivery,True)
+    sql(f"SELECT mark_invite_email_sent('{email_invite}','stale-provider','{delivery}');",user=USER_A,fail='delivery changed')
+    sql(f"UPDATE invites SET last_email_attempt_at=now()-interval '2 minutes' WHERE code='{email_invite}';")
+    retry = json.loads(sql(f"SELECT prepare_email_invite('New person','member','newperson@example.invalid','{email_invite}');",user=USER_A))
+    check('uncertain pending email retries keep the same delivery identity',retry['delivery_id'],resent['delivery_id'])
+    sql(f"UPDATE auth.users SET email='newperson@example.invalid',email_confirmed_at=NULL WHERE id='{USER_C}';")
+    sql(f"SELECT redeem_invite('{email_invite}','9999');",user=USER_C,fail='different verified email')
+    sql(f"UPDATE auth.users SET email='c@example.invalid',email_confirmed_at=now() WHERE id='{USER_C}';")
+    photo_path = f'{hid}/{uuid.uuid4()}.jpg'
+    sql(f"INSERT INTO storage.objects(bucket_id,name) VALUES('household-photos','{photo_path}');")
+    photo_id = sql(f"SELECT add_household_photo('{photo_path}');",user=USER_A)
+    check('own household can read photo metadata',sql('SELECT count(*) FROM list_household_photos();',user=USER_A),'1')
+    check('other household cannot read photo metadata',sql('SELECT count(*) FROM list_household_photos();',user=USER_C),'0')
+    sql(f"SELECT add_household_photo('{photo_path}');",user=USER_C,fail='Upload a household photo first')
+    sql(f"SELECT reorder_household_photos(ARRAY['{photo_id}'::uuid]);",user=USER_C,fail='Photo order changed')
+    sql(f"SELECT remove_household_photo('{photo_id}');",user=USER_C)
+    check('another household cannot remove a photo',sql(f"SELECT count(*) FROM household_photos WHERE id='{photo_id}';"),'1')
+    sql(f"SELECT remove_household_photo('{photo_id}');",user=USER_A)
+    check('adult can remove own household photo',sql('SELECT count(*) FROM list_household_photos();',user=USER_A),'0')
     # Failed PIN entries are committed and common to both public PIN endpoints.
     for _ in range(4):
         check('invalid PIN returns no identity', sql("SELECT count(*) FROM verify_pin('0000');", user=USER_A), '0')
@@ -174,9 +231,17 @@ def run():
     check('valid adult PIN is blocked at verification', sql("SELECT count(*) FROM verify_pin('1234');", user=USER_A), '0')
     check('direct financial authorization cannot bypass lockout', sql("SELECT authorize_finances('1234') IS NULL;", user=USER_A), 't')
     sql(f"UPDATE pin_attempts SET created_at=now()-interval '6 minutes' WHERE household_id='{hid}';")
-    code = sql('SELECT create_pairing_code();', user=USER_A)
-    check('pairing code uses a longer cryptographic token', len(code), 12)
-    device = sql(f"SELECT pair_device('{code}','Test tablet');", device='')
+    sql('SELECT create_pairing_code();', user=USER_A, fail='permission denied')
+    sql("SELECT pair_tablet_with_passkey('Denied');", user=USER_A, fail='fresh passkey')
+    sql("SELECT pair_device('ABCDEF123456','Old route');",device='',fail='permission denied')
+    sql("SELECT pair_tablet_with_passkey('Expired');",user=USER_A,passkey=True,passkey_age=180,fail='fresh passkey')
+    sql(f"UPDATE members SET role='member' WHERE household_id='{hid}' AND key='{member_b}';")
+    sql("SELECT pair_tablet_with_passkey('Child account');",user=USER_B,passkey=True,fail='Only adults')
+    sql(f"UPDATE members SET role='admin' WHERE household_id='{hid}' AND key='{member_b}';")
+    pairing_session = str(uuid.uuid4())
+    device = sql("SELECT pair_tablet_with_passkey('Test tablet');", user=USER_A, passkey=True, session_id=pairing_session)
+    sql("SELECT pair_tablet_with_passkey('Reused session');",user=USER_A,passkey=True,session_id=pairing_session,fail='duplicate key')
+    check('passkey pairing returns a cryptographic device credential', len(device), 64)
     token = sql("SELECT authorize_finances('1234');", device=device)
     check('paired adult grant enables finances', sql(f"SELECT can_access_finances('{hid}');", device=device, finance=token), 't')
     check('finance grant lifetime is bounded', sql(f"SELECT expires_at<=now()+interval '15 minutes' AND authorized_by IS NOT NULL FROM finance_sessions WHERE household_id='{hid}' ORDER BY created_at DESC LIMIT 1;"), 't')
@@ -187,7 +252,7 @@ def run():
     check('adult PIN change revokes tablet grants', sql(f"SELECT can_access_finances('{hid}');", device=device, finance=token), 'f')
     sql(f"UPDATE households SET suspended=true WHERE id='{hid}';")
     sql('SELECT household_members();', user=USER_A, fail='Household suspended')
-    sql("SELECT create_invite('Forbidden','member');", user=USER_A, fail='Household suspended')
+    sql("SELECT prepare_email_invite('Forbidden','member','blocked@example.invalid');", user=USER_A, fail='Household suspended')
     sql('SELECT my_context();', device=device, fail='Household suspended')
     check('suspension removes table access', sql(f"SELECT count(*) FROM shopping_items WHERE household_id='{hid}';", user=USER_A), '0')
     sql(f"UPDATE households SET suspended=false WHERE id='{hid}';")

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, Delete, Lock } from "lucide-react";
+import { CalendarDays, Delete, Lock, Pause, Play } from "lucide-react";
 import photo from "@/assets/kiosk-photo.jpg";
 import { HOUSEHOLD, MEMBERS, memberBg, type Chore, type Member } from "./data";
 import { db, isDeviceMode, setFinanceToken } from "@/lib/db";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { dateKey, eventWhen, upcomingEvents, type FamilyEvent } from "./planner-data";
+import { useHouseholdPhotos } from "@/lib/household-photos";
 
 export function useClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -262,25 +263,46 @@ export function Kiosk({
 }) {
   const now = useClock();
   const [entering, setEntering] = useState(false);
+  const { photos } = useHouseholdPhotos();
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const shownPhoto = photos.length ? photos[photoIndex % photos.length] : null;
+  useEffect(() => {
+    if (
+      photos.length < 2 ||
+      paused ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "hidden")
+        setPhotoIndex((index) => (index + 1) % photos.length);
+    }, 20_000);
+    return () => clearInterval(timer);
+  }, [photos.length, paused]);
   const next = now ? upcomingEvents(events, now) : [];
   const pending = now
     ? chores.filter((chore) => !chore.done && chore.dueDate === dateKey(now)).length
     : 0;
   return (
-    <div className="relative min-h-[calc(100dvh-4rem)] w-full overflow-hidden rounded-3xl text-primary-foreground">
+    <div
+      className="relative min-h-dvh w-full overflow-hidden bg-black text-primary-foreground"
+      data-testid="tablet-lock-screen"
+    >
       <img
-        src={photo}
+        key={shownPhoto?.id ?? "default"}
+        src={shownPhoto?.url ?? photo}
         alt=""
         aria-hidden="true"
         width={1600}
         height={1008}
-        className="absolute inset-0 h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-cover motion-safe:animate-in motion-safe:fade-in"
       />
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/25 to-black/80" />
       <div
         className={cn(
-          "relative flex min-h-[calc(100dvh-4rem)] flex-col justify-between gap-10",
-          compact ? "p-6" : "p-12",
+          "relative flex min-h-dvh flex-col justify-between gap-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]",
+          compact ? "px-6" : "px-12",
         )}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -289,6 +311,16 @@ export function Kiosk({
           </span>
           <span className="flex items-center gap-2 text-sm text-white/80">
             <Lock className="size-4" /> Tablet del hogar
+            {photos.length > 1 && (
+              <button
+                type="button"
+                className="ml-2 rounded-full bg-black/30 p-2"
+                aria-label={paused ? "Reanudar fotos" : "Pausar fotos"}
+                onClick={() => setPaused((value) => !value)}
+              >
+                {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+              </button>
+            )}
           </span>
         </div>
         <div>
@@ -339,6 +371,23 @@ export function Kiosk({
             Entrar con PIN
           </Button>
         </div>
+        {photos.length > 1 && (
+          <div className="flex justify-center gap-2" aria-label="Fotos del hogar">
+            {photos.map((item, index) => (
+              <button
+                type="button"
+                key={item.id}
+                aria-label={`Mostrar foto ${index + 1}`}
+                aria-pressed={shownPhoto?.id === item.id}
+                className={cn(
+                  "size-3 rounded-full border border-white/80",
+                  shownPhoto?.id === item.id ? "bg-white" : "bg-white/20",
+                )}
+                onClick={() => setPhotoIndex(index)}
+              />
+            ))}
+          </div>
+        )}
       </div>
       {entering && <PinPad onCancel={() => setEntering(false)} onSuccess={onUnlock} />}
     </div>

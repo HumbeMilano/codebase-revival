@@ -38,11 +38,19 @@ describe("financial forms", () => {
     render(<Finance f={f} compact />);
     fireEvent.click(screen.getByRole("button", { name: /Aporte$/ }));
     expect(screen.getByRole("dialog", { name: "Nuevo aporte" })).toBeInTheDocument();
+    const today = new Date();
+    expect(screen.getByLabelText("Fecha del aporte")).toHaveValue(
+      `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
+    );
+    fireEvent.change(screen.getByLabelText("Fecha del aporte"), {
+      target: { value: "2026-02-17" },
+    });
     fireEvent.change(screen.getByLabelText("Monto del aporte"), { target: { value: "50" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar aporte" }));
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
     const apply = save.mock.calls[0]![0] as (rows: Contribution[]) => Contribution[];
     expect(apply([])[0]?.personId).toBe("real");
+    expect(apply([])[0]).toMatchObject({ date: "2026-02-17", month: "2026-02" });
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Guardar aporte" })).toBeEnabled(),
     );

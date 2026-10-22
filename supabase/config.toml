@@ -1,1 +1,6 @@
 project_id = "skendal-homehub"
+
+[functions.household-photos]
+# Paired tablets use their device token; the function validates my_context and
+# the household-scoped metadata before signing any private object.
+verify_jwt = false

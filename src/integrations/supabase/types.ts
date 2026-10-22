@@ -121,6 +121,7 @@ export type Database = {
       };
       chores: {
         Row: {
+          completed_at: string | null;
           revision: number;
           due_date: string | null;
           done: boolean;
@@ -132,6 +133,7 @@ export type Database = {
           when_label: string;
         };
         Insert: {
+          completed_at?: string | null;
           revision?: number;
           due_date?: string | null;
           done?: boolean;
@@ -143,6 +145,7 @@ export type Database = {
           when_label?: string;
         };
         Update: {
+          completed_at?: string | null;
           revision?: number;
           due_date?: string | null;
           done?: boolean;
@@ -165,6 +168,7 @@ export type Database = {
       };
       contributions: {
         Row: {
+          occurred_on: string | null;
           revision: number;
           amount: number;
           household_id: string;
@@ -174,6 +178,7 @@ export type Database = {
           person_key: string;
         };
         Insert: {
+          occurred_on?: string | null;
           revision?: number;
           amount?: number;
           household_id: string;
@@ -183,6 +188,7 @@ export type Database = {
           person_key: string;
         };
         Update: {
+          occurred_on?: string | null;
           revision?: number;
           amount?: number;
           household_id?: string;
@@ -638,6 +644,39 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      prepare_email_invite: {
+        Args: { _member_name: string; _role: string; _email: string; _code?: string };
+        Returns: Json;
+      };
+      mark_invite_email_sent: {
+        Args: { _code: string; _message_id: string; _delivery_id: string };
+        Returns: undefined;
+      };
+      list_email_invites: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          code: string;
+          member_name: string;
+          role: string;
+          expires_at: string;
+          used_at: string | null;
+          revoked_at: string | null;
+          recipient_email: string | null;
+          delivery_status: string;
+        }[];
+      };
+      sync_shopping: {
+        Args: { _household: string; _mutation_id: string; _changes: Json; _member_key?: string };
+        Returns: Json;
+      };
+      list_household_photos: {
+        Args: Record<PropertyKey, never>;
+        Returns: { id: string; path: string; position: number }[];
+      };
+      add_household_photo: { Args: { _path: string }; Returns: string };
+      remove_household_photo: { Args: { _id: string }; Returns: undefined };
+      reorder_household_photos: { Args: { _ids: string[] }; Returns: undefined };
+      pair_tablet_with_passkey: { Args: { _name?: string }; Returns: string };
       pin_lock_status: { Args: never; Returns: Json };
       list_member_accounts: { Args: never; Returns: { key: string; linked: boolean }[] };
       unlink_member: { Args: { _key: string }; Returns: undefined };

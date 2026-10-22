@@ -27,6 +27,7 @@ import {
 import { Avatar } from "./Kiosk";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { PersistedSetter } from "@/lib/persisted-collection";
+import { dateKey, parseDate } from "./planner-data";
 import { CATEGORIES, MEMBERS, type Member } from "./data";
 
 export const money = (n: number) =>
@@ -790,6 +791,18 @@ export function Finance({
                     >
                       {money(c.amount)}
                     </button>
+                    <span className="text-xs text-muted-foreground">
+                      {c.date ? (
+                        <time dateTime={c.date}>
+                          {parseDate(c.date).toLocaleDateString("es", {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </time>
+                      ) : (
+                        "Fecha no registrada"
+                      )}
+                    </span>
                     {c.note && (
                       <span className="max-w-[120px] truncate text-xs text-muted-foreground">
                         {c.note}
@@ -1117,7 +1130,6 @@ export function Finance({
 
       {addingAporte && (
         <AporteForm
-          mk={mk}
           initial={addingAporte === "new" ? undefined : addingAporte}
           onClose={() => {
             if (!saving) setAddingAporte(null);
@@ -1132,6 +1144,10 @@ export function Finance({
                 ),
               () => {
                 setAddingAporte(null);
+                if (c.date) {
+                  const selectedDate = parseDate(c.date);
+                  setCursor({ y: selectedDate.getFullYear(), m: selectedDate.getMonth() });
+                }
                 toast.success("Aporte guardado");
               },
             )
@@ -1143,12 +1159,10 @@ export function Finance({
 }
 
 function AporteForm({
-  mk,
   initial,
   onSave,
   onClose,
 }: {
-  mk: string;
   initial?: Contribution | undefined;
   onSave: (c: Contribution) => Promise<boolean>;
   onClose: () => void;
@@ -1156,9 +1170,12 @@ function AporteForm({
   const [personId, setPersonId] = useState(initial?.personId ?? MEMBERS[0]?.id ?? "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [note, setNote] = useState(initial?.note ?? "");
+  const [date, setDate] = useState(initial?.date ?? dateKey(new Date()));
   const [busy, setBusy] = useState(false);
   const numericAmount = Number(amount);
   const ok =
+    /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+    dateKey(parseDate(date)) === date &&
     MEMBERS.some((m) => m.id === personId) &&
     Number.isFinite(numericAmount) &&
     numericAmount > 0 &&
@@ -1173,7 +1190,8 @@ function AporteForm({
         id: initial?.id ?? crypto.randomUUID(),
         personId,
         amount: numericAmount,
-        month: mk,
+        month: date.slice(0, 7),
+        date,
         note: note.trim(),
       });
     } finally {
@@ -1183,7 +1201,7 @@ function AporteForm({
   return (
     <Sheet
       title={initial ? "Editar aporte" : "Nuevo aporte"}
-      subtitle="Dinero que entra al fondo común"
+      subtitle="Dinero que entra al fondo común. Se registra en el mes de la fecha elegida."
       onClose={onClose}
     >
       <form
@@ -1225,6 +1243,17 @@ function AporteForm({
           placeholder="Nota (opcional)"
           className="w-full rounded-2xl border bg-background px-4 py-3 outline-none focus:border-primary"
         />
+        <label className="block text-sm font-semibold">
+          Fecha del aporte
+          <input
+            type="date"
+            required
+            aria-label="Fecha del aporte"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className="mt-1 w-full rounded-2xl border bg-background px-4 py-3 text-base"
+          />
+        </label>
         <button
           type="submit"
           disabled={!ok || busy}

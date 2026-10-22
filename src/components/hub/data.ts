@@ -28,11 +28,13 @@ export interface Chore {
   done: boolean;
   when: string;
   dueDate?: string | null;
+  completedAt?: string | null;
   revision?: number;
 }
 
 export interface ShopItem {
   revision?: number;
+  position?: number;
   id: string;
   name: string;
   done: boolean;

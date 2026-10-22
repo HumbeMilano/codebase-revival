@@ -44,6 +44,13 @@ import { toast } from "sonner";
 import { setHouseholdId } from "@/lib/hub-db";
 import { sessionIdentity } from "@/lib/session-identity";
 import { personalPreferences } from "@/lib/account-validation";
+import {
+  ACTIVE_SHOPPING_ACCOUNT,
+  rememberShoppingContext,
+  readShoppingContext,
+  type ShoppingContext,
+} from "@/lib/offline-shopping";
+import { OfflineShopping } from "./OfflineShopping";
 
 const Finance = lazy(() => import("./Finance").then((m) => ({ default: m.Finance })));
 const FamilyCalendar = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyCalendar })));
@@ -64,6 +71,7 @@ const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "profile", label: "Mi perfil", icon: UserRound },
 ];
 type Gate =
+  | { status: "offline"; context: ShoppingContext }
   | { status: "loading" | "welcome" | "setup" }
   | { status: "error"; message: string }
   | {
@@ -71,6 +79,7 @@ type Gate =
       mode: "account" | "device";
       member: Member | null;
       identity: string;
+      shoppingContext: ShoppingContext | null;
     };
 type MemberRow = { key: string; name: string; role: string };
 const gateError = (error: unknown) => {
@@ -114,11 +123,29 @@ export function HubApp() {
     const revision = ++sequence.current;
     setGate({ status: "loading" });
     let candidate: ReturnType<typeof prepareDbContext> | undefined;
+    let requestedAccountId: string | null = null;
     try {
+      if (navigator.onLine === false) {
+        const accountId = localStorage.getItem(ACTIVE_SHOPPING_ACCOUNT);
+        const cached = accountId ? await readShoppingContext(accountId) : null;
+        if (revision !== sequence.current) return;
+        if (cached && Date.now() - cached.verifiedAt < 14 * 24 * 60 * 60 * 1000) {
+          invalidateDbContext();
+          setGate({ status: "offline", context: cached });
+          return;
+        }
+        setGate({
+          status: "error",
+          message:
+            "Abre las compras con conexión al menos una vez en este dispositivo antes de utilizarlas sin internet.",
+        });
+        return;
+      }
       const {
         data: { session },
         error: sessionError,
       } = await supabase.auth.getSession();
+      requestedAccountId = session?.user.id ?? null;
       if (sessionError) throw sessionError;
       const token = getDeviceToken();
       if (!session && !token) {
@@ -158,6 +185,7 @@ export function HubApp() {
         invalidateDbContext();
         setMembers([]);
         setHouseholdId("");
+        localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
         if (userId) setGate({ status: "setup" });
         else {
           forgetDevice();
@@ -171,13 +199,35 @@ export function HubApp() {
         candidate.discard();
         return;
       }
+      const shoppingContext: ShoppingContext | null =
+        userId && context.member_key
+          ? {
+              accountId: userId,
+              householdId: context.household_id,
+              householdName: context.household_name,
+              memberKey: context.member_key,
+              verifiedAt: Date.now(),
+            }
+          : null;
+      if (shoppingContext) {
+        try {
+          await rememberShoppingContext(shoppingContext);
+        } catch {
+          /* Local caching does not block online household access. */
+        }
+      }
+      if (revision !== sequence.current) {
+        candidate.discard();
+        return;
+      }
       candidate.activate();
       setHouseholdId(context.household_id);
       HOUSEHOLD.id = context.household_id;
       HOUSEHOLD.name = context.household_name;
       setMembers(rows ?? []);
       const member = MEMBERS.find((m) => m.id === context.member_key) ?? null;
-      setGate({ status: "ready", mode: candidate.mode, member, identity });
+      if (shoppingContext) localStorage.setItem(ACTIVE_SHOPPING_ACCOUNT, userId!);
+      setGate({ status: "ready", mode: candidate.mode, member, identity, shoppingContext });
       setMembersVersion((v) => v + 1);
       if (userId) void loadPreferences();
     } catch (error) {
@@ -186,6 +236,26 @@ export function HubApp() {
         invalidateDbContext();
         setHouseholdId("");
         setMembers([]);
+        const message =
+          error && typeof error === "object" && "message" in error
+            ? String(error.message)
+            : String(error);
+        if (navigator.onLine === false || /fetch|network|timeout|timed out/i.test(message)) {
+          try {
+            const accountId = localStorage.getItem(ACTIVE_SHOPPING_ACCOUNT);
+            const cached =
+              accountId && (!requestedAccountId || accountId === requestedAccountId)
+                ? await readShoppingContext(accountId)
+                : null;
+            if (revision !== sequence.current) return;
+            if (cached && Date.now() - cached.verifiedAt < 14 * 24 * 60 * 60 * 1000) {
+              setGate({ status: "offline", context: cached });
+              return;
+            }
+          } catch {
+            /* Keep the connection error if there is no usable local list. */
+          }
+        } else localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
         setGate({ status: "error", message: gateError(error) });
       }
     }
@@ -193,9 +263,12 @@ export function HubApp() {
   useEffect(() => {
     const media = window.matchMedia("(max-width: 899px)");
     const resize = () => setCompact(media.matches);
-    const network = () => setOnline(navigator.onLine);
+    const network = () => {
+      setOnline(navigator.onLine);
+      if (navigator.onLine && !currentDbIdentity()) void reload();
+    };
     resize();
-    network();
+    setOnline(navigator.onLine);
     void reload();
     media.addEventListener("change", resize);
     window.addEventListener("online", network);
@@ -215,7 +288,16 @@ export function HubApp() {
         updateAccountToken(session.access_token);
         return;
       }
-      if (event === "SIGNED_OUT") invalidateDbContext();
+      if (
+        event === "SIGNED_IN" &&
+        session &&
+        localStorage.getItem(ACTIVE_SHOPPING_ACCOUNT) !== session.user.id
+      )
+        localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
+      if (event === "SIGNED_OUT") {
+        localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
+        invalidateDbContext();
+      }
       if (event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(() => void reload(), 0);
     });
     return () => {
@@ -254,7 +336,13 @@ export function HubApp() {
       setGate((old) =>
         old.status !== "ready"
           ? old
-          : { ...old, member: MEMBERS.find((m) => m.id === context.data?.[0]?.member_key) ?? null },
+          : {
+              ...old,
+              member: MEMBERS.find((m) => m.id === context.data?.[0]?.member_key) ?? null,
+              shoppingContext: old.shoppingContext
+                ? { ...old.shoppingContext, memberKey: context.data?.[0]?.member_key ?? "" }
+                : null,
+            },
       );
     }
   }, [reload]);
@@ -273,10 +361,14 @@ export function HubApp() {
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
       {!online && (
         <p role="status" className="z-40 bg-accent px-4 py-2 text-center text-sm">
-          Sin conexión. Necesitas internet para guardar; los cambios fallidos se revertirán.
+          Sin conexión. Las compras se guardan en este dispositivo; las otras secciones necesitan
+          internet para guardar.
         </p>
       )}
       <div className="relative flex min-h-0 flex-1 flex-col">
+        {gate.status === "offline" && (
+          <OfflineShopping context={gate.context} onReconnect={() => void reload()} />
+        )}
         {gate.status === "loading" && (
           <div className="grid min-h-dvh place-items-center text-muted-foreground">
             Abriendo tu hogar…
@@ -321,6 +413,7 @@ export function HubApp() {
             onContextRefresh={refreshContext}
             onProfileSaved={() => void loadPreferences()}
             onReload={() => void reload()}
+            shoppingContext={gate.shoppingContext}
           />
         )}
       </div>
@@ -337,6 +430,7 @@ function HubShell({
   onContextRefresh,
   onProfileSaved,
   onReload,
+  shoppingContext,
 }: {
   compact: boolean;
   mode: "account" | "device";
@@ -346,6 +440,7 @@ function HubShell({
   onContextRefresh: () => Promise<void>;
   onProfileSaved: () => void;
   onReload: () => void;
+  shoppingContext: ShoppingContext | null;
 }) {
   const [user, setUser] = useState<Member | null>(accountMember);
   const [tab, setTab] = useState<Tab>("home");
@@ -372,7 +467,7 @@ function HubShell({
   const financialAccess =
     canViewFinances(user?.role, financeUnlocked) && (mode === "account" || financeUnlocked);
   const canManage = mode === "account" && user?.role === "admin";
-  const s = useHubState({ includeFinances: financialAccess, onContextRefresh });
+  const s = useHubState({ includeFinances: financialAccess, onContextRefresh, shoppingContext });
   const visibleTabs = TABS.filter(
     (t) => (t.id !== "household" || canManage) && (t.id !== "profile" || mode === "account"),
   );
@@ -559,13 +654,15 @@ function HubShell({
               aria-live="polite"
               className="mt-6 text-right text-xs text-muted-foreground"
             >
-              {s.saving
-                ? "Guardando cambios…"
-                : s.error
-                  ? "Hay cambios que no se guardaron"
-                  : s.lastSavedAt
-                    ? "Cambios guardados"
-                    : ""}
+              {s.shoppingSync?.pending
+                ? `${s.shoppingSync.pending} cambios de compras guardados en este dispositivo, pendientes de sincronizar`
+                : s.saving
+                  ? "Guardando cambios…"
+                  : s.error
+                    ? "Hay cambios que no se guardaron"
+                    : s.lastSavedAt
+                      ? "Cambios guardados"
+                      : ""}
             </p>
           </main>
           {compact && (
