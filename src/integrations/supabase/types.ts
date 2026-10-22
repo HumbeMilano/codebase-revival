@@ -265,6 +265,51 @@ export type Database = {
           },
         ]
       }
+      finance_sessions: {
+        Row: {
+          auth_session: string | null
+          created_at: string
+          device_id: string | null
+          household_id: string
+          revoked: boolean
+          token_hash: string
+          user_id: string | null
+        }
+        Insert: {
+          auth_session?: string | null
+          created_at?: string
+          device_id?: string | null
+          household_id: string
+          revoked?: boolean
+          token_hash: string
+          user_id?: string | null
+        }
+        Update: {
+          auth_session?: string | null
+          created_at?: string
+          device_id?: string | null
+          household_id?: string
+          revoked?: boolean
+          token_hash?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_sessions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_sessions_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       household_accounts: {
         Row: {
           created_at: string
@@ -492,6 +537,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      authorize_finances: { Args: { _pin: string }; Returns: string }
+      can_access_finances: { Args: { _household: string }; Returns: boolean }
       create_household: {
         Args: { _member_name: string; _name: string; _pin: string }
         Returns: string
@@ -532,6 +579,7 @@ export type Database = {
       pair_device: { Args: { _code: string; _name: string }; Returns: string }
       redeem_invite: { Args: { _code: string; _pin: string }; Returns: string }
       revoke_device: { Args: { _id: string }; Returns: undefined }
+      revoke_finance_session: { Args: { _token: string }; Returns: undefined }
       verify_pin: {
         Args: { _admin_only?: boolean; _pin: string }
         Returns: {
