@@ -60,6 +60,9 @@ export async function loadHubData(): Promise<HubData> {
 }
 
 type Row = Record<string, unknown>;
+function checkWrite(result: { error: unknown }) {
+  if (result.error) throw result.error;
+}
 
 /** Diff two collections by id and apply inserts/updates/deletes. */
 async function syncCollection(
@@ -71,16 +74,16 @@ async function syncCollection(
   const prevIds = new Set(prev.map((x) => x.id));
   const nextIds = new Set(next.map((x) => x.id));
   const removed = prev.filter((x) => !nextIds.has(x.id)).map((x) => x.id);
-  if (removed.length) await db().from(table).delete().in("id", removed);
+  if (removed.length) checkWrite(await db().from(table).delete().in("id", removed));
   const prevById = new Map(prev.map((x) => [x.id, x]));
   for (let i = 0; i < next.length; i++) {
     const item = next[i];
     if (!item) continue;
     const before = prevById.get(item.id);
     const row = toRow(item as never, i);
-    if (!before) await db().from(table).insert(row as never);
+    if (!before) checkWrite(await db().from(table).insert(row as never));
     else if (JSON.stringify(toRow(before as never, i)) !== JSON.stringify(row))
-      await db().from(table).update(row as never).eq("id", item.id);
+      checkWrite(await db().from(table).update(row as never).eq("id", item.id));
   }
 }
 
@@ -103,7 +106,7 @@ export const syncContributions = (prev: Contribution[], next: Contribution[]) =>
 export async function syncBills(prev: LedgerBill[], next: LedgerBill[]) {
   const nextIds = new Set(next.map((b) => b.id));
   const removed = prev.filter((b) => !nextIds.has(b.id)).map((b) => b.id);
-  if (removed.length) await db().from("bills").delete().in("id", removed);
+  if (removed.length) checkWrite(await db().from("bills").delete().in("id", removed));
   const prevById = new Map(prev.map((b) => [b.id, b]));
   for (let i = 0; i < next.length; i++) {
     const b = next[i];
@@ -111,12 +114,12 @@ export async function syncBills(prev: LedgerBill[], next: LedgerBill[]) {
     const before = prevById.get(b.id);
     const changed = before && JSON.stringify(before) !== JSON.stringify(b);
     if (before && !changed) continue;
-    await db().from("bills").upsert({ id: b.id, household_id: HOUSEHOLD_ID, name: b.name, category: b.category, base: b.base, due_day: b.dueDay, auto_pay: b.autoPay, position: i });
-    await db().from("bill_splits").delete().eq("bill_id", b.id);
+    checkWrite(await db().from("bills").upsert({ id: b.id, household_id: HOUSEHOLD_ID, name: b.name, category: b.category, base: b.base, due_day: b.dueDay, auto_pay: b.autoPay, position: i }));
+    checkWrite(await db().from("bill_splits").delete().eq("bill_id", b.id));
     if (b.splits.length)
-      await db().from("bill_splits").insert(b.splits.map((s) => ({ bill_id: b.id, person_key: s.personId, type: s.type, value: s.value })));
-    await db().from("bill_overrides").delete().eq("bill_id", b.id);
+      checkWrite(await db().from("bill_splits").insert(b.splits.map((s) => ({ bill_id: b.id, person_key: s.personId, type: s.type, value: s.value }))));
+    checkWrite(await db().from("bill_overrides").delete().eq("bill_id", b.id));
     const rows = Object.entries(b.overrides).map(([month, o]) => ({ bill_id: b.id, month, amount: o.amount ?? null, status: o.status ?? null, hidden: o.hidden ?? false }));
-    if (rows.length) await db().from("bill_overrides").insert(rows);
+    if (rows.length) checkWrite(await db().from("bill_overrides").insert(rows));
   }
 }

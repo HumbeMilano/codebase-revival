@@ -61,13 +61,13 @@ export function setFinanceToken(token: string) {
 
 export async function clearFinanceAccess() {
   const token = financeToken;
-  financeToken = null;
-  financeClient = null;
-  window.dispatchEvent(new Event("homehub-finance-access"));
   if (token) {
     const { error } = await db().rpc("revoke_finance_session", { _token: token });
     if (error) throw error;
   }
+  financeToken = null;
+  financeClient = null;
+  window.dispatchEvent(new Event("homehub-finance-access"));
 }
 
 export function forgetDevice() {
