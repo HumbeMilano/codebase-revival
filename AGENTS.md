@@ -24,6 +24,8 @@
 ## Backend and security
 
 - Household data lives in the owner's Supabase project; context comes from `my_context()`. Always query household data through `db()` so paired tablets send the device token header. The app is a static Vite/TanStack Router SPA, independent of Lovable runtime services.
+- Tablet pairing shows an application QR on the tablet and asks a signed-in adult to approve with a fresh passkey on the phone. Keep approval and claim secrets independent; never expose the claim secret in links. The application QR does not prove Bluetooth proximity. The anonymous request gateway requires its own private server key and rate limit.
+- Tours are optional, contextual and stored per personal account. Never show them on shared tablets or force navigation. Preserve skip/progress across devices and allow an explicit replay from the profile.
 - PIN verification stays in Postgres. All PIN authorization paths, including finance authorization, must share server-side attempt limits. Never introduce client PIN checks or server-function PIN lookups against a potentially different backend URL.
 - Every household table is RLS-scoped. Suspension must also be checked by privileged RPCs; `SECURITY DEFINER` bypasses RLS and therefore needs its own authorization checks.
 - Household/invitation/pairing/device/member mutations use reviewed RPCs. Revalidate authorization under the household lock when changing roles or members; concurrent calls must not remove the last adult.

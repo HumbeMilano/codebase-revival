@@ -5,6 +5,7 @@ Requires Docker and Python 3 only. No real project credentials are used. The
 Supabase scaffold provides platform schemas, not Auth/Storage HTTP services.
 """
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -108,6 +109,8 @@ def run():
         sql(path.read_text())
     sql("INSERT INTO pairing_codes(code,household_id,expires_at,max_uses) VALUES('PEREZ1','11111111-1111-1111-1111-111111111111',now()+interval '1 year',9999);")
     for path in sorted((ROOT / 'supabase/migrations').glob('*.sql')):
+        if path.name == '20261022225312_qr_pairing_and_guided_tour.sql':
+            sql("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('dddddddd-dddd-4ddd-8ddd-dddddddddddd','existing@example.invalid',now());")
         sql(path.read_text())
     sql((ROOT / 'scripts/validate-constraints.sql').read_text())
     check('all integrity constraints validate on a clean installation', sql("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='public' AND NOT c.convalidated;"), '0')
@@ -243,6 +246,88 @@ def run():
     device = sql("SELECT pair_tablet_with_passkey('Test tablet');", user=USER_A, passkey=True, session_id=pairing_session)
     sql("SELECT pair_tablet_with_passkey('Reused session');",user=USER_A,passkey=True,session_id=pairing_session,fail='duplicate key')
     check('passkey pairing returns a cryptographic device credential', len(device), 64)
+    # QR pairing separates phone approval from the tablet's private claim key.
+    server_key = 'sql-fixture-pairing-server'
+    digest = lambda value: hashlib.sha256(value.encode()).hexdigest()
+    sql(f"INSERT INTO homehub_private.tablet_pairing_keys VALUES('{digest(server_key)}');")
+    sql('SELECT * FROM homehub_private.tablet_pairing_requests;', device='', fail='permission denied')
+    def qr_request():
+        rid, claim, approval = str(uuid.uuid4()), uuid.uuid4().hex*2, uuid.uuid4().hex*2
+        query = f"SELECT create_tablet_pairing('{rid}','QR tablet','{digest(claim)}','{digest(approval)}','{server_key}');"
+        return rid, claim, approval, query
+    rid, claim, approval, create = qr_request()
+    sql(create.replace(server_key, 'wrong-server-key'), device='', fail='server authorization')
+    sql(create, user=USER_A, fail='permission denied')
+    prepared = json.loads(sql(create, device=''))
+    check('anonymous QR creation returns only public request metadata', sorted(prepared), ['expires_at', 'id', 'name'])
+    check('QR creation retry preserves the request expiry', json.loads(sql(create, device='')), prepared)
+    check('phone preview names the authorizing household', json.loads(sql(f"SELECT tablet_pairing_preview('{rid}','{approval}');",user=USER_A))['household_name'], 'Test Home')
+    sql(f"SELECT tablet_pairing_preview('{rid}','{claim}');",user=USER_A,fail='Invalid or expired')
+    approve = f"SELECT approve_tablet_pairing('{rid}','{approval}');"
+    sql(approve, user=USER_A, fail='fresh passkey')
+    sql(approve, user=USER_A, passkey=True, fail='fresh passkey')  # fabricated/deleted Auth session
+    sid = str(uuid.uuid4())
+    sql(f"INSERT INTO auth.sessions(id,user_id) VALUES('{sid}','{USER_A}');")
+    sql(approve,user=USER_A,passkey=True,session_id=sid,passkey_age=180,fail='fresh passkey')
+    sql(f"SELECT claim_tablet_pairing('{rid}','{claim}');",device='',fail='not approved')
+    sql(f"UPDATE members SET role='member' WHERE household_id='{hid}' AND key='{member_b}';")
+    sql(approve,user=USER_B,passkey=True,fail='Only adults')
+    sql(f"UPDATE members SET role='admin' WHERE household_id='{hid}' AND key='{member_b}';")
+    sql(approve,user=USER_A,passkey=True,session_id=sid)
+    sql(approve,user=USER_A,passkey=True,session_id=sid)  # lost HTTP response retry
+    check('only the tablet claim secret sees approval', json.loads(sql(f"SELECT tablet_pairing_status('{rid}','{claim}');",device=''))['status'], 'approved')
+    sql(f"SELECT claim_tablet_pairing('{rid}','{approval}');",device='',fail='not approved')
+    claim_sql = f"SELECT claim_tablet_pairing('{rid}','{claim}');"
+    # Concurrent retries must produce the same credential and exactly one device.
+    claim_prefix = "SET ROLE anon;"
+    def claim_process():
+        proc = subprocess.Popen(DOCKER + ['exec','-i',NAME,'psql','-h','127.0.0.1','-X','-qAt','-U','postgres','-v','ON_ERROR_STOP=1'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env=ENV)
+        return proc
+    processes = [claim_process(),claim_process()]
+    receipts = []
+    for proc in processes:
+        proc.stdin.write(claim_prefix+claim_sql)
+        proc.stdin.close()
+    for proc in processes:
+        proc.wait(timeout=10)
+        assert proc.returncode == 0, proc.stderr.read()
+        receipts.append(json.loads(proc.stdout.read().strip()))
+    check('concurrent QR claims return one identical private device credential', receipts[0], receipts[1])
+    check('QR claim retry never inserts a second device', sql(f"SELECT count(*) FROM devices WHERE token_hash='{digest(receipts[0]['token'])}';"), '1')
+    check('claimed tablet receives device mode without an adult account', json.loads(sql('SELECT row_to_json(c) FROM my_context() c;',device=receipts[0]['token']))['mode'], 'device')
+    rid2, claim2, approval2, create2 = qr_request()
+    sql(create2,device='')
+    sql(f"SELECT approve_tablet_pairing('{rid2}','{approval2}');",user=USER_A,passkey=True,session_id=sid,fail='already used')
+    sql(f"UPDATE devices SET revoked=true WHERE token_hash='{digest(receipts[0]['token'])}';")
+    sql(claim_sql,device='',fail='Device revoked')
+    sql(f"SELECT cancel_tablet_pairing('{rid2}','{approval2}');",device='')
+    check('phone approval key cannot cancel or claim the tablet', json.loads(sql(f"SELECT tablet_pairing_status('{rid2}','{claim2}');",device=''))['status'], 'pending')
+    sql(f"SELECT cancel_tablet_pairing('{rid2}','{claim2}');",device='')
+    check('tablet cancellation invalidates its QR', json.loads(sql(f"SELECT tablet_pairing_status('{rid2}','{claim2}');",device=''))['status'], 'expired')
+    sql(f"SELECT tablet_pairing_preview('{rid2}','{approval2}');",user=USER_A,fail='Invalid or expired')
+    rid3, claim3, approval3, create3 = qr_request()
+    sql(create3,device='')
+    sid3 = str(uuid.uuid4())
+    sql(f"INSERT INTO auth.sessions(id,user_id) VALUES('{sid3}','{USER_A}');")
+    sql(f"SELECT approve_tablet_pairing('{rid3}','{approval3}');",user=USER_A,passkey=True,session_id=sid3)
+    sql(f"UPDATE households SET suspended=true WHERE id='{hid}';")
+    sql(f"SELECT claim_tablet_pairing('{rid3}','{claim3}');",device='',fail='approval no longer valid')
+    sql(f"UPDATE households SET suspended=false WHERE id='{hid}';")
+    sql(f"UPDATE members SET role='member' WHERE household_id='{hid}' AND key='{member_a}';")
+    sql(f"SELECT claim_tablet_pairing('{rid3}','{claim3}');",device='',fail='approval no longer valid')
+    sql(f"UPDATE members SET role='admin' WHERE household_id='{hid}' AND key='{member_a}';")
+    sql(f"UPDATE homehub_private.tablet_pairing_requests SET expires_at=now()-interval '1 second' WHERE id='{rid3}';")
+    sql(f"SELECT claim_tablet_pairing('{rid3}','{claim3}');",device='',fail='Invalid or expired')
+    check('existing accounts are not interrupted by the new tour', sql("SELECT onboarding_state->>'dismissed' FROM profiles WHERE id='dddddddd-dddd-4ddd-8ddd-dddddddddddd';"), 'true')
+    check('new accounts start a contextual tour', json.loads(sql(f"SELECT onboarding_state FROM profiles WHERE id='{USER_A}';",user=USER_A))['dismissed'], False)
+    progress = json.loads(sql("SELECT save_onboarding_progress(ARRAY['home','notes']);",user=USER_A))
+    check('tour progress merges visited sections', sorted(progress['seen']), ['home','notes'])
+    check('tour progress stays private to its account', json.loads(sql("SELECT save_onboarding_progress();",user=USER_B))['seen'], [])
+    sql("SELECT save_onboarding_progress(ARRAY['invalid']);",user=USER_A,fail='Invalid tour progress')
+    sql('SELECT save_onboarding_progress();',device='',fail='permission denied')
+    sql("SELECT save_onboarding_progress(_dismissed=>true);",user=USER_A)
+    check('tour skip survives a delayed progress update', json.loads(sql("SELECT save_onboarding_progress(ARRAY['shopping']);",user=USER_A))['dismissed'], True)
+    check('only explicit replay resets the tour', json.loads(sql("SELECT save_onboarding_progress(_restart=>true);",user=USER_A)), {'version':1,'seen':[],'dismissed':False})
     token = sql("SELECT authorize_finances('1234');", device=device)
     check('paired adult grant enables finances', sql(f"SELECT can_access_finances('{hid}');", device=device, finance=token), 't')
     check('finance grant lifetime is bounded', sql(f"SELECT expires_at<=now()+interval '15 minutes' AND authorized_by IS NOT NULL FROM finance_sessions WHERE household_id='{hid}' ORDER BY created_at DESC LIMIT 1;"), 't')

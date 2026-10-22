@@ -8,7 +8,14 @@
     "SUPABASE_URL": "https://rwbeiestzyzceramgtdw.supabase.co",
     "SUPABASE_PUBLIC_KEY": "sb_publishable_Aal707QWHprU7mfaJMbrnw_Xw3Ycei7",
   },
-  "secrets": { "required": ["RESEND_API_KEY"] },
+  "secrets": { "required": ["RESEND_API_KEY", "TABLET_PAIRING_KEY"] },
+  "ratelimits": [
+    {
+      "name": "TABLET_PAIRING_RATE",
+      "namespace_id": "20261022",
+      "simple": { "limit": 5, "period": 60 },
+    },
+  ],
   "observability": { "enabled": true, "head_sampling_rate": 0.1 },
   "assets": {
     "directory": "./dist",

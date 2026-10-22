@@ -491,7 +491,9 @@ export function Dashboard({
   return (
     <div className="space-y-5">
       <div className="flex items-end justify-between gap-3">
-        <h2 className="font-display text-3xl font-extrabold">Hola, {user.name}</h2>
+        <h2 data-tour="home" className="font-display text-3xl font-extrabold">
+          Hola, {user.name}
+        </h2>
         <span className="shrink-0 text-sm font-semibold capitalize text-muted-foreground">
           {now.toLocaleDateString("es", { day: "numeric", month: "short" })}
         </span>
@@ -760,9 +762,6 @@ export function Chores({
         >
           Archivadas
         </Button>
-        <p className="text-xs text-muted-foreground">
-          Las tareas realizadas se archivan a los 3 días.
-        </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -784,6 +783,7 @@ export function Chores({
           </Button>
         ))}
         <Button
+          data-tour="chores"
           onClick={() =>
             setDraft({ ...fresh(), memberId: who === "all" ? (MEMBERS[0]?.id ?? "") : who })
           }
@@ -795,7 +795,7 @@ export function Chores({
       {!list.length && (
         <p className="rounded-2xl bg-card py-12 text-center text-muted-foreground">
           {taskView === "archived"
-            ? "No hay tareas archivadas. Las realizadas aparecerán aquí después de 3 días."
+            ? "No hay tareas archivadas."
             : "No hay tareas. Añade la primera para organizar el hogar."}
         </p>
       )}
@@ -1064,6 +1064,7 @@ export function Shopping({
         </section>
       )}
       <form
+        data-tour="shopping"
         onSubmit={(event) => void add(event)}
         className="flex items-center gap-2 rounded-2xl bg-card p-2 pl-4 shadow-card"
       >

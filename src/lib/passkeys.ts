@@ -27,9 +27,12 @@ export function passkeyError(reason: unknown): string {
   return "No se pudo completar la verificación. Usa una passkey de una cuenta adulta de este hogar y comprueba la conexión.";
 }
 
-/** A cross-device WebAuthn ceremony. QR and Bluetooth proximity are provided by
- * the operating system; the shared tablet never stores the adult's Auth session. */
-export async function pairTabletWithPasskey(name: string, signal?: AbortSignal): Promise<string> {
+/** A fresh phone-side verification in a separate, nonpersistent Auth session. */
+export async function withVerifiedPasskey<T>(
+  expectedUserId: string,
+  action: (client: ReturnType<typeof createPairingClient>) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
   if (!supportsPasskeys())
     throw new Error(
       "Este navegador no admite passkeys. Actualiza el sistema y abre la app en Safari o Chrome.",
@@ -43,7 +46,7 @@ export async function pairTabletWithPasskey(name: string, signal?: AbortSignal):
       ...options,
       challenge: decode(challenge),
       userVerification: "required",
-      hints: ["hybrid"],
+      hints: ["client-device"],
       ...(allowCredentials
         ? {
             allowCredentials: allowCredentials.map((item) => ({
@@ -88,12 +91,10 @@ export async function pairTabletWithPasskey(name: string, signal?: AbortSignal):
       },
     });
     if (error || !data.session) throw error ?? new Error("Verification unavailable");
+    if (data.session.user.id !== expectedUserId)
+      throw new Error("La passkey corresponde a otra cuenta. Usa la de tu cuenta adulta actual.");
     if (signal?.aborted) throw new Error("Pairing aborted");
-    const result = await client.rpc("pair_tablet_with_passkey", {
-      _name: name.trim() || "Tablet del hogar",
-    });
-    if (result.error || !result.data) throw result.error ?? new Error("Pairing unavailable");
-    return result.data;
+    return await action(client);
   } finally {
     // This is a separate, nonpersistent session. Never sign out the phone's other sessions.
     await client.auth.signOut({ scope: "local" }).catch(() => {});

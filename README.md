@@ -25,7 +25,8 @@ Guarda la configuración del proyecto en `.env.local`. Las variables `VITE_*` se
 
 - Una persona crea una cuenta y confirma su correo. Después crea un hogar o acepta una invitación de un adulto.
 - Las cuentas están vinculadas a un miembro del hogar. El rol adulto/hijo se guarda en tablas protegidas, separado del perfil editable.
-- Un adulto registra una passkey desde su móvil y vincula la tablet mediante la verificación del sistema (QR y Bluetooth en el método «Usar otro dispositivo»). La tablet accede al hogar con un token revocable y cada persona entra con su PIN.
+- La tablet muestra un QR en `/vincular` o en la opción «Tablet». El teléfono lo escanea y una cuenta adulta confirma el hogar con su passkey; si aún no tiene una, se crea en ese momento. La tablet recibe solo un token revocable y cada persona entra con su PIN mediante el teclado propio. Este QR de la aplicación no verifica cercanía por Bluetooth.
+- Las cuentas nuevas tienen un recorrido contextual opcional: muestra una ayuda al explorar cada sección y guarda el avance por usuario. Se puede omitir y volver a activar desde Mi perfil → Volver a ver el recorrido. Las cuentas anteriores conservan el recorrido desactivado hasta solicitarlo.
 - Finanzas exige un adulto o una autorización de PIN adulto válida, vinculada a la sesión o tablet. Ocultar una sección no sustituye la autorización de servidor.
 - La información se persiste en Postgres y se refresca entre dispositivos. Las compras se guardan en IndexedDB y una cola durable reintenta sincronizarlas; los conflictos requieren una elección explícita. El resto de las funciones necesita conexión.
 - Las invitaciones se envían por correo y abren el registro. Solo las puede aceptar la dirección confirmada que las recibió.

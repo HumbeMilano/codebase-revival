@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, type Page, type Route } from "@playwright/test";
 
 export const HOME_ID = "10000000-0000-4000-8000-000000000001";
@@ -49,8 +50,31 @@ export class HouseholdBackend {
   unexpectedRequests: string[] = [];
   shoppingReceipts = new Map<string, unknown>();
   photos: Row[] = [];
+  tourProgress = { version: 1, seen: [] as string[], dismissed: true };
+  pairings = new Map<
+    string,
+    {
+      claimHash: string;
+      approvalHash: string;
+      approved: boolean;
+      claimed: boolean;
+      expiresAt: string;
+    }
+  >();
 
   async install(page: Page) {
+    await page.route("**/api/tablet-pairing", async (route) => {
+      const data = route.request().postDataJSON();
+      const expiresAt = new Date(Date.now() + 300000).toISOString();
+      this.pairings.set(data.id, {
+        claimHash: data.claim_hash,
+        approvalHash: data.approval_hash,
+        approved: false,
+        claimed: false,
+        expiresAt,
+      });
+      await route.fulfill({ json: { id: data.id, name: data.name, expires_at: expiresAt } });
+    });
     await page.route("**/auth/v1/**", (route) => this.auth(route));
     await page.route("**/rest/v1/**", (route) => this.data(route));
     await page.route("**/storage/v1/**", (route) =>
@@ -88,7 +112,10 @@ export class HouseholdBackend {
         },
       });
     }
-    if (pathname.endsWith("/passkeys")) return route.fulfill({ json: [] });
+    if (pathname.endsWith("/passkeys"))
+      return route.fulfill({
+        json: [{ id: "fixture-passkey", created_at: "2026-01-01T00:00:00Z" }],
+      });
     if (pathname.endsWith("/token")) {
       return route.fulfill({
         json: {
@@ -120,7 +147,13 @@ export class HouseholdBackend {
       return route.fulfill(result);
     }
     if (endpoint === "profiles") {
-      const profile = { id: USER_ID, avatar_path: null, preferred_view: "auto", time_format: "24" };
+      const profile = {
+        id: USER_ID,
+        avatar_path: null,
+        preferred_view: "auto",
+        time_format: "24",
+        onboarding_state: this.tourProgress,
+      };
       return route.fulfill({
         json: request.headers()["accept"]?.includes("vnd.pgrst.object") ? profile : [profile],
       });
@@ -190,8 +223,65 @@ export class HouseholdBackend {
         };
       case "household_members":
         return { json: [member, { key: "m_nico", name: "Nico", role: "member" }] };
-      case "pair_tablet_with_passkey":
-        return { json: "fixture-device-token" };
+      case "save_onboarding_progress": {
+        if (args["_restart"]) this.tourProgress = { version: 1, seen: [], dismissed: false };
+        this.tourProgress = {
+          version: 1,
+          seen: [...new Set([...this.tourProgress.seen, ...((args["_seen"] as string[]) ?? [])])],
+          dismissed: this.tourProgress.dismissed || !!args["_dismissed"],
+        };
+        return { json: this.tourProgress };
+      }
+      case "tablet_pairing_preview":
+      case "tablet_pairing_status":
+      case "approve_tablet_pairing":
+      case "cancel_tablet_pairing":
+      case "claim_tablet_pairing": {
+        const request = this.pairings.get(String(args["_id"]));
+        const approval = name === "tablet_pairing_preview" || name === "approve_tablet_pairing";
+        const secret = String(args[approval ? "_approval_secret" : "_claim_secret"]);
+        if (
+          !request ||
+          createHash("sha256").update(secret).digest("hex") !==
+            request[approval ? "approvalHash" : "claimHash"]
+        )
+          return { status: 403, json: { message: "Invalid pairing request" } };
+        if (name === "tablet_pairing_preview")
+          return {
+            json: {
+              name: "Tablet del hogar",
+              household_name: "Hogar de prueba",
+              expires_at: request.expiresAt,
+              status: request.approved ? "approved" : "pending",
+            },
+          };
+        if (name === "approve_tablet_pairing") {
+          request.approved = true;
+          return { json: null };
+        }
+        if (name === "claim_tablet_pairing") {
+          if (!request.approved) return { status: 403, json: { message: "Not approved" } };
+          request.claimed = true;
+          return { json: { token: "a".repeat(64), household_name: "Hogar de prueba" } };
+        }
+        if (name === "cancel_tablet_pairing") {
+          request.expiresAt = new Date(0).toISOString();
+          return { json: null };
+        }
+        return {
+          json: {
+            status:
+              Date.parse(request.expiresAt) <= Date.now()
+                ? "expired"
+                : request.claimed
+                  ? "claimed"
+                  : request.approved
+                    ? "approved"
+                    : "pending",
+            expires_at: request.expiresAt,
+          },
+        };
+      }
       case "list_household_photos":
         return { json: this.photos.map(({ url, ...photo }) => photo) };
       case "pin_lock_status":
@@ -364,7 +454,7 @@ export async function signIn(page: Page) {
 }
 
 /** The browser boundary is synthetic; Postgres tests separately enforce fresh
- * signed passkey claims. A real QR/Bluetooth ceremony still needs physical devices. */
+ * signed passkey claims. Real camera scanning and biometrics need physical devices. */
 export async function mockTabletPasskey(page: Page) {
   await page.addInitScript(() => {
     Object.defineProperty(window, "PublicKeyCredential", { configurable: true, value: class {} });
@@ -397,4 +487,63 @@ export async function section(page: Page, label: string) {
     button = page.getByRole("button", { name: label, exact: true }).first();
   }
   await button.click();
+}
+
+/** Exercise the visible QR flow with isolated phone/tablet storage. */
+export async function pairTablet(page: Page, backend: HouseholdBackend) {
+  const browser = page.context().browser()!;
+  const phoneContext = await browser.newContext({ baseURL: "http://127.0.0.1:8080" });
+  const phone = await phoneContext.newPage();
+  try {
+    await backend.install(phone);
+    await mockTabletPasskey(phone);
+    await signIn(phone);
+    await page.addInitScript(() =>
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (value: string) => {
+            (window as unknown as { copiedPairingLink: string }).copiedPairingLink = value;
+          },
+        },
+      }),
+    );
+    await page.goto("/");
+    await page.getByRole("button", { name: "Tablet", exact: true }).click();
+    await expect(page.getByRole("img", { name: "QR para vincular esta tablet" })).toBeVisible();
+    await page.getByRole("button", { name: "Copiar enlace para el teléfono", exact: true }).click();
+    const link = await page.evaluate(
+      () => (window as unknown as { copiedPairingLink: string }).copiedPairingLink,
+    );
+    expect(new URL(link).pathname).toBe("/vincular");
+    expect(new URL(link).search).toBe("");
+    await phone.goto(link);
+    await expect(
+      phone.getByRole("heading", { name: "¿Vincular esta tablet a Hogar de prueba?" }),
+    ).toBeVisible();
+    await phone.getByRole("button", { name: "Vincular tablet", exact: true }).click();
+    await expect(
+      phone.getByRole("heading", { name: "Tablet autorizada", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByTestId("tablet-lock-screen")).toBeVisible();
+    expect(
+      await phone.evaluate(() =>
+        Object.keys(localStorage).some((key) => key.includes("auth-token")),
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(() =>
+        Object.keys(localStorage).filter((key) => key.includes("auth-token")),
+      ),
+    ).toEqual([]);
+    expect(backend.pairings.size).toBe(1);
+  } finally {
+    await phoneContext.close();
+  }
+}
+export async function enterPin(page: Page, pin: string) {
+  const group = page.getByRole("group", { name: "PIN de 4 números" });
+  await group.focus();
+  await group.press("Delete");
+  await group.pressSequentially(pin);
 }

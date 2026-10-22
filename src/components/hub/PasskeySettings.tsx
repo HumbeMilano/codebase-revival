@@ -55,9 +55,7 @@ export function PasskeySettings() {
         <Fingerprint /> Passkeys
       </h2>
       <p className="text-sm text-muted-foreground">
-        Añade una passkey en tu móvil. Después, en la tablet, elige «Vincular con passkey» y «Usar
-        otro dispositivo». El sistema mostrará el QR y comprobará la cercanía por Bluetooth cuando
-        use ese método.
+        Usa la seguridad de tu teléfono para autorizar tablets.
       </p>
       {error && (
         <p role="alert" className="text-sm text-destructive">

@@ -26,4 +26,4 @@ La revisión del 22 de octubre de 2026 se implementa como una actualización coo
 
 La política actual de finanzas mantiene plantillas recurrentes y ajustes mensuales; no representa movimientos bancarios. Los cambios en una plantilla afectan a los meses sin una excepción explícita y la interfaz lo explica. Un libro contable inmutable con cierres de mes sería una ampliación del modelo.
 
-El propietario confirmó registro, inicio de sesión y recuperación por correo en producción. Las invitaciones por correo, el carrusel y la ceremonia passkey con QR/Bluetooth necesitan además una comprobación con los dispositivos reales. Se retiró por completo el dictado. Consulta los detalles de esta actualización en [Producción](production.md#actualización-de-uso-diario).
+El propietario confirmó registro, inicio de sesión y recuperación por correo en producción. Las invitaciones por correo, el carrusel y el escaneo del nuevo QR y la verificación passkey en el teléfono necesitan además una comprobación con los dispositivos reales. Se retiró por completo el dictado. Consulta los detalles de esta actualización en [Producción](production.md#actualización-de-uso-diario).

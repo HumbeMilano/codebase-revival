@@ -21,9 +21,11 @@ const field = "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base
 export function PersonalProfile({
   onSaved,
   onHouseholdLeft,
+  onRestartTour,
 }: {
   onSaved: () => void;
   onHouseholdLeft?: () => void;
+  onRestartTour?: () => Promise<void>;
 }) {
   const [id, setId] = useState("");
   const [path, setPath] = useState<string | null>(null);
@@ -324,6 +326,22 @@ export function PersonalProfile({
           {busy ? "Guardando…" : "Guardar preferencias"}
         </Button>
       </form>
+      {onRestartTour && (
+        <section className="rounded-2xl border p-4">
+          <h2 className="font-display font-semibold">Ayuda</h2>
+          <Button
+            className="mt-3"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void onRestartTour().finally(() => setBusy(false));
+            }}
+          >
+            Volver a ver el recorrido
+          </Button>
+        </section>
+      )}
       <PasskeySettings />
       <section className="rounded-2xl border p-4">
         <h2 className="font-display font-semibold">Tu cuenta y el hogar</h2>

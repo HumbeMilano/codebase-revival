@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HOME_ID, HouseholdBackend, mockTabletPasskey, section, signIn } from "./backend";
+import { HOME_ID, HouseholdBackend, enterPin, section, signIn } from "./backend";
 
 test("a real viewport can create household records and reload confirmed data", async ({
   page,
@@ -140,7 +140,9 @@ test("platform action failure remains visible", async ({ page }) => {
 });
 
 test("paired tablet requires an adult grant and revokes it when locked", async ({ page }) => {
-  await mockTabletPasskey(page);
+  await page.addInitScript(() =>
+    localStorage.setItem("homehub-device-token", "fixture-device-token"),
+  );
   const backend = new HouseholdBackend();
   backend.rows["bills"] = [
     {
@@ -157,16 +159,14 @@ test("paired tablet requires an adult grant and revokes it when locked", async (
   ];
   await backend.install(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Tablet", exact: true }).click();
-  await page.getByRole("button", { name: "Vincular con passkey", exact: true }).click();
   await page.getByRole("button", { name: "Entrar con PIN", exact: true }).click();
-  await page.getByLabel("PIN de 4 números").fill("5678");
+  await enterPin(page, "5678");
   await expect(page.getByRole("heading", { name: "Hola, Nico", exact: true })).toBeVisible();
   expect(backend.financialReadsWithoutGrant).toBe(0);
   await section(page, "Finanzas");
-  await page.getByLabel("PIN de 4 números").fill("0000");
+  await enterPin(page, "0000");
   await expect(page.getByRole("alert")).toContainText("PIN incorrecto");
-  await page.getByLabel("PIN de 4 números").fill("1234");
+  await enterPin(page, "1234");
   await expect(page.getByText("Cuenta privada", { exact: true })).toBeVisible();
   expect(backend.financeActive).toBe(true);
   expect(backend.financialReadsWithoutGrant).toBe(0);
@@ -174,7 +174,7 @@ test("paired tablet requires an adult grant and revokes it when locked", async (
   await expect(page.getByRole("button", { name: "Entrar con PIN", exact: true })).toBeVisible();
   expect(backend.financeActive).toBe(false);
   await page.getByRole("button", { name: "Entrar con PIN", exact: true }).click();
-  await page.getByLabel("PIN de 4 números").fill("5678");
+  await enterPin(page, "5678");
   await expect(page.getByRole("heading", { name: "Hola, Nico", exact: true })).toBeVisible();
   await expect(page.getByText("Cuenta privada", { exact: true })).toHaveCount(0);
   expect(backend.unexpectedRequests).toEqual([]);
