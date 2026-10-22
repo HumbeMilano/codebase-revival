@@ -81,6 +81,14 @@ export function HubApp() {
     });
     return () => { sequence.current += 1; data.subscription.unsubscribe(); };
   }, [reload]);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
   const compact = device === "mobile";
 
   return (
@@ -96,6 +104,7 @@ export function HubApp() {
           </button>
         ))}
       </div>
+      {!online && <p className="mb-2 max-w-[1200px] rounded-full bg-accent px-4 py-2 text-center text-xs font-semibold">Sin conexión — los cambios no se guardarán hasta que vuelva internet</p>}
       <div
         className={cn(
           "relative w-full overflow-hidden border bg-background shadow-card transition-all duration-500",

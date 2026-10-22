@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Copy, Home, KeyRound, Mail, Tablet, Trash2, UserPlus } from "lucide-react";
+import { Copy, Home, KeyRound, Mail, Pencil, Tablet, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { DEVICE_KEY } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { credentials, invitationCode, INVITATION_KEY, readPendingInvite } from "@/lib/account-validation";
+import { Avatar } from "./Kiosk";
+import { MEMBERS, type Role } from "./data";
 
 const field = "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-ring";
 const pinField = (v: string) => v.replace(/\D/g, "").slice(0, 4);
@@ -16,6 +18,12 @@ const errMsg = (e: { message?: string } | null) => {
   if (m.includes("Already in household")) return "Esta cuenta ya pertenece a un hogar";
   if (m.includes("Name required")) return "Escribe un nombre válido";
   if (m.includes("PIN already")) return "Ese PIN ya lo usa otra persona del hogar";
+  if (m.includes("PIN must be 4 digits")) return "El PIN debe tener 4 números";
+  if (m.includes("Only adults")) return "Solo un adulto puede hacerlo";
+  if (m.includes("Cannot remove the last adult")) return "Debe quedar al menos un adulto en el hogar";
+  if (m.includes("Member has a linked account")) return "Esta persona tiene una cuenta vinculada y no se puede quitar";
+  if (m.includes("Member not found")) return "No se encontró a esa persona";
+  if (m.includes("Invalid role")) return "Rol no válido";
   if (m.includes("Invalid or expired")) return "Código no válido o caducado";
   if (m.includes("duplicate key") && m.includes("pin")) return "Ese PIN ya lo usa otra persona del hogar";
   return m || "Algo salió mal";
@@ -169,9 +177,13 @@ export function HouseholdSettings() {
   const [devices, setDevices] = useState<{ id: string; name: string; created_at: string; revoked: boolean }[]>([]);
   const [invites, setInvites] = useState<{ code: string; member_name: string; role: string; expires_at: string; used_at: string | null; revoked_at: string | null }[]>([]);
   const [busy, setBusy] = useState(false);
+  const [members, setMembers] = useState<{ key: string; name: string; role: string }[]>([]);
+  const [adding, setAdding] = useState<{ name: string; role: "member" | "admin"; pin: string } | null>(null);
+  const [editing, setEditing] = useState<{ key: string; name: string; role: "member" | "admin"; pin: string } | null>(null);
   const loadDevices = () => void supabase.rpc("list_devices").then(({ data }) => setDevices(data ?? []));
   const loadInvites = () => void supabase.rpc("list_invites").then(({ data, error }) => { if (error) toast.error("No se pudieron cargar las invitaciones"); else setInvites(data ?? []); });
-  useEffect(() => { loadDevices(); loadInvites(); }, []);
+  const loadMembers = () => void supabase.rpc("household_members").then(({ data, error }) => { if (error) toast.error("No se pudieron cargar los miembros"); else setMembers(data ?? []); });
+  useEffect(() => { loadDevices(); loadInvites(); loadMembers(); }, []);
 
   const copy = (t: string) => void navigator.clipboard?.writeText(t).then(() => toast.success("Copiado"));
   const makeInvite = async (e: React.FormEvent) => {
@@ -191,6 +203,40 @@ export function HouseholdSettings() {
   const revoke = async (id: string) => {
     await supabase.rpc("revoke_device", { _id: id });
     loadDevices();
+  };
+  const addMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adding || adding.pin.length !== 4) { toast.error("El PIN debe tener 4 números"); return; }
+    setBusy(true);
+    const { error } = await supabase.rpc("create_member", { _name: adding.name, _role: adding.role, _pin: adding.pin });
+    setBusy(false);
+    if (error) { toast.error(errMsg(error)); return; }
+    setAdding(null);
+    loadMembers();
+    toast.success("Miembro añadido");
+  };
+  const saveMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    if (editing.pin && editing.pin.length !== 4) { toast.error("El PIN debe tener 4 números"); return; }
+    setBusy(true);
+    const { error } = await supabase.rpc("update_member", { _key: editing.key, _name: editing.name, _role: editing.role, _pin: editing.pin });
+    setBusy(false);
+    if (error) { toast.error(errMsg(error)); return; }
+    setEditing(null);
+    loadMembers();
+    toast.success("Cambios guardados");
+  };
+  const removeMember = async (key: string, name: string) => {
+    if (!window.confirm(`¿Quitar a ${name} del hogar?`)) return;
+    const { error } = await supabase.rpc("delete_member", { _key: key });
+    if (error) { toast.error(errMsg(error)); return; }
+    loadMembers();
+    toast.success("Miembro eliminado");
+  };
+  const memberAvatar = (key: string, name: string, role: string) => {
+    const known = MEMBERS.find((m) => m.id === key);
+    return <Avatar m={known ?? { id: key, name, role: role === "admin" ? "admin" : "member", color: "member-1" }} size="sm" />;
   };
 
   return (
@@ -224,6 +270,42 @@ export function HouseholdSettings() {
             </li>
           ))}
         </ul>
+      </section>
+      <section className="rounded-[1.75rem] bg-accent p-5 md:col-span-2">
+        <h2 className="flex items-center gap-2 font-display text-xl font-bold"><Users className="size-5" /> Miembros</h2>
+        {!adding && <Button onClick={() => setAdding({ name: "", role: "member", pin: "" })} className="mt-4 rounded-xl"><UserPlus className="size-4" /> Añadir persona</Button>}
+        {adding && <form onSubmit={addMember} className="mt-4 space-y-3">
+          <input required maxLength={100} autoFocus aria-label="Nombre de la persona" placeholder="Nombre" value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} className={field} />
+          <div className="grid grid-cols-2 gap-2">
+            {([["member", "Hijo/a"], ["admin", "Adulto"]] as const).map(([r, l]) => <button type="button" key={r} onClick={() => setAdding({ ...adding, role: r })} className={cn("rounded-xl py-2 text-sm font-semibold", adding.role === r ? "bg-primary text-primary-foreground" : "bg-card")}>{l}</button>)}
+          </div>
+          <input inputMode="numeric" required maxLength={4} aria-label="PIN de 4 números" placeholder="PIN (4 números)" value={adding.pin} onChange={(e) => setAdding({ ...adding, pin: pinField(e.target.value) })} className={cn(field, "font-display tracking-[0.5em]")} />
+          <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setAdding(null)}>Cancelar</Button><Button type="submit" disabled={busy}>Añadir</Button></div>
+        </form>}
+        <ul className="mt-4 space-y-2">
+          {members.map((m) => (
+            <li key={m.key} className="flex flex-wrap items-center gap-2 rounded-xl bg-card p-3">
+              {memberAvatar(m.key, m.name, m.role)}
+              {editing?.key === m.key ? (
+                <form onSubmit={saveMember} className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  <input required maxLength={100} aria-label={`Nombre de ${m.name}`} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className={cn(field, "min-w-36 flex-1")} />
+                  {(["member", "admin"] as const).map((r) => <button type="button" key={r} onClick={() => setEditing({ ...editing, role: r })} className={cn("rounded-xl px-3 py-2 text-sm font-semibold", editing.role === r ? "bg-primary text-primary-foreground" : "bg-secondary")}>{r === "admin" ? "Adulto" : "Hijo/a"}</button>)}
+                  <input inputMode="numeric" maxLength={4} aria-label="PIN nuevo (opcional)" placeholder="PIN nuevo" value={editing.pin} onChange={(e) => setEditing({ ...editing, pin: pinField(e.target.value) })} className={cn(field, "w-36 font-display tracking-[0.3em]")} />
+                  <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button>
+                  <Button type="submit" disabled={busy} size="sm">Guardar</Button>
+                </form>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">{m.name}</span>
+                  <span className="text-xs text-muted-foreground">{m.role === "admin" ? "Adulto" : "Hijo/a"}</span>
+                  <Button variant="ghost" size="icon" aria-label={`Editar a ${m.name}`} onClick={() => setEditing({ key: m.key, name: m.name, role: m.role === "admin" ? "admin" : "member", pin: "" })}><Pencil /></Button>
+                  <Button variant="ghost" size="icon" aria-label={`Quitar a ${m.name}`} onClick={() => void removeMember(m.key, m.name)}><Trash2 /></Button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-muted-foreground">El PIN es la llave de cada persona. Quien tiene cuenta propia se vincula al aceptar su invitación y no se puede quitar desde aquí.</p>
       </section>
     </div>
   );
