@@ -177,9 +177,13 @@ export function HouseholdSettings() {
   const [devices, setDevices] = useState<{ id: string; name: string; created_at: string; revoked: boolean }[]>([]);
   const [invites, setInvites] = useState<{ code: string; member_name: string; role: string; expires_at: string; used_at: string | null; revoked_at: string | null }[]>([]);
   const [busy, setBusy] = useState(false);
+  const [members, setMembers] = useState<{ key: string; name: string; role: string }[]>([]);
+  const [adding, setAdding] = useState<{ name: string; role: "member" | "admin"; pin: string } | null>(null);
+  const [editing, setEditing] = useState<{ key: string; name: string; role: "member" | "admin"; pin: string } | null>(null);
   const loadDevices = () => void supabase.rpc("list_devices").then(({ data }) => setDevices(data ?? []));
   const loadInvites = () => void supabase.rpc("list_invites").then(({ data, error }) => { if (error) toast.error("No se pudieron cargar las invitaciones"); else setInvites(data ?? []); });
-  useEffect(() => { loadDevices(); loadInvites(); }, []);
+  const loadMembers = () => void supabase.rpc("household_members").then(({ data, error }) => { if (error) toast.error("No se pudieron cargar los miembros"); else setMembers(data ?? []); });
+  useEffect(() => { loadDevices(); loadInvites(); loadMembers(); }, []);
 
   const copy = (t: string) => void navigator.clipboard?.writeText(t).then(() => toast.success("Copiado"));
   const makeInvite = async (e: React.FormEvent) => {
@@ -199,6 +203,40 @@ export function HouseholdSettings() {
   const revoke = async (id: string) => {
     await supabase.rpc("revoke_device", { _id: id });
     loadDevices();
+  };
+  const addMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adding || adding.pin.length !== 4) { toast.error("El PIN debe tener 4 números"); return; }
+    setBusy(true);
+    const { error } = await supabase.rpc("create_member", { _name: adding.name, _role: adding.role, _pin: adding.pin });
+    setBusy(false);
+    if (error) { toast.error(errMsg(error)); return; }
+    setAdding(null);
+    loadMembers();
+    toast.success("Miembro añadido");
+  };
+  const saveMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    if (editing.pin && editing.pin.length !== 4) { toast.error("El PIN debe tener 4 números"); return; }
+    setBusy(true);
+    const { error } = await supabase.rpc("update_member", { _key: editing.key, _name: editing.name, _role: editing.role, _pin: editing.pin || null });
+    setBusy(false);
+    if (error) { toast.error(errMsg(error)); return; }
+    setEditing(null);
+    loadMembers();
+    toast.success("Cambios guardados");
+  };
+  const removeMember = async (key: string, name: string) => {
+    if (!window.confirm(`¿Quitar a ${name} del hogar?`)) return;
+    const { error } = await supabase.rpc("delete_member", { _key: key });
+    if (error) { toast.error(errMsg(error)); return; }
+    loadMembers();
+    toast.success("Miembro eliminado");
+  };
+  const memberAvatar = (key: string, name: string, role: string) => {
+    const known = MEMBERS.find((m) => m.id === key);
+    return <Avatar m={known ?? { id: key, name, role: role === "admin" ? "admin" : "member", color: "member-1" }} size="sm" />;
   };
 
   return (
