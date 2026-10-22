@@ -12,5 +12,8 @@ CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT (nullif
 CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb) $$;
 CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$ SELECT string_to_array($1,'/') $$;
 GRANT USAGE ON SCHEMA public, auth, storage, extensions TO anon, authenticated, service_role;
+-- Mirror Supabase's independent default grants, in addition to PostgreSQL's
+-- implicit PUBLIC execute grant. Otherwise tests can miss an anon privilege.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon,authenticated,service_role;
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 CREATE PUBLICATION supabase_realtime;

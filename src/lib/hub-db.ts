@@ -350,7 +350,7 @@ export function bindHubPersistence(
       assertActive();
       const { data, error } = await client.rpc("save_bill", {
         _household: householdId,
-        _expected_revision: before ? revisionFor("bills", before, bill) : null,
+        ...(before ? { _expected_revision: revisionFor("bills", before, bill) } : {}),
         _bill: {
           id: bill.id,
           name: bill.name,

@@ -42,24 +42,24 @@ export type Database = {
       };
       bill_splits: {
         Row: {
-          household_id: string;
           bill_id: string;
+          household_id: string;
           id: string;
           person_key: string;
           type: string;
           value: number;
         };
         Insert: {
-          household_id: string;
           bill_id: string;
+          household_id: string;
           id?: string;
           person_key: string;
           type?: string;
           value?: number;
         };
         Update: {
-          household_id?: string;
           bill_id?: string;
+          household_id?: string;
           id?: string;
           person_key?: string;
           type?: string;
@@ -73,11 +73,24 @@ export type Database = {
             referencedRelation: "bills";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "split_household_valid";
+            columns: ["bill_id", "household_id"];
+            isOneToOne: false;
+            referencedRelation: "bills";
+            referencedColumns: ["id", "household_id"];
+          },
+          {
+            foreignKeyName: "split_member_valid";
+            columns: ["household_id", "person_key"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["household_id", "key"];
+          },
         ];
       };
       bills: {
         Row: {
-          revision: number;
           auto_pay: boolean;
           base: number;
           category: string;
@@ -86,9 +99,9 @@ export type Database = {
           id: string;
           name: string;
           position: number;
+          revision: number;
         };
         Insert: {
-          revision?: number;
           auto_pay?: boolean;
           base?: number;
           category: string;
@@ -97,9 +110,9 @@ export type Database = {
           id?: string;
           name: string;
           position?: number;
+          revision?: number;
         };
         Update: {
-          revision?: number;
           auto_pay?: boolean;
           base?: number;
           category?: string;
@@ -108,6 +121,7 @@ export type Database = {
           id?: string;
           name?: string;
           position?: number;
+          revision?: number;
         };
         Relationships: [
           {
@@ -122,41 +136,48 @@ export type Database = {
       chores: {
         Row: {
           completed_at: string | null;
-          revision: number;
-          due_date: string | null;
           done: boolean;
+          due_date: string | null;
           household_id: string;
           id: string;
           member_key: string;
           position: number;
+          revision: number;
           title: string;
           when_label: string;
         };
         Insert: {
           completed_at?: string | null;
-          revision?: number;
-          due_date?: string | null;
           done?: boolean;
+          due_date?: string | null;
           household_id: string;
           id?: string;
           member_key: string;
           position?: number;
+          revision?: number;
           title: string;
           when_label?: string;
         };
         Update: {
           completed_at?: string | null;
-          revision?: number;
-          due_date?: string | null;
           done?: boolean;
+          due_date?: string | null;
           household_id?: string;
           id?: string;
           member_key?: string;
           position?: number;
+          revision?: number;
           title?: string;
           when_label?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "chore_member_valid";
+            columns: ["household_id", "member_key"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["household_id", "key"];
+          },
           {
             foreignKeyName: "chores_household_id_fkey";
             columns: ["household_id"];
@@ -168,36 +189,43 @@ export type Database = {
       };
       contributions: {
         Row: {
-          occurred_on: string | null;
-          revision: number;
           amount: number;
           household_id: string;
           id: string;
           month: string;
           note: string;
+          occurred_on: string | null;
           person_key: string;
+          revision: number;
         };
         Insert: {
-          occurred_on?: string | null;
-          revision?: number;
           amount?: number;
           household_id: string;
           id?: string;
           month: string;
           note?: string;
+          occurred_on?: string | null;
           person_key: string;
+          revision?: number;
         };
         Update: {
-          occurred_on?: string | null;
-          revision?: number;
           amount?: number;
           household_id?: string;
           id?: string;
           month?: string;
           note?: string;
+          occurred_on?: string | null;
           person_key?: string;
+          revision?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "contribution_member_valid";
+            columns: ["household_id", "person_key"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["household_id", "key"];
+          },
           {
             foreignKeyName: "contributions_household_id_fkey";
             columns: ["household_id"];
@@ -244,36 +272,43 @@ export type Database = {
       };
       events: {
         Row: {
-          revision: number;
           date: string;
           household_id: string;
           id: string;
           member_key: string;
           note: string;
+          revision: number;
           time: string;
           title: string;
         };
         Insert: {
-          revision?: number;
           date: string;
           household_id: string;
           id?: string;
           member_key: string;
           note?: string;
+          revision?: number;
           time?: string;
           title: string;
         };
         Update: {
-          revision?: number;
           date?: string;
           household_id?: string;
           id?: string;
           member_key?: string;
           note?: string;
+          revision?: number;
           time?: string;
           title?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "event_member_valid";
+            columns: ["household_id", "member_key"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["household_id", "key"];
+          },
           {
             foreignKeyName: "events_household_id_fkey";
             columns: ["household_id"];
@@ -285,39 +320,46 @@ export type Database = {
       };
       finance_sessions: {
         Row: {
-          authorized_by: string | null;
-          expires_at: string;
           auth_session: string | null;
+          authorized_by: string | null;
           created_at: string;
           device_id: string | null;
+          expires_at: string;
           household_id: string;
           revoked: boolean;
           token_hash: string;
           user_id: string | null;
         };
         Insert: {
-          authorized_by?: string | null;
-          expires_at?: string;
           auth_session?: string | null;
+          authorized_by?: string | null;
           created_at?: string;
           device_id?: string | null;
+          expires_at?: string;
           household_id: string;
           revoked?: boolean;
           token_hash: string;
           user_id?: string | null;
         };
         Update: {
-          authorized_by?: string | null;
-          expires_at?: string;
           auth_session?: string | null;
+          authorized_by?: string | null;
           created_at?: string;
           device_id?: string | null;
+          expires_at?: string;
           household_id?: string;
           revoked?: boolean;
           token_hash?: string;
           user_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "finance_sessions_authorized_by_fkey";
+            columns: ["authorized_by"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "finance_sessions_device_id_fkey";
             columns: ["device_id"];
@@ -355,7 +397,46 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "account_member_valid";
+            columns: ["household_id", "member_key"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["household_id", "key"];
+          },
+          {
             foreignKeyName: "household_accounts_household_id_fkey";
+            columns: ["household_id"];
+            isOneToOne: false;
+            referencedRelation: "households";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      household_photos: {
+        Row: {
+          created_at: string;
+          household_id: string;
+          id: string;
+          path: string;
+          position: number;
+        };
+        Insert: {
+          created_at?: string;
+          household_id: string;
+          id?: string;
+          path: string;
+          position?: number;
+        };
+        Update: {
+          created_at?: string;
+          household_id?: string;
+          id?: string;
+          path?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "household_photos_household_id_fkey";
             columns: ["household_id"];
             isOneToOne: false;
             referencedRelation: "households";
@@ -391,9 +472,14 @@ export type Database = {
         Row: {
           code: string;
           created_by: string;
+          delivery_status: string;
+          email_delivery_id: string;
+          email_message_id: string | null;
           expires_at: string;
           household_id: string;
+          last_email_attempt_at: string | null;
           member_name: string;
+          recipient_email: string | null;
           revoked_at: string | null;
           role: string;
           used_at: string | null;
@@ -401,9 +487,14 @@ export type Database = {
         Insert: {
           code: string;
           created_by: string;
+          delivery_status?: string;
+          email_delivery_id?: string;
+          email_message_id?: string | null;
           expires_at: string;
           household_id: string;
+          last_email_attempt_at?: string | null;
           member_name: string;
+          recipient_email?: string | null;
           revoked_at?: string | null;
           role?: string;
           used_at?: string | null;
@@ -411,9 +502,14 @@ export type Database = {
         Update: {
           code?: string;
           created_by?: string;
+          delivery_status?: string;
+          email_delivery_id?: string;
+          email_message_id?: string | null;
           expires_at?: string;
           household_id?: string;
+          last_email_attempt_at?: string | null;
           member_name?: string;
+          recipient_email?: string | null;
           revoked_at?: string | null;
           role?: string;
           used_at?: string | null;
@@ -465,36 +561,43 @@ export type Database = {
       };
       notes: {
         Row: {
-          revision: number;
           body: string;
           household_id: string;
           id: string;
           member_key: string;
           pinned: boolean;
+          revision: number;
           title: string;
           updated_at: string;
         };
         Insert: {
-          revision?: number;
           body?: string;
           household_id: string;
           id?: string;
           member_key: string;
           pinned?: boolean;
+          revision?: number;
           title: string;
           updated_at?: string;
         };
         Update: {
-          revision?: number;
           body?: string;
           household_id?: string;
           id?: string;
           member_key?: string;
           pinned?: boolean;
+          revision?: number;
           title?: string;
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "note_member_valid";
+            columns: ["household_id", "member_key"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["household_id", "key"];
+          },
           {
             foreignKeyName: "notes_household_id_fkey";
             columns: ["household_id"];
@@ -585,28 +688,28 @@ export type Database = {
       };
       shopping_items: {
         Row: {
-          revision: number;
           done: boolean;
           household_id: string;
           id: string;
           name: string;
           position: number;
+          revision: number;
         };
         Insert: {
-          revision?: number;
           done?: boolean;
           household_id: string;
           id?: string;
           name: string;
           position?: number;
+          revision?: number;
         };
         Update: {
-          revision?: number;
           done?: boolean;
           household_id?: string;
           id?: string;
           name?: string;
           position?: number;
+          revision?: number;
         };
         Relationships: [
           {
@@ -644,55 +747,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      prepare_email_invite: {
-        Args: { _member_name: string; _role: string; _email: string; _code?: string };
-        Returns: Json;
-      };
-      mark_invite_email_sent: {
-        Args: { _code: string; _message_id: string; _delivery_id: string };
-        Returns: undefined;
-      };
-      list_email_invites: {
-        Args: Record<PropertyKey, never>;
-        Returns: {
-          code: string;
-          member_name: string;
-          role: string;
-          expires_at: string;
-          used_at: string | null;
-          revoked_at: string | null;
-          recipient_email: string | null;
-          delivery_status: string;
-        }[];
-      };
-      sync_shopping: {
-        Args: { _household: string; _mutation_id: string; _changes: Json; _member_key?: string };
-        Returns: Json;
-      };
-      list_household_photos: {
-        Args: Record<PropertyKey, never>;
-        Returns: { id: string; path: string; position: number }[];
-      };
       add_household_photo: { Args: { _path: string }; Returns: string };
-      remove_household_photo: { Args: { _id: string }; Returns: undefined };
-      reorder_household_photos: { Args: { _ids: string[] }; Returns: undefined };
-      pair_tablet_with_passkey: { Args: { _name?: string }; Returns: string };
-      pin_lock_status: { Args: never; Returns: Json };
-      list_member_accounts: { Args: never; Returns: { key: string; linked: boolean }[] };
-      unlink_member: { Args: { _key: string }; Returns: undefined };
-      leave_household: { Args: never; Returns: undefined };
-      save_collection: {
-        Args: { _table: string; _household: string; _changes: Json };
-        Returns: Json;
-      };
-      save_bill: {
-        Args: { _household: string; _bill: Json; _expected_revision: number | null };
-        Returns: Json;
-      };
-      delete_bill: {
-        Args: { _id: string; _expected_revision: number };
-        Returns: undefined;
-      };
       admin_list_accounts: {
         Args: never;
         Returns: {
@@ -761,6 +816,10 @@ export type Database = {
       };
       create_pairing_code: { Args: never; Returns: string };
       current_household_ids: { Args: never; Returns: string[] };
+      delete_bill: {
+        Args: { _expected_revision: number; _id: string };
+        Returns: undefined;
+      };
       delete_member: { Args: { _key: string }; Returns: undefined };
       has_role: {
         Args: {
@@ -778,6 +837,7 @@ export type Database = {
         }[];
       };
       is_household_admin: { Args: { _household: string }; Returns: boolean };
+      leave_household: { Args: never; Returns: undefined };
       list_devices: {
         Args: never;
         Returns: {
@@ -785,6 +845,27 @@ export type Database = {
           id: string;
           name: string;
           revoked: boolean;
+        }[];
+      };
+      list_email_invites: {
+        Args: never;
+        Returns: {
+          code: string;
+          delivery_status: string;
+          expires_at: string;
+          member_name: string;
+          recipient_email: string;
+          revoked_at: string;
+          role: string;
+          used_at: string;
+        }[];
+      };
+      list_household_photos: {
+        Args: never;
+        Returns: {
+          id: string;
+          path: string;
+          position: number;
         }[];
       };
       list_invites: {
@@ -798,6 +879,17 @@ export type Database = {
           used_at: string;
         }[];
       };
+      list_member_accounts: {
+        Args: never;
+        Returns: {
+          key: string;
+          linked: boolean;
+        }[];
+      };
+      mark_invite_email_sent: {
+        Args: { _code: string; _delivery_id: string; _message_id: string };
+        Returns: undefined;
+      };
       my_context: {
         Args: never;
         Returns: {
@@ -808,12 +900,43 @@ export type Database = {
         }[];
       };
       pair_device: { Args: { _code: string; _name: string }; Returns: string };
+      pair_tablet_with_passkey: { Args: { _name?: string }; Returns: string };
+      pin_lock_status: { Args: never; Returns: Json };
       platform_admin_exists: { Args: never; Returns: boolean };
+      prepare_email_invite: {
+        Args: {
+          _code?: string;
+          _email: string;
+          _member_name: string;
+          _role: string;
+        };
+        Returns: Json;
+      };
       redeem_invite: { Args: { _code: string; _pin: string }; Returns: string };
+      remove_household_photo: { Args: { _id: string }; Returns: undefined };
+      reorder_household_photos: { Args: { _ids: string[] }; Returns: undefined };
       require_platform_admin: { Args: never; Returns: undefined };
       revoke_device: { Args: { _id: string }; Returns: undefined };
       revoke_finance_session: { Args: { _token: string }; Returns: undefined };
       revoke_invite: { Args: { _code: string }; Returns: undefined };
+      save_bill: {
+        Args: { _bill: Json; _expected_revision?: number; _household: string };
+        Returns: Json;
+      };
+      save_collection: {
+        Args: { _changes: Json; _household: string; _table: string };
+        Returns: Json;
+      };
+      sync_shopping: {
+        Args: {
+          _changes: Json;
+          _household: string;
+          _member_key?: string;
+          _mutation_id: string;
+        };
+        Returns: Json;
+      };
+      unlink_member: { Args: { _key: string }; Returns: undefined };
       update_member: {
         Args: { _key: string; _name?: string; _pin?: string; _role?: string };
         Returns: undefined;

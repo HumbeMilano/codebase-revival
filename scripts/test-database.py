@@ -215,6 +215,7 @@ def run():
     sql(f"INSERT INTO storage.objects(bucket_id,name) VALUES('household-photos','{photo_path}');")
     photo_id = sql(f"SELECT add_household_photo('{photo_path}');",user=USER_A)
     check('own household can read photo metadata',sql('SELECT count(*) FROM list_household_photos();',user=USER_A),'1')
+    check('anonymous callers cannot execute photo mutations',sql("SELECT has_function_privilege('anon','public.add_household_photo(text)','EXECUTE') OR has_function_privilege('anon','public.remove_household_photo(uuid)','EXECUTE') OR has_function_privilege('anon','public.reorder_household_photos(uuid[])','EXECUTE');"),'f')
     check('other household cannot read photo metadata',sql('SELECT count(*) FROM list_household_photos();',user=USER_C),'0')
     sql(f"SELECT add_household_photo('{photo_path}');",user=USER_C,fail='Upload a household photo first')
     sql(f"SELECT reorder_household_photos(ARRAY['{photo_id}'::uuid]);",user=USER_C,fail='Photo order changed')
