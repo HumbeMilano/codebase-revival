@@ -262,9 +262,12 @@ export function HubApp() {
           attemptedIdentity === currentDbIdentity() &&
           isTransientContextError(error)
         ) {
-          toast.warning("Conexión temporalmente inestable. Conservamos la sesión y los datos cargados.", {
-            id: "homehub-transient-connection",
-          });
+          toast.warning(
+            "Conexión temporalmente inestable. Conservamos la sesión y los datos cargados.",
+            {
+              id: "homehub-transient-connection",
+            },
+          );
           return;
         }
         invalidateDbContext();
@@ -373,11 +376,7 @@ export function HubApp() {
       });
       return;
     }
-    if (
-      contextFailure ||
-      !context.data?.[0] ||
-      context.data[0].household_id !== HOUSEHOLD.id
-    ) {
+    if (contextFailure || !context.data?.[0] || context.data[0].household_id !== HOUSEHOLD.id) {
       void reload();
       return;
     }
