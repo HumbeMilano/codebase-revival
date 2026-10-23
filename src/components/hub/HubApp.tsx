@@ -43,6 +43,7 @@ import {
 import { toast } from "sonner";
 import { setHouseholdId } from "@/lib/hub-db";
 import { sessionIdentity } from "@/lib/session-identity";
+import { isTransientContextError } from "@/lib/transient-context-error";
 import { personalPreferences } from "@/lib/account-validation";
 import {
   ACTIVE_SHOPPING_ACCOUNT,
@@ -129,7 +130,13 @@ export function HubApp() {
   }, []);
   const reload = useCallback(async () => {
     const revision = ++sequence.current;
-    setGate({ status: "loading" });
+    let attemptedIdentity: string | null = null;
+    // A background refresh must not unmount an already authorized household.
+    setGate((previous) =>
+      previous.status === "ready" && previous.identity === currentDbIdentity()
+        ? previous
+        : { status: "loading" },
+    );
     let candidate: ReturnType<typeof prepareDbContext> | undefined;
     let requestedAccountId: string | null = null;
     try {
@@ -164,6 +171,14 @@ export function HubApp() {
         }
         return;
       }
+      attemptedIdentity = session
+        ? sessionIdentity(session.user.id, session.access_token)
+        : `device:${token}`;
+      // Switching accounts/devices must immediately discard the previous private view.
+      if (currentDbIdentity() && currentDbIdentity() !== attemptedIdentity) {
+        invalidateDbContext();
+        setGate({ status: "loading" });
+      }
       let userId: string | null = null;
       if (session) {
         const {
@@ -180,8 +195,9 @@ export function HubApp() {
         deviceToken: userId ? null : token,
         identity,
       });
-      const { data, error } = await candidate.client.rpc("my_context");
-      if (error) throw error;
+      const contextResponse = await candidate.client.rpc("my_context");
+      const { data, error } = contextResponse;
+      if (error) throw Object.assign(error, { httpStatus: contextResponse.status });
       const context = data?.[0];
       if (!context) {
         if (revision !== sequence.current) {
@@ -200,8 +216,9 @@ export function HubApp() {
         }
         return;
       }
-      const { data: rows, error: memberError } = await candidate.client.rpc("household_members");
-      if (memberError) throw memberError;
+      const memberResponse = await candidate.client.rpc("household_members");
+      const { data: rows, error: memberError } = memberResponse;
+      if (memberError) throw Object.assign(memberError, { httpStatus: memberResponse.status });
       if (revision !== sequence.current) {
         candidate.discard();
         return;
@@ -240,6 +257,16 @@ export function HubApp() {
     } catch (error) {
       candidate?.discard();
       if (revision === sequence.current) {
+        if (
+          attemptedIdentity &&
+          attemptedIdentity === currentDbIdentity() &&
+          isTransientContextError(error)
+        ) {
+          toast.warning("Conexión temporalmente inestable. Conservamos la sesión y los datos cargados.", {
+            id: "homehub-transient-connection",
+          });
+          return;
+        }
         invalidateDbContext();
         setHouseholdId("");
         setMembers([]);
@@ -281,7 +308,13 @@ export function HubApp() {
       if (event === "TOKEN_REFRESHED" && session) {
         if (currentDbIdentity() === sessionIdentity(session.user.id, session.access_token))
           updateAccountToken(session.access_token);
-        else setTimeout(() => void reload(), 0);
+        else {
+          if (currentDbIdentity()) {
+            invalidateDbContext();
+            setGate({ status: "loading" });
+          }
+          setTimeout(() => void reload(), 0);
+        }
         return;
       }
       if (
@@ -291,6 +324,15 @@ export function HubApp() {
       ) {
         updateAccountToken(session.access_token);
         return;
+      }
+      if (
+        event === "SIGNED_IN" &&
+        session &&
+        currentDbIdentity() &&
+        currentDbIdentity() !== sessionIdentity(session.user.id, session.access_token)
+      ) {
+        invalidateDbContext();
+        setGate({ status: "loading" });
       }
       if (
         event === "SIGNED_IN" &&
@@ -320,11 +362,21 @@ export function HubApp() {
       db().rpc("household_members"),
     ]);
     if (revision !== sequence.current || request !== contextRevision.current) return;
+    const contextFailure = context.error
+      ? Object.assign(context.error, { httpStatus: context.status })
+      : members.error
+        ? Object.assign(members.error, { httpStatus: members.status })
+        : null;
+    if (contextFailure && isTransientContextError(contextFailure)) {
+      toast.warning("No se pudo revalidar el hogar por un problema temporal de conexión.", {
+        id: "homehub-transient-connection",
+      });
+      return;
+    }
     if (
-      context.error ||
+      contextFailure ||
       !context.data?.[0] ||
-      context.data[0].household_id !== HOUSEHOLD.id ||
-      members.error
+      context.data[0].household_id !== HOUSEHOLD.id
     ) {
       void reload();
       return;
