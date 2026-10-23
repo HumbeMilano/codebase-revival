@@ -50,7 +50,9 @@ export class HouseholdBackend {
   unexpectedRequests: string[] = [];
   shoppingReceipts = new Map<string, unknown>();
   photos: Row[] = [];
-  tourProgress = { version: 1, seen: [] as string[], dismissed: true };
+  photoObjects = new Map<string, Buffer>();
+  photoUploadRequests = 0;
+  loseNextPhotoRegistration = false;
   pairings = new Map<
     string,
     {
@@ -77,9 +79,56 @@ export class HouseholdBackend {
     });
     await page.route("**/auth/v1/**", (route) => this.auth(route));
     await page.route("**/rest/v1/**", (route) => this.data(route));
-    await page.route("**/storage/v1/**", (route) =>
-      route.fulfill({ status: 404, json: { message: "No photo in this fixture" } }),
-    );
+    await page.route("**/storage/v1/**", async (route) => {
+      const request = route.request(),
+        url = new URL(request.url());
+      const marker = "/object/household-photos/";
+      if (request.method() === "POST" && url.pathname.includes(marker)) {
+        const path = decodeURIComponent(url.pathname.split(marker)[1]!);
+        this.photoUploadRequests++;
+        if (this.photoObjects.has(path))
+          return route.fulfill({
+            status: 409,
+            json: { statusCode: "409", error: "Duplicate", message: "The resource already exists" },
+          });
+        const incoming = new Request(request.url(), {
+          method: "POST",
+          headers: request.headers(),
+          body: new Uint8Array(request.postDataBuffer()!),
+        });
+        const form = await incoming.formData();
+        const image = [...form.values()].find((value) => typeof value !== "string");
+        if (!image || typeof image === "string") throw new Error("Expected uploaded photo");
+        this.photoObjects.set(path, Buffer.from(await image.arrayBuffer()));
+        return route.fulfill({
+          json: { Id: crypto.randomUUID(), Key: `household-photos/${path}` },
+        });
+      }
+      const info = "/object/info/household-photos/";
+      if (request.method() === "GET" && url.pathname.includes(info)) {
+        const path = decodeURIComponent(url.pathname.split(info)[1]!);
+        return this.photoObjects.has(path)
+          ? route.fulfill({
+              json: { id: "stored-photo", name: path, metadata: { mimetype: "image/jpeg" } },
+            })
+          : route.fulfill({ status: 404, json: { message: "Not found" } });
+      }
+      if (request.method() === "DELETE" && url.pathname.endsWith("/object/household-photos")) {
+        const paths = request.postDataJSON().prefixes as string[];
+        for (const path of paths) this.photoObjects.delete(path);
+        return route.fulfill({ json: paths.map((name) => ({ name })) });
+      }
+      return route.fulfill({ status: 404, json: { message: "No photo in this fixture" } });
+    });
+    await page.route("https://photos.fixture.invalid/uploaded/**", (route) => {
+      const path = decodeURIComponent(
+        new URL(route.request().url()).pathname.slice("/uploaded/".length),
+      );
+      const photo = this.photoObjects.get(path);
+      return photo
+        ? route.fulfill({ contentType: "image/jpeg", body: photo })
+        : route.fulfill({ status: 404, body: "Not found" });
+    });
     await page.route("**/functions/v1/household-photos", (route) =>
       route.fulfill({ json: { photos: this.photos } }),
     );
@@ -152,7 +201,6 @@ export class HouseholdBackend {
         avatar_path: null,
         preferred_view: "auto",
         time_format: "24",
-        onboarding_state: this.tourProgress,
       };
       return route.fulfill({
         json: request.headers()["accept"]?.includes("vnd.pgrst.object") ? profile : [profile],
@@ -223,15 +271,6 @@ export class HouseholdBackend {
         };
       case "household_members":
         return { json: [member, { key: "m_nico", name: "Nico", role: "member" }] };
-      case "save_onboarding_progress": {
-        if (args["_restart"]) this.tourProgress = { version: 1, seen: [], dismissed: false };
-        this.tourProgress = {
-          version: 1,
-          seen: [...new Set([...this.tourProgress.seen, ...((args["_seen"] as string[]) ?? [])])],
-          dismissed: this.tourProgress.dismissed || !!args["_dismissed"],
-        };
-        return { json: this.tourProgress };
-      }
       case "tablet_pairing_preview":
       case "tablet_pairing_status":
       case "approve_tablet_pairing":
@@ -284,6 +323,35 @@ export class HouseholdBackend {
       }
       case "list_household_photos":
         return { json: this.photos.map(({ url, ...photo }) => photo) };
+      case "add_household_photo": {
+        const path = String(args["_path"]);
+        let photo = this.photos.find((photo) => photo["path"] === path);
+        if (!photo) {
+          photo = {
+            id: crypto.randomUUID(),
+            path,
+            position: this.photos.length,
+            url: `https://photos.fixture.invalid/uploaded/${path}`,
+          };
+          this.photos.push(photo);
+        }
+        if (this.loseNextPhotoRegistration) {
+          this.loseNextPhotoRegistration = false;
+          return { status: 503, json: { message: "Response lost after commit" } };
+        }
+        return { json: photo["id"] };
+      }
+      case "remove_household_photo":
+        this.photos = this.photos.filter((photo) => photo["id"] !== args["_id"]);
+        return { json: null };
+      case "reorder_household_photos":
+        this.photos = (args["_ids"] as string[]).map((id, position) => ({
+          ...this.photos.find((photo) => photo["id"] === id)!,
+          position,
+        }));
+        return { json: null };
+      case "list_member_accounts":
+        return { json: [] };
       case "pin_lock_status":
         return { json: { locked: false, retry_after: 0 } };
       case "verify_pin":

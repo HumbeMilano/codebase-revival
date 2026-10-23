@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { NativeInputShortcut } from "./NativeInputShortcut";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { PersistedSetter } from "@/lib/persisted-collection";
 import { cn } from "@/lib/utils";
@@ -101,7 +102,6 @@ export function FamilyCalendar({
           ))}
         </select>
         <Button
-          data-tour="calendar"
           onClick={() =>
             setDraft({ id: "", title: "", date: selected, time: "", memberId: user.id, note: "" })
           }
@@ -251,8 +251,9 @@ export function FamilyCalendar({
                   maxLength={200}
                   value={draft.title}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                  className={field}
+                  className={cn(field, "min-w-0 flex-1")}
                 />
+                <NativeInputShortcut targetId="draft-title" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -295,6 +296,7 @@ export function FamilyCalendar({
                 <label htmlFor="event-note" className="text-sm font-semibold">
                   Nota
                 </label>
+                <NativeInputShortcut targetId="event-note" />
               </div>
               <textarea
                 id="event-note"
@@ -361,7 +363,6 @@ export function FamilyNotes({
           className={cn(field, "flex-1")}
         />
         <Button
-          data-tour="notes"
           aria-label="Nueva nota"
           onClick={() =>
             setDraft({ id: "", title: "", body: "", memberId: user.id, pinned: false })
@@ -472,8 +473,9 @@ export function FamilyNotes({
                   maxLength={200}
                   value={draft.title}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                  className={field}
+                  className={cn(field, "min-w-0 flex-1")}
                 />
+                <NativeInputShortcut targetId="draft-title" />
               </div>
             </div>
             <div>
@@ -481,6 +483,7 @@ export function FamilyNotes({
                 <label htmlFor="note-body" className="text-sm font-semibold">
                   Contenido
                 </label>
+                <NativeInputShortcut targetId="note-body" />
               </div>
               <textarea
                 id="note-body"

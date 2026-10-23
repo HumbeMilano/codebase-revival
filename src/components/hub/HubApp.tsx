@@ -51,8 +51,6 @@ import {
   type ShoppingContext,
 } from "@/lib/offline-shopping";
 import { OfflineShopping } from "./OfflineShopping";
-import { useGuidedTour } from "@/hooks/use-guided-tour";
-import { GuidedTour } from "./GuidedTour";
 
 const Finance = lazy(() => import("./Finance").then((m) => ({ default: m.Finance })));
 const FamilyCalendar = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyCalendar })));
@@ -96,6 +94,14 @@ const gateError = (error: unknown) => {
 
 /** Only the latest resolved snapshot is allowed to change shared household state. */
 export function HubApp() {
+  useEffect(() => {
+    try {
+      for (const key of Object.keys(localStorage))
+        if (key.startsWith("homehub-tour:")) localStorage.removeItem(key);
+    } catch {
+      /* Clearing obsolete preferences is optional when storage is blocked. */
+    }
+  }, []);
   const [gate, setGate] = useState<Gate>({ status: "loading" });
   const [compact, setCompact] = useState(false);
   const [online, setOnline] = useState(true);
@@ -452,10 +458,6 @@ function HubShell({
   const [more, setMore] = useState(false);
   const [create, setCreate] = useState<{ tab: Tab; id: number } | null>(null);
   const now = useClock();
-  const tour = useGuidedTour(
-    mode === "account" ? (shoppingContext?.accountId ?? null) : null,
-    db(),
-  );
   useEffect(() => {
     setUser((previous) =>
       mode === "account"
@@ -573,13 +575,6 @@ function HubShell({
               </nav>
             )}
           </header>
-          <GuidedTour
-            tab={tab}
-            enabled={mode === "account" && !s.loading && !s.error && !quick && !askAdmin && !more}
-            progress={tour.progress}
-            onSeen={tour.seen}
-            onDismiss={tour.dismiss}
-          />
           <main
             id="main-content"
             className={cn("mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6", compact && "pb-28")}
@@ -658,18 +653,7 @@ function HubShell({
                   <HouseholdSettings onMembersChanged={onContextRefresh} />
                 )}
                 {tab === "profile" && mode === "account" && (
-                  <PersonalProfile
-                    onSaved={onProfileSaved}
-                    onHouseholdLeft={onReload}
-                    onRestartTour={async () => {
-                      try {
-                        await tour.restart();
-                        go("home");
-                      } catch {
-                        toast.error("No se pudo reiniciar el recorrido. Reintenta con conexión.");
-                      }
-                    }}
-                  />
+                  <PersonalProfile onSaved={onProfileSaved} onHouseholdLeft={onReload} />
                 )}
               </Suspense>
             )}
