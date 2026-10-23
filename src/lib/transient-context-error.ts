@@ -16,7 +16,5 @@ export function isTransientContextError(error: unknown): boolean {
     return false;
   if (status >= 500 && status < 600) return true;
   const message = String(details.message ?? "");
-  return /failed to fetch|fetch failed|network (?:error|request|connection)|timeout|timed out|bad gateway|gateway timeout|ssl|tls|connection (?:failed|reset|refused|closed)|(?:http|status)\s*(?:50\d|52[25])/i.test(
-    message,
-  );
+  return /failed to fetch|fetch failed|network (?:error|request|connection)|timeout|timed out|bad gateway|gateway timeout|ssl|tls|connection (?:failed|reset|refused|closed)|(?:http|status)\s*(?:50\d|52[25])/i.test(message);
 }
