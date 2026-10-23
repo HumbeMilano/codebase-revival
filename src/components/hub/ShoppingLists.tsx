@@ -11,13 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { addShoppingItem } from "@/lib/shopping";
 import { defaultShoppingList, shoppingListId } from "@/lib/offline-shopping";
@@ -172,20 +166,11 @@ export function Shopping({
           );
         })}
       </div>
-      {sync && (
+      {sync && (sync.error || sync.conflict) && (
         <section
           aria-label="Sincronización de compras"
           className="space-y-2 text-xs text-muted-foreground"
         >
-          <p role="status">
-            {sync.loading
-              ? "Preparando almacenamiento local…"
-              : sync.syncing
-                ? "Sincronizando…"
-                : sync.pending
-                  ? `${sync.pending} cambios guardados en este dispositivo, pendientes de sincronizar.`
-                  : "Listas disponibles sin conexión"}
-          </p>
           {sync.error && (
             <p role="alert" className="text-destructive">
               {sync.error}
@@ -365,10 +350,9 @@ export function Shopping({
           if (!value && !busy) setEditor(null);
         }}
       >
-        <DialogContent className="rounded-3xl">
+        <DialogContent className="rounded-3xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{editor?.id ? "Renombrar lista" : "Nueva lista"}</DialogTitle>
-            <DialogDescription>Una lista para cada ocasión.</DialogDescription>
           </DialogHeader>
           <form onSubmit={(event) => void saveList(event)} className="space-y-4">
             <label className="block text-sm font-semibold">

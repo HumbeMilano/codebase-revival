@@ -62,7 +62,7 @@ test("shopping survives an offline reload and synchronizes each change once on r
   await backend.install(page);
   await signIn(page);
   await section(page, "Compras");
-  await expect(page.getByRole("status").filter({ hasText: "Listas disponibles" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Lista Groceries", exact: true })).toBeVisible();
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller)
@@ -93,9 +93,7 @@ test("shopping survives an offline reload and synchronizes each change once on r
     page.getByRole("button", { name: "Comprado en el mercado", exact: true }),
   ).toBeVisible();
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Compras sin conexión", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Compras", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Comprado en el mercado", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Comprado en el mercado", exact: true }),

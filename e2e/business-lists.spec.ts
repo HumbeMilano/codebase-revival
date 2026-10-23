@@ -39,9 +39,7 @@ test("independent lists persist and remain editable after an offline reload", as
   await page.getByLabel("Producto", { exact: true }).fill("Pasaporte");
   await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Compras sin conexión", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Compras", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Abrir lista Viajes", exact: true }).click();
   await page.getByRole("button", { name: "Pasaporte", exact: true }).click();
   await expect(page.getByRole("button", { name: "Pasaporte", exact: true })).toHaveAttribute(
@@ -139,12 +137,7 @@ test("signing out of the business console closes offline household access", asyn
   await expect(page.getByLabel("Correo", { exact: true })).toBeVisible();
   await context.setOffline(true);
   await page.goto("/");
-  await expect(
-    page.getByText(
-      "Abre las compras con conexión al menos una vez en este dispositivo antes de utilizarlas sin internet.",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("Conéctate para abrir tus listas.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Compra privada", exact: true })).toHaveCount(0);
   expect(backend.unexpectedRequests).toEqual([]);
 });
