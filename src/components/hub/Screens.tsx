@@ -1,24 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ArrowUpRight,
-  Check,
-  ListChecks,
-  Pencil,
-  PiggyBank,
-  Plus,
-  Receipt,
-  ShoppingBasket,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Check, Pencil, PiggyBank, Plus, Receipt, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { NativeInputShortcut } from "./NativeInputShortcut";
-import { canViewFinances } from "@/lib/finance-visibility";
-import { monthKey, monthSummary, type Contribution, type LedgerBill } from "@/lib/ledger";
+import type { Contribution, LedgerBill } from "@/lib/ledger";
 import { Avatar } from "./Kiosk";
-import { eventWhen, type FamilyEvent, type FamilyNote } from "./planner-data";
+import type { FamilyEvent, FamilyNote } from "./planner-data";
 import { MEMBERS, memberBg, type Chore, type Member, type ShopItem } from "./data";
 import { bindHubPersistence, HOUSEHOLD_ID } from "@/lib/hub-db";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,7 +18,7 @@ import {
 } from "@/lib/persisted-collection";
 import { addShoppingItem } from "@/lib/shopping";
 import { persistenceErrorMessage } from "@/lib/persistence-errors";
-import { dateKey, parseDate, upcomingEvents } from "./planner-data";
+import { dateKey, parseDate } from "./planner-data";
 import { useToday } from "@/hooks/use-today";
 import { isChoreArchived } from "@/lib/chore-archive";
 import { useClock } from "./Kiosk";
@@ -45,8 +33,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const money = (n: number) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const byId = (id: string): Member =>
   MEMBERS.find((m) => m.id === id) ?? {
     id,
@@ -452,226 +438,6 @@ const whenLabel = (chore: Chore, today: Date) => {
         ? "Mañana"
         : "Próximas";
 };
-
-export function Dashboard({
-  s,
-  user,
-  compact,
-  go,
-  adultAuthorized = false,
-}: {
-  s: HubState;
-  user: Member;
-  compact: boolean;
-  go: (t: "chores" | "shopping" | "finance") => void;
-  adultAuthorized?: boolean;
-}) {
-  const now = useToday();
-  const currentChores = s.chores.filter((chore) => !isChoreArchived(chore, now.getTime()));
-  const today = currentChores.filter(
-    (c) => c.dueDate === dateKey(now) || (!c.done && !!c.dueDate && c.dueDate < dateKey(now)),
-  );
-  const remaining = today.filter((c) => !c.done).length;
-  const pending = s.items.filter((i) => !i.done).length;
-  const financialAccess = canViewFinances(user.role, adultAuthorized);
-  const sum = financialAccess
-    ? monthSummary(
-        s.bills,
-        s.contributions,
-        monthKey(now.getFullYear(), now.getMonth()),
-        now,
-        MEMBERS.map((m) => m.id),
-      )
-    : null;
-  const agenda = today.map((c) => ({
-    ...c,
-    time: c.dueDate && c.dueDate < dateKey(now) ? "Antes" : "Hoy",
-    m: byId(c.memberId),
-  }));
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between gap-3">
-        <h2 className="font-display text-3xl font-extrabold">Hola, {user.name}</h2>
-        <span className="shrink-0 text-sm font-semibold capitalize text-muted-foreground">
-          {now.toLocaleDateString("es", { day: "numeric", month: "short" })}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          {
-            label: "Tareas",
-            n: remaining,
-            Icon: ListChecks,
-            tone: "bg-success text-success-foreground",
-            tab: "chores" as const,
-            done: today.filter((c) => c.done).length,
-            total: today.length,
-          },
-          {
-            label: "Compras",
-            n: pending,
-            Icon: ShoppingBasket,
-            tone: "bg-accent text-accent-foreground",
-            tab: "shopping" as const,
-            done: s.items.filter((i) => i.done).length,
-            total: s.items.length,
-          },
-        ].map(({ label, n, Icon, tone, tab, done, total }) => (
-          <Button
-            key={label}
-            variant="ghost"
-            onClick={() => go(tab)}
-            className={cn(
-              "h-auto min-w-0 flex-col items-stretch gap-2 rounded-3xl p-4 shadow-card hover:opacity-90",
-              tone,
-            )}
-          >
-            <span className="flex items-center justify-between">
-              <Icon className="size-5" />
-              <ArrowUpRight className="size-4 opacity-50" />
-            </span>
-            <span className="text-left font-display text-6xl font-extrabold tabular">{n}</span>
-            <span className="flex items-center justify-between text-sm font-bold">
-              <span>{label}</span>
-              <span className="text-xs opacity-60">
-                {done}/{total} ✓
-              </span>
-            </span>
-            <span className="flex h-1.5 gap-1" aria-hidden="true">
-              {Array.from({ length: total }, (_, i) => (
-                <span
-                  key={i}
-                  className={cn("flex-1 rounded-full bg-foreground", i >= done && "opacity-15")}
-                />
-              ))}
-            </span>
-          </Button>
-        ))}
-      </div>
-
-      <div className={cn("grid gap-5", compact ? "grid-cols-1" : "grid-cols-[1.2fr_1fr]")}>
-        <div className="space-y-5">
-          <section aria-label="La familia hoy">
-            <div className="grid grid-cols-4 gap-2">
-              {MEMBERS.map((m) => {
-                const list = currentChores.filter((c) => c.memberId === m.id);
-                const done = list.filter((c) => c.done).length;
-                return (
-                  <Button
-                    key={m.id}
-                    variant="ghost"
-                    onClick={() => go("chores")}
-                    className="h-auto min-w-0 flex-col gap-1 rounded-2xl px-0 py-2"
-                  >
-                    <Ring
-                      pct={list.length ? done / list.length : 1}
-                      size={compact ? 52 : 64}
-                      stroke={4}
-                      className="text-success-strong"
-                    >
-                      <Avatar m={m} />
-                    </Ring>
-                    <span className="text-xs font-semibold">{m.name}</span>
-                  </Button>
-                );
-              })}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-2 font-display text-lg font-bold">Hoy</h3>
-            <div className="divide-y divide-border">
-              {agenda.map((c) => (
-                <Button
-                  key={c.id}
-                  variant="ghost"
-                  aria-label={c.title}
-                  onClick={() => toggleChore(s, c.id)}
-                  className="h-auto w-full justify-start gap-3 whitespace-normal rounded-xl px-1 py-3 text-left"
-                >
-                  <span className="w-10 shrink-0 text-xs tabular text-muted-foreground">
-                    {c.time}
-                  </span>
-                  <Avatar m={c.m} size="sm" />
-                  <span
-                    className={cn(
-                      "min-w-0 flex-1 text-sm font-semibold",
-                      c.done && "text-muted-foreground line-through",
-                    )}
-                  >
-                    {c.title}
-                  </span>
-                  <span
-                    className={cn(
-                      "grid size-6 shrink-0 place-items-center rounded-full border",
-                      c.done
-                        ? "border-success-strong bg-success text-success-foreground"
-                        : "border-foreground/25",
-                    )}
-                  >
-                    {c.done && <Check />}
-                  </span>
-                </Button>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <aside className="space-y-5">
-          {sum && (
-            <Button
-              variant="ghost"
-              onClick={() => go("finance")}
-              className="h-auto w-full justify-between gap-4 rounded-3xl bg-primary p-5 text-primary-foreground shadow-card hover:bg-primary/90"
-            >
-              <span className="min-w-0 space-y-1 text-left">
-                <span className="block text-xs font-semibold opacity-70">
-                  Fondo común <ArrowUpRight className="inline size-3" />
-                </span>
-                <span className="block font-display text-3xl font-extrabold tabular">
-                  {money(sum.contributed - sum.paid)}
-                </span>
-                <span className="block text-xs opacity-70">
-                  {sum.pendingCount} bills pendientes
-                </span>
-              </span>
-              <Ring
-                pct={sum.total ? sum.paid / sum.total : 0}
-                size={72}
-                stroke={6}
-                className="text-success"
-              >
-                <span className="text-sm font-bold tabular">
-                  {Math.round(sum.total ? (sum.paid / sum.total) * 100 : 0)}%
-                </span>
-              </Ring>
-            </Button>
-          )}
-
-          <section>
-            <h3 className="mb-2 font-display text-lg font-bold">Próximos</h3>
-            <div className="space-y-2">
-              {upcomingEvents(s.events, now).map((e) => (
-                <div
-                  key={e.id}
-                  className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-card"
-                >
-                  <Avatar m={byId(e.memberId)} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">{e.title}</p>
-                    <p className="text-xs text-muted-foreground">{eventWhen(e)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </aside>
-      </div>
-    </div>
-  );
-}
 
 const CHORE_GROUPS = ["Atrasadas", "Hoy", "Mañana", "Próximas", "Sin fecha"];
 export function Chores({

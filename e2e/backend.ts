@@ -53,6 +53,10 @@ export class HouseholdBackend {
   photoObjects = new Map<string, Buffer>();
   photoUploadRequests = 0;
   loseNextPhotoRegistration = false;
+  dashboardPreference: Row | null = null;
+  dashboardSaveRequests = 0;
+  loseNextDashboardResponse = false;
+  dashboardDeviceReads = 0;
   pairings = new Map<
     string,
     {
@@ -206,6 +210,13 @@ export class HouseholdBackend {
         json: request.headers()["accept"]?.includes("vnd.pgrst.object") ? profile : [profile],
       });
     }
+    if (endpoint === "dashboard_preferences") {
+      if (request.headers()["x-device-token"]) {
+        this.dashboardDeviceReads++;
+        return route.fulfill({ status: 403, json: { message: "Account required" } });
+      }
+      return route.fulfill({ json: this.dashboardPreference ? [this.dashboardPreference] : [] });
+    }
     if (!(endpoint in this.rows)) {
       this.unexpectedRequests.push(url.pathname);
       return route.fulfill({
@@ -258,6 +269,35 @@ export class HouseholdBackend {
   ): Promise<{ status?: number; json?: unknown }> {
     const member = { key: memberKey, name: "Ana", role: "admin" };
     switch (name) {
+      case "save_dashboard_layout": {
+        this.dashboardSaveRequests++;
+        if (headers["x-device-token"] || !headers["authorization"]?.startsWith("Bearer "))
+          return { status: 403, json: { message: "Account required" } };
+        const expected = Number(args["_expected_revision"]);
+        const current = this.dashboardPreference;
+        if (
+          current &&
+          current["revision"] === expected + 1 &&
+          JSON.stringify(current["layout"]) === JSON.stringify(args["_layout"])
+        )
+          return { json: [current] };
+        if ((current?.["revision"] ?? 0) !== expected)
+          return {
+            status: 409,
+            json: { code: "40001", message: "Dashboard changed on another device" },
+          };
+        this.dashboardPreference = {
+          user_id: USER_ID,
+          layout: args["_layout"],
+          revision: expected + 1,
+          updated_at: new Date().toISOString(),
+        };
+        if (this.loseNextDashboardResponse) {
+          this.loseNextDashboardResponse = false;
+          return { status: 503, json: { message: "Response lost after commit" } };
+        }
+        return { json: [this.dashboardPreference] };
+      }
       case "my_context":
         return {
           json: [

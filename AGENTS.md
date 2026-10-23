@@ -15,6 +15,7 @@
 
 - This is a functional household application, not a device preview. Use responsive layouts and real household data. Do not restore demo PINs, fixed weather, fixed calendar dates or fictitious agenda entries.
 - Use the shared finance visibility predicate for every financial UI surface; financial tables also require server-side authorization through `db()`.
+- Dashboard layouts contain widget IDs and sizes only. Personal accounts save their own RLS-scoped preferences with revision checks; shared-tablet PIN members keep separate local layouts and must never query personal account preferences. A layout cannot grant financial access.
 - Calendar and notes persist in household tables. Keep date-only values local, and put overflow navigation in the mobile More menu so navigation never scrolls horizontally.
 - Use native-keyboard focus shortcuts for optional dictation. Browsers cannot start the keyboard microphone directly. Do not add web microphone capture, speech recognition, speech models or audio processing dependencies; never put these shortcuts in the PIN keypad.
 - Resolve authentication into a snapshot before committing household/member state. Ignore stale resolutions before they can mutate shared context. Bind queued writes to their original household and client; a later login must not redirect them.

@@ -121,6 +121,49 @@ def run():
     sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{USER_A}','a@example.invalid',now()),('{USER_B}','b@example.invalid',now()),('{USER_C}','c@example.invalid',now());")
     sql('SELECT claim_platform_admin();', user=USER_A, fail='permission denied')
     check('ordinary account cannot claim global administration', sql('SELECT count(*) FROM user_roles;'), '0')
+    layout = {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'wide'}, {'id': 'notes', 'size': 'compact'}]}
+    empty_layout = {'version': 1, 'widgets': []}
+    save_layout = lambda value, revision, **kwargs: sql(f"SELECT row_to_json(saved) FROM save_dashboard_layout('{j(value)}'::jsonb,{revision}) saved;", **kwargs)
+    saved_layout = json.loads(save_layout(layout, 0, user=USER_A))
+    check('dashboard first save is bound to the account', (saved_layout['user_id'], saved_layout['layout'], saved_layout['revision']), (USER_A, layout, 1))
+    check('uncertain dashboard response retries are idempotent', json.loads(save_layout(layout, 0, user=USER_A))['revision'], 1)
+    check('dashboard preferences are private between accounts', sql('SELECT count(*) FROM dashboard_preferences;', user=USER_B), '0')
+    check('dashboard function uses caller privileges and RLS', sql("SELECT NOT prosecdef FROM pg_proc WHERE oid='public.save_dashboard_layout(jsonb,integer)'::regprocedure;"), 't')
+    check('anonymous clients cannot read or save dashboard preferences', sql("SELECT has_table_privilege('anon','public.dashboard_preferences','SELECT') OR has_function_privilege('anon','public.save_dashboard_layout(jsonb,integer)','EXECUTE');"), 'f')
+    save_layout(layout, 0, device='', fail='permission denied')
+    sql(f"INSERT INTO dashboard_preferences(user_id,layout) VALUES('{USER_A}','{j(layout)}');", user=USER_B, fail='row-level security')
+    sql(f"UPDATE dashboard_preferences SET user_id='{USER_B}' WHERE user_id='{USER_A}';", user=USER_A, fail='row-level security')
+    check('another account cannot update dashboard preferences', sql(f"WITH changed AS(UPDATE dashboard_preferences SET revision=99 WHERE user_id='{USER_A}' RETURNING user_id) SELECT count(*) FROM changed;", user=USER_B), '0')
+    check('empty dashboard layout can be saved deliberately', json.loads(save_layout(empty_layout, 1, user=USER_A))['layout'], empty_layout)
+    check('dashboard revision advances once', json.loads(save_layout(empty_layout, 1, user=USER_A))['revision'], 2)
+    save_layout(layout, 1, user=USER_A, fail='Dashboard changed')
+    check('stale dashboard save preserves confirmed layout', json.loads(sql(f"SELECT layout FROM dashboard_preferences WHERE user_id='{USER_A}';", user=USER_A)), empty_layout)
+    for invalid_layout in [None, [], {}, {'version': 2, 'widgets': []}, {'version': 1, 'widgets': None},
+                           {'version': 1, 'widgets': [{'id': 'unknown', 'size': 'compact'}]},
+                           {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'giant'}]},
+                           {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'wide'}] * 2},
+                           {'version': 1, 'widgets': ['tasks']}, {'version': 1, 'widgets': [], 'secret': 'not allowed'},
+                           {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'wide', 'data': 'not allowed'}]}]:
+        save_layout(invalid_layout, 2, user=USER_A, fail='Invalid dashboard layout')
+    sql("SELECT save_dashboard_layout(NULL,2);", user=USER_A, fail='Invalid dashboard layout')
+    save_layout(layout, -1, user=USER_A, fail='Invalid dashboard layout')
+    check('another account starts an independent dashboard', json.loads(save_layout(layout, 0, user=USER_B))['revision'], 1)
+    # Force overlapping saves on one account with the same expected revision.
+    def begin_layout(value, pause):
+        claims = json.dumps({'sub': USER_A})
+        query = f"BEGIN;SET request.jwt.claims='{claims}';SET ROLE authenticated;SELECT revision FROM save_dashboard_layout('{j(value)}'::jsonb,2);SELECT pg_sleep({pause});COMMIT;"
+        proc = subprocess.Popen(DOCKER + ['exec', '-i', NAME, 'psql', '-h', '127.0.0.1', '-X', '-qAt', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=ENV)
+        proc.stdin.write(query)
+        proc.stdin.close()
+        return proc
+    first_layout = begin_layout(layout, 1)
+    time.sleep(.2)
+    second_layout = begin_layout({'version': 1, 'widgets': [{'id': 'calendar', 'size': 'wide'}]}, 0)
+    first_layout.wait(timeout=10)
+    second_layout.wait(timeout=10)
+    check('first concurrent dashboard save succeeds', first_layout.returncode, 0)
+    check('second concurrent dashboard save cannot overwrite it', second_layout.returncode != 0, True)
+    check('concurrent dashboard saves advance only one revision', sql(f"SELECT revision FROM dashboard_preferences WHERE user_id='{USER_A}';", user=USER_A), '3')
     hid = sql("SELECT create_household('Test Home','Adult A','1234');", user=USER_A)
     member_a = sql('SELECT member_key FROM my_context();', user=USER_A)
     invite = sql("SELECT prepare_email_invite('Adult B','admin','b@example.invalid')->>'code';", user=USER_A)

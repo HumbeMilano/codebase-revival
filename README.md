@@ -2,6 +2,8 @@
 
 Aplicación para organizar un hogar desde el móvil o una tablet compartida: tareas, compras, calendario, notas y gastos. Usa React 19, TanStack Router, Vite, Tailwind y Supabase.
 
+El inicio permite elegir, ordenar y ampliar widgets de cada sección desde «Personalizar». El diseño se guarda por cuenta; en una tablet compartida se conserva por miembro en ese dispositivo.
+
 La aplicación está publicada en `https://app.skendal.com` y su web de presentación para `https://skendal.com`, alojadas como archivos estáticos en Cloudflare. Consulta [Producción](docs/production.md) para las cuentas, el backend y la activación del correo. La aplicación no necesita servicios de Lovable. Se conserva su historial Git; no reescribas commits publicados ni hagas force push.
 
 ## Desarrollo
