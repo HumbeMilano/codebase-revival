@@ -669,21 +669,18 @@ export type Database = {
         Row: {
           avatar_path: string | null;
           id: string;
-          onboarding_state: Json;
           preferred_view: string;
           time_format: string;
         };
         Insert: {
           avatar_path?: string | null;
           id: string;
-          onboarding_state?: Json;
           preferred_view?: string;
           time_format?: string;
         };
         Update: {
           avatar_path?: string | null;
           id?: string;
-          onboarding_state?: Json;
           preferred_view?: string;
           time_format?: string;
         };
@@ -950,10 +947,6 @@ export type Database = {
       };
       save_collection: {
         Args: { _changes: Json; _household: string; _table: string };
-        Returns: Json;
-      };
-      save_onboarding_progress: {
-        Args: { _dismissed?: boolean; _restart?: boolean; _seen?: string[] };
         Returns: Json;
       };
       sync_shopping: {

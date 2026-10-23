@@ -16,7 +16,7 @@
 - This is a functional household application, not a device preview. Use responsive layouts and real household data. Do not restore demo PINs, fixed weather, fixed calendar dates or fictitious agenda entries.
 - Use the shared finance visibility predicate for every financial UI surface; financial tables also require server-side authorization through `db()`.
 - Calendar and notes persist in household tables. Keep date-only values local, and put overflow navigation in the mobile More menu so navigation never scrolls horizontally.
-- Dictation was removed at the owner's request. Do not add microphone controls, speech models or audio processing dependencies.
+- Use native-keyboard focus shortcuts for optional dictation. Browsers cannot start the keyboard microphone directly. Do not add web microphone capture, speech recognition, speech models or audio processing dependencies; never put these shortcuts in the PIN keypad.
 - Resolve authentication into a snapshot before committing household/member state. Ignore stale resolutions before they can mutate shared context. Bind queued writes to their original household and client; a later login must not redirect them.
 - Keep member data reactive across settings, selectors, roles and the tablet kiosk. Invalidate it after member operations and revalidate it between devices.
 - Evaluate collection updates outside replayable React state updaters. Separate confirmed and optimistic data, serialize dependent writes, and reconcile failures. Do not announce a successful save before confirmation or promise offline persistence without a durable implementation.
@@ -25,7 +25,7 @@
 
 - Household data lives in the owner's Supabase project; context comes from `my_context()`. Always query household data through `db()` so paired tablets send the device token header. The app is a static Vite/TanStack Router SPA, independent of Lovable runtime services.
 - Tablet pairing shows an application QR on the tablet and asks a signed-in adult to approve with a fresh passkey on the phone. Keep approval and claim secrets independent; never expose the claim secret in links. The application QR does not prove Bluetooth proximity. The anonymous request gateway requires its own private server key and rate limit.
-- Tours are optional, contextual and stored per personal account. Never show them on shared tablets or force navigation. Preserve skip/progress across devices and allow an explicit replay from the profile.
+- The owner removed the guided tour. Do not restore coachmarks, tour progress or a replay control.
 - PIN verification stays in Postgres. All PIN authorization paths, including finance authorization, must share server-side attempt limits. Never introduce client PIN checks or server-function PIN lookups against a potentially different backend URL.
 - Every household table is RLS-scoped. Suspension must also be checked by privileged RPCs; `SECURITY DEFINER` bypasses RLS and therefore needs its own authorization checks.
 - Household/invitation/pairing/device/member mutations use reviewed RPCs. Revalidate authorization under the household lock when changing roles or members; concurrent calls must not remove the last adult.

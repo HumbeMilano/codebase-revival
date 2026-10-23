@@ -836,7 +836,6 @@ export function Finance({
                 Calendario de facturas
               </h3>
               <button
-                data-tour="finance"
                 onClick={() => setEditing("new")}
                 className="flex items-center gap-1 rounded-full bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground"
               >

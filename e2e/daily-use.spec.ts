@@ -150,37 +150,37 @@ test("tablet pairing leaves no adult session and its photo lock screen fills the
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
-test("the tour follows exploration once per account, can be skipped and replayed", async ({
+test("keyboard shortcuts focus the field without starting app microphone capture", async ({
   page,
 }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "homehub-tour:legacy",
+      JSON.stringify({ version: 1, seen: [], dismissed: false }),
+    ),
+  );
   const backend = new HouseholdBackend();
-  backend.tourProgress.dismissed = false;
   await backend.install(page);
   await signIn(page);
-  await expect(page.getByRole("dialog", { name: "Tu hogar, de un vistazo" })).toBeVisible();
-  await section(page, "Tareas");
-  await expect(page.getByRole("dialog", { name: "Crea tu primera tarea" })).toBeVisible();
-  await page.getByRole("button", { name: "Nueva tarea", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Crea tu primera tarea" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Close", exact: true }).click();
-  await section(page, "Notas");
-  await expect(page.getByRole("dialog", { name: "Escribe tu primera nota" })).toBeVisible();
-  await page.getByRole("button", { name: "Omitir recorrido", exact: true }).click();
-  await page.reload();
+  expect(await page.evaluate(() => localStorage.getItem("homehub-tour:legacy"))).toBeNull();
+  await expect(page.locator("[data-guided-tour]")).toHaveCount(0);
   await section(page, "Compras");
-  await expect(page.locator("[data-guided-tour]")).toHaveCount(0);
+  await page.getByRole("button", { name: "Escribir o dictar con mi teclado", exact: true }).click();
+  await expect(page.getByLabel("Producto", { exact: true })).toBeFocused();
+  await page.getByLabel("Producto", { exact: true }).fill("Manzanas dictadas con el teclado");
+  await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Manzanas dictadas con el teclado", exact: true }),
+  ).toBeVisible();
+  await section(page, "Notas");
+  await page.getByRole("button", { name: "Nueva nota", exact: true }).click();
+  await page.locator('button[aria-controls="note-body"]').click();
+  await expect(page.getByLabel("Contenido", { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await section(page, "Mi perfil");
-  await page.getByRole("button", { name: "Volver a ver el recorrido", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Tu hogar, de un vistazo" })).toBeVisible();
-  await page.getByRole("button", { name: "Entendido", exact: true }).click();
-  await section(page, "Notas");
-  await expect(page.getByRole("dialog", { name: "Escribe tu primera nota" })).toBeVisible();
-  await page.getByRole("button", { name: "Entendido", exact: true }).click();
-  await section(page, "Tareas");
-  await expect(page.getByRole("dialog", { name: "Crea tu primera tarea" })).toBeVisible();
-  await page.getByRole("button", { name: "Entendido", exact: true }).click();
-  await section(page, "Notas");
-  await expect(page.locator("[data-guided-tour]")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Volver a ver el recorrido", exact: true }),
+  ).toHaveCount(0);
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
@@ -203,5 +203,40 @@ test("a tablet QR survives reload, expires and can be replaced without an adult 
   await page.getByRole("button", { name: "Volver", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Bienvenido", exact: true })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem("homehub-tablet-pairing-v1"))).toBeNull();
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("photos survive a lost registration response, reload, reorder and removal", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  backend.loseNextPhotoRegistration = true;
+  await backend.install(page);
+  await signIn(page);
+  await section(page, "Hogar");
+  const image = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS1cAAAAASUVORK5CYII=",
+    "base64",
+  );
+  const picker = page.getByLabel("Añadir foto", { exact: true });
+  await picker.setInputFiles({ name: "familia.png", mimeType: "image/png", buffer: image });
+  await expect(page.getByRole("alert")).toContainText("No se pudo confirmar");
+  expect(backend.photoObjects.size).toBe(1);
+  await page.getByRole("button", { name: "Reintentar", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Foto 1 del hogar", exact: true })).toBeVisible();
+  expect(backend.photos).toHaveLength(1);
+  expect(backend.photoUploadRequests).toBe(1);
+  await picker.setInputFiles({ name: "casa.png", mimeType: "image/png", buffer: image });
+  await expect(page.getByRole("img", { name: "Foto 2 del hogar", exact: true })).toBeVisible();
+  const second = backend.photos[1]!["id"];
+  await page.getByRole("button", { name: "Adelantar foto 2", exact: true }).click();
+  await expect.poll(() => backend.photos[0]!["id"]).toBe(second);
+  await page.reload();
+  await section(page, "Hogar");
+  await expect(page.getByRole("img", { name: "Foto 2 del hogar", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Eliminar foto 1", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Foto 2 del hogar", exact: true })).toHaveCount(0);
+  expect(backend.photoObjects.size).toBe(1);
+  expect(backend.photos).toHaveLength(1);
   expect(backend.unexpectedRequests).toEqual([]);
 });

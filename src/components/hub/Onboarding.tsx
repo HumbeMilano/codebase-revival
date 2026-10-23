@@ -868,7 +868,6 @@ export function HouseholdSettings({
         </h2>
         {!adding && (
           <Button
-            data-tour="household"
             onClick={() => setAdding({ name: "", role: "member", pin: "" })}
             className="mt-4 rounded-xl"
           >

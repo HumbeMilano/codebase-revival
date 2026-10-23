@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Images, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Images, Plus, Trash2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { HOUSEHOLD } from "./data";
 import {
@@ -8,39 +8,64 @@ import {
   type HouseholdPhoto,
 } from "@/lib/household-photos";
 import { Button } from "@/components/ui/button";
+import {
+  discardHouseholdPhoto,
+  photoErrorMessage,
+  saveHouseholdPhoto,
+  type PhotoUpload,
+} from "@/lib/photo-upload";
 
 export function HouseholdPhotos() {
   const { photos, error: loadingError, refresh } = useHouseholdPhotos();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const pending = useRef<{
+    client: ReturnType<typeof db>;
+    householdId: string;
+    operation: PhotoUpload;
+  } | null>(null);
   const changed = () => {
-    refresh();
     window.dispatchEvent(new Event("homehub-photos-changed"));
   };
-  const upload = async (file: File | undefined) => {
-    if (!file || busy || photos.length >= 12) return;
-    const client = db();
-    const householdId = HOUSEHOLD.id;
+  const assertCurrent = () => {
+    if (
+      pending.current &&
+      (pending.current.client !== db() || pending.current.householdId !== HOUSEHOLD.id)
+    )
+      throw new Error("La sesión cambió. Vuelve a abrir el hogar.");
+  };
+  const upload = async (file?: File) => {
+    if (busy || (!file && !pending.current) || (file && photos.length >= 12)) return;
     setBusy(true);
     setError("");
-    let uploadedPath: string | null = null;
     try {
-      const blob = await prepareHouseholdPhoto(file);
-      if (client !== db() || HOUSEHOLD.id !== householdId)
-        throw new Error("La sesión cambió. Vuelve a abrir el hogar.");
-      const path = `${householdId}/${crypto.randomUUID()}.jpg`;
-      const result = await client.storage
-        .from("household-photos")
-        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
-      if (result.error) throw result.error;
-      uploadedPath = path;
-      const saved = await client.rpc("add_household_photo", { _path: path });
-      if (saved.error) throw saved.error;
-      uploadedPath = null;
+      if (file) {
+        if (pending.current) {
+          await discardHouseholdPhoto(
+            pending.current.client,
+            pending.current.operation,
+            assertCurrent,
+          );
+          pending.current = null;
+          changed();
+        }
+        const client = db(),
+          householdId = HOUSEHOLD.id;
+        const blob = await prepareHouseholdPhoto(file);
+        if (client !== db() || householdId !== HOUSEHOLD.id)
+          throw new Error("La sesión cambió. Vuelve a abrir el hogar.");
+        pending.current = {
+          client,
+          householdId,
+          operation: { path: `${householdId}/${crypto.randomUUID()}.jpg`, blob, uploaded: false },
+        };
+      }
+      if (!pending.current) return;
+      await saveHouseholdPhoto(pending.current.client, pending.current.operation, assertCurrent);
+      pending.current = null;
       changed();
     } catch (reason) {
-      if (uploadedPath) await client.storage.from("household-photos").remove([uploadedPath]);
-      setError(reason instanceof Error ? reason.message : "No se pudo guardar la foto. Reintenta.");
+      setError(photoErrorMessage(reason));
     } finally {
       setBusy(false);
     }
@@ -49,10 +74,13 @@ export function HouseholdPhotos() {
     if (busy) return;
     setBusy(true);
     setError("");
-    const client = db();
+    const client = db(),
+      householdId = HOUSEHOLD.id;
     try {
       const removed = await client.storage.from("household-photos").remove([photo.path]);
       if (removed.error) throw removed.error;
+      if (client !== db() || householdId !== HOUSEHOLD.id)
+        throw new Error("La sesión cambió. Vuelve a abrir el hogar.");
       const result = await client.rpc("remove_household_photo", { _id: photo.id });
       if (result.error) throw result.error;
       changed();
@@ -69,8 +97,12 @@ export function HouseholdPhotos() {
     try {
       const ids = photos.map((photo) => photo.id);
       [ids[index], ids[index + direction]] = [ids[index + direction]!, ids[index]!];
-      const result = await db().rpc("reorder_household_photos", { _ids: ids });
+      const client = db(),
+        householdId = HOUSEHOLD.id;
+      const result = await client.rpc("reorder_household_photos", { _ids: ids });
       if (result.error) throw result.error;
+      if (client !== db() || householdId !== HOUSEHOLD.id)
+        throw new Error("La sesión cambió. Vuelve a abrir el hogar.");
       changed();
     } catch {
       setError("No se pudo guardar el orden. Actualiza las fotos y reintenta.");
@@ -83,25 +115,33 @@ export function HouseholdPhotos() {
       <h2 className="flex items-center gap-2 font-display text-xl font-bold">
         <Images /> Fotos de la pantalla de bloqueo
       </h2>
-      <p className="text-sm text-muted-foreground">
-        Hasta 12 fotos privadas del hogar. Se alternan cada 20 segundos en la tablet; puedes
-        ordenarlas o quitarlas. Las imágenes se comprimen antes de subirlas.
-      </p>
+      <p className="text-sm text-muted-foreground">{photos.length}/12 fotos</p>
       {(error || loadingError) && (
         <p role="alert" className="text-sm text-destructive">
           {error || loadingError}{" "}
-          <button type="button" className="underline" onClick={refresh}>
+          <button
+            type="button"
+            className="underline"
+            disabled={busy}
+            onClick={() => {
+              if (pending.current) void upload();
+              else {
+                setError("");
+                refresh();
+              }
+            }}
+          >
             Reintentar
           </button>
         </p>
       )}
-      <label className="block text-sm font-semibold">
-        Añadir foto
+      <label className="relative inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold focus-within:ring-2 focus-within:ring-ring has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+        <Plus className="size-4" /> Añadir foto
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp"
           disabled={busy || photos.length >= 12}
-          className="mt-2 block w-full text-base"
+          className="sr-only"
           onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = "";
@@ -157,11 +197,6 @@ export function HouseholdPhotos() {
           </li>
         ))}
       </ol>
-      {!photos.length && (
-        <p className="text-sm text-muted-foreground">
-          Mientras no añadas fotos se mostrará el fondo inicial.
-        </p>
-      )}
     </section>
   );
 }

@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { NativeInputShortcut } from "./NativeInputShortcut";
 import { canViewFinances } from "@/lib/finance-visibility";
 import { monthKey, monthSummary, type Contribution, type LedgerBill } from "@/lib/ledger";
 import { Avatar } from "./Kiosk";
@@ -491,9 +492,7 @@ export function Dashboard({
   return (
     <div className="space-y-5">
       <div className="flex items-end justify-between gap-3">
-        <h2 data-tour="home" className="font-display text-3xl font-extrabold">
-          Hola, {user.name}
-        </h2>
+        <h2 className="font-display text-3xl font-extrabold">Hola, {user.name}</h2>
         <span className="shrink-0 text-sm font-semibold capitalize text-muted-foreground">
           {now.toLocaleDateString("es", { day: "numeric", month: "short" })}
         </span>
@@ -783,7 +782,6 @@ export function Chores({
           </Button>
         ))}
         <Button
-          data-tour="chores"
           onClick={() =>
             setDraft({ ...fresh(), memberId: who === "all" ? (MEMBERS[0]?.id ?? "") : who })
           }
@@ -883,23 +881,27 @@ export function Chores({
         <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] overflow-y-auto rounded-3xl">
           <DialogHeader>
             <DialogTitle>{isNew ? "Nueva tarea" : "Editar tarea"}</DialogTitle>
-            <DialogDescription>Asigna una persona y una fecha real.</DialogDescription>
+            <DialogDescription className="sr-only">
+              Asigna una persona y una fecha real.
+            </DialogDescription>
           </DialogHeader>
           {draft && (
             <form onSubmit={(event) => void save(event)} className="space-y-4">
-              <label className="block text-sm font-semibold">
-                Tarea
+              <div className="block text-sm font-semibold">
+                <label htmlFor="chore-title">Tarea</label>
                 <div className="flex items-center gap-2">
                   <input
                     required
                     maxLength={200}
+                    id="chore-title"
                     aria-label="Título de la tarea"
                     value={draft.title}
                     onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                    className={field}
+                    className={cn(field, "min-w-0 flex-1")}
                   />
+                  <NativeInputShortcut targetId="chore-title" />
                 </div>
-              </label>
+              </div>
               <label className="block text-sm font-semibold">
                 Persona
                 <select
@@ -1064,12 +1066,12 @@ export function Shopping({
         </section>
       )}
       <form
-        data-tour="shopping"
         onSubmit={(event) => void add(event)}
         className="flex items-center gap-2 rounded-2xl bg-card p-2 pl-4 shadow-card"
       >
         <input
           ref={input}
+          id="shopping-product"
           maxLength={150}
           aria-label="Producto"
           value={name}
@@ -1077,6 +1079,7 @@ export function Shopping({
           placeholder="Añadir producto"
           className="min-w-0 flex-1 bg-transparent text-base outline-none"
         />
+        <NativeInputShortcut targetId="shopping-product" />
         <Button
           type="submit"
           size="icon"
