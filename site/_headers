@@ -2,4 +2,6 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
-  Cache-Control: public, max-age=3600
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://rwbeiestzyzceramgtdw.supabase.co; base-uri 'self'; frame-ancestors 'none'; form-action 'none'; object-src 'none'
+  Cache-Control: public, max-age=300

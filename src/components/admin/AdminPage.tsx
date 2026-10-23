@@ -3,6 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, Users, Tablet, Crown, Ban, ShieldCheck, LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { createAdminClient } from "@/lib/admin-client";
+import { clearFinanceAccess, invalidateDbContext } from "@/lib/db";
+import { BusinessConsole, type BusinessTab } from "./BusinessConsole";
 
 type Stats = {
   households: number;
@@ -42,7 +45,7 @@ const fmt = (d: string | null) =>
 
 export function AdminPage() {
   const [status, setStatus] = useState<Status>("loading");
-  const [tab, setTab] = useState<"hogares" | "cuentas">("hogares");
+  const [tab, setTab] = useState<BusinessTab | "hogares" | "cuentas">("resumen");
   const [stats, setStats] = useState<Stats | null>(null);
   const [households, setHouseholds] = useState<Household[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -52,6 +55,11 @@ export function AdminPage() {
 
   const [busy, setBusy] = useState(false);
   const sequence = useRef(0);
+  const actor = useRef<{ valid: boolean; client: ReturnType<typeof createAdminClient> } | null>(
+    null,
+  );
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [canDelegate, setCanDelegate] = useState(false);
 
   const load = useCallback(async () => {
     const request = ++sequence.current;
@@ -72,7 +80,18 @@ export function AdminPage() {
         return;
       }
       setMe(user.id);
-      const { data: isAdmin, error: roleError } = await supabase.rpc("am_platform_admin");
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (!current()) return;
+      if (sessionError || !sessionData.session || sessionData.session.user.id !== user.id)
+        throw sessionError ?? new Error("Session changed");
+      if (actor.current) actor.current.valid = false;
+      const binding = {
+        valid: true,
+        client: null as unknown as ReturnType<typeof createAdminClient>,
+      };
+      binding.client = createAdminClient(sessionData.session.access_token, () => binding.valid);
+      actor.current = binding;
+      const { data: isAdmin, error: roleError } = await binding.client.rpc("am_platform_admin");
       if (!current()) return;
       if (roleError) throw roleError;
       if (!isAdmin) {
@@ -83,9 +102,9 @@ export function AdminPage() {
         return;
       }
       const [s, h, a] = await Promise.all([
-        supabase.rpc("admin_stats"),
-        supabase.rpc("admin_list_households"),
-        supabase.rpc("admin_list_accounts"),
+        binding.client.rpc("admin_stats"),
+        binding.client.rpc("admin_list_households"),
+        binding.client.rpc("admin_list_accounts"),
       ]);
       if (!current()) return;
       if (s.error || h.error || a.error) throw s.error ?? h.error ?? a.error;
@@ -93,6 +112,7 @@ export function AdminPage() {
       setHouseholds((h.data as Household[]) ?? []);
       setAccounts((a.data as Account[]) ?? []);
       setStatus("ok");
+      setRefreshKey((value) => value + 1);
     } catch {
       if (!current()) return;
       setError("No se pudieron cargar los datos. Revisa la conexión e inténtalo de nuevo.");
@@ -105,6 +125,9 @@ export function AdminPage() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+        if (event === "SIGNED_OUT") invalidateDbContext();
+        sequence.current += 1;
+        if (actor.current) actor.current.valid = false;
         setStatus("loading");
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
@@ -115,6 +138,7 @@ export function AdminPage() {
     });
     return () => {
       sequence.current += 1;
+      if (actor.current) actor.current.valid = false;
       if (timer) clearTimeout(timer);
       data.subscription.unsubscribe();
     };
@@ -179,6 +203,7 @@ export function AdminPage() {
     );
 
   const q = query.trim().toLowerCase();
+  const client = actor.current!.client;
   const hs = households.filter((h) => h.name.toLowerCase().includes(q));
   const as = accounts.filter(
     (a) => a.email.toLowerCase().includes(q) || (a.household_name ?? "").toLowerCase().includes(q),
@@ -189,9 +214,17 @@ export function AdminPage() {
       <header className="mb-6 flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            HomeHub · Plataforma
+            Skendal · Consola del negocio
           </p>
           <h1 className="font-display text-3xl font-bold md:text-4xl">Administración</h1>
+          <a
+            href="https://skendal.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-muted-foreground underline"
+          >
+            Ver web pública ↗
+          </a>
         </div>
         <div className="flex gap-2">
           <Button
@@ -211,7 +244,12 @@ export function AdminPage() {
             size="icon"
             aria-label="Cerrar sesión"
             disabled={busy}
-            onClick={() => void run(() => supabase.auth.signOut())}
+            onClick={() =>
+              void run(async () => {
+                await clearFinanceAccess();
+                return supabase.auth.signOut();
+              })
+            }
           >
             <LogOut className="h-4 w-4" />
           </Button>
@@ -257,25 +295,47 @@ export function AdminPage() {
       )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {(["hogares", "cuentas"] as const).map((t) => (
+        {(
+          [
+            "resumen",
+            "hogares",
+            "cuentas",
+            "pagos",
+            "planes",
+            "actividad",
+            "configuracion",
+          ] as const
+        ).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
+            aria-current={tab === t ? "page" : undefined}
             className={`rounded-full px-4 py-2 text-sm font-semibold capitalize ${tab === t ? "bg-primary text-primary-foreground" : "bg-card"}`}
           >
-            {t}
+            {t === "configuracion" ? "Configuración" : t}
           </button>
         ))}
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar"
-          aria-label="Buscar"
-          className="ml-auto w-full rounded-full border bg-card px-4 py-2 text-sm md:w-64"
-        />
+        {(tab === "hogares" || tab === "cuentas" || tab === "resumen") && (
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar"
+            aria-label="Buscar"
+            className="ml-auto w-full rounded-full border bg-card px-4 py-2 text-sm md:w-64"
+          />
+        )}
       </div>
 
-      {tab === "hogares" ? (
+      <BusinessConsole
+        key={me}
+        client={client}
+        tab={tab}
+        refreshKey={refreshKey}
+        households={households}
+        onCapabilities={setCanDelegate}
+      />
+
+      {tab === "hogares" || tab === "resumen" ? (
         <section className="grid gap-3 md:grid-cols-2">
           {hs.length === 0 && <p className="text-muted-foreground">Sin hogares.</p>}
           {hs.map((h) => (
@@ -308,7 +368,7 @@ export function AdminPage() {
                   variant="outline"
                   onClick={() =>
                     void run(() =>
-                      supabase.rpc("admin_set_household", {
+                      client.rpc("admin_set_household", {
                         _id: h.id,
                         _plan: h.plan === "pro" ? "free" : "pro",
                         _suspended: h.suspended,
@@ -328,7 +388,7 @@ export function AdminPage() {
                       confirm(`¿Suspender ${h.name}? Nadie del hogar podrá ver sus datos.`)
                     )
                       void run(() =>
-                        supabase.rpc("admin_set_household", {
+                        client.rpc("admin_set_household", {
                           _id: h.id,
                           _plan: h.plan,
                           _suspended: !h.suspended,
@@ -355,9 +415,7 @@ export function AdminPage() {
                     variant="outline"
                     onClick={() => {
                       if (confirm("¿Desvincular todas las tablets de este hogar?"))
-                        void run(() =>
-                          supabase.rpc("admin_revoke_household_devices", { _id: h.id }),
-                        );
+                        void run(() => client.rpc("admin_revoke_household_devices", { _id: h.id }));
                     }}
                   >
                     <Tablet className="mr-1 h-4 w-4" />
@@ -368,7 +426,7 @@ export function AdminPage() {
             </article>
           ))}
         </section>
-      ) : (
+      ) : tab === "cuentas" ? (
         <section className="space-y-2">
           {as.length === 0 && <p className="text-muted-foreground">Sin cuentas.</p>}
           {as.map((a) => (
@@ -393,14 +451,14 @@ export function AdminPage() {
                   Admin
                 </span>
               )}
-              {a.user_id !== me && (
+              {a.user_id !== me && a.confirmed && canDelegate && (
                 <Button
                   disabled={busy}
                   size="sm"
                   variant="outline"
                   onClick={() =>
                     void run(() =>
-                      supabase.rpc("admin_set_platform_admin", {
+                      client.rpc("admin_set_platform_admin", {
                         _user: a.user_id,
                         _grant: !a.is_admin,
                       }),
@@ -413,7 +471,7 @@ export function AdminPage() {
             </article>
           ))}
         </section>
-      )}
+      ) : null}
     </main>
   );
 }

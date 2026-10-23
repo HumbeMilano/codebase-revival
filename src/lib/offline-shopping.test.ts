@@ -5,6 +5,8 @@ import type { Database } from "@/integrations/supabase/types";
 import {
   acceptShoppingSnapshot,
   enqueueShopping,
+  enqueueShoppingLists,
+  defaultShoppingList,
   flushShopping,
   readShopping,
   resolveShoppingConflict,
@@ -126,5 +128,148 @@ describe("durable shopping outbox", () => {
     expect((await readShopping(second)).local).toEqual([]);
     expect((await readShopping(second)).queue).toEqual([]);
     expect((await readShopping(first)).queue).toHaveLength(1);
+  });
+});
+
+describe("multiple durable shopping lists", () => {
+  it("keeps an older cached list and its pending products while introducing independent lists", async () => {
+    const key = scope(),
+      defaultId = key.split(":")[1]!,
+      school = crypto.randomUUID();
+    const milk = item();
+    await acceptShoppingSnapshot(key, [milk]);
+    await enqueueShopping(key, (rows) => rows.map((row) => ({ ...row, done: true })));
+    await enqueueShoppingLists(key, (lists) => [
+      ...lists,
+      { id: school, name: "School", archived: false },
+    ]);
+    await enqueueShopping(key, (rows) => [...rows, { ...item(), listId: school }]);
+    const restored = await readShopping(key);
+    expect(restored.local).toHaveLength(2);
+    expect(restored.local[0]?.done).toBe(true);
+    expect(restored.lists?.map((list) => list.name)).toEqual(["Groceries", "School"]);
+    expect(restored.queue).toHaveLength(3);
+    expect(restored.queue[0]?.changes[0]?.values).toEqual({ done: true });
+    expect(restored.queue[2]?.changes[0]?.values.list_id).toBe(school);
+    expect(restored.lists?.[0]?.id).toBe(defaultId);
+  });
+  it("retries list creation with its exact identity before synchronizing dependent products", async () => {
+    const key = scope(),
+      school = crypto.randomUUID(),
+      bread = { ...item("Bread"), listId: school };
+    await enqueueShoppingLists(key, (lists) => [
+      ...lists,
+      { id: school, name: "School", archived: false },
+    ]);
+    await enqueueShopping(key, (rows) => [...rows, bread]);
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError("Response lost"))
+      .mockResolvedValueOnce(
+        response({
+          items: [],
+          lists: [{ id: school, name: "School", archived: false, position: 1, revision: 1 }],
+        }),
+      )
+      .mockResolvedValueOnce(response([{ ...bread, list_id: school }]));
+    const api = client(fetcher);
+    await expect(flushShopping(key, key.split(":")[1]!, api)).rejects.toBeDefined();
+    await flushShopping(key, key.split(":")[1]!, api);
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual(
+      JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body)),
+    );
+    const restored = await readShopping(key);
+    expect(restored.queue).toHaveLength(0);
+    expect(restored.local[0]?.listId).toBe(school);
+    expect(restored.lists?.find((list) => list.id === school)?.revision).toBe(1);
+  });
+  it("rebases new-list name collisions without moving or losing unrelated products", async () => {
+    const key = scope(),
+      defaultId = key.split(":")[1]!,
+      localId = crypto.randomUUID(),
+      remoteId = crypto.randomUUID();
+    await enqueueShoppingLists(key, (lists) => [
+      ...lists,
+      { id: localId, name: "School", archived: false },
+    ]);
+    await enqueueShopping(key, (rows) => [...rows, { ...item("Pencils"), listId: localId }]);
+    const remoteMilk = item("Milk");
+    const result = await resolveShoppingConflict(key, [remoteMilk], true, [
+      defaultShoppingList(defaultId),
+      { id: remoteId, name: "School", archived: false, revision: 2 },
+    ]);
+    expect(result.lists?.map((list) => list.id)).toEqual([defaultId, remoteId]);
+    expect(result.local.find((row) => row.name === "Pencils")?.listId).toBe(remoteId);
+    expect(result.local.find((row) => row.id === remoteMilk.id)).toEqual(remoteMilk);
+    expect(result.queue[0]?.changes[0]?.values.list_id).toBe(remoteId);
+  });
+  it("archives without deleting products and refuses to archive the original list", async () => {
+    const key = scope(),
+      defaultId = key.split(":")[1]!,
+      school = crypto.randomUUID();
+    await acceptShoppingSnapshot(
+      key,
+      [{ ...item("Book"), listId: school }],
+      [
+        defaultShoppingList(defaultId),
+        { id: school, name: "School", archived: false, revision: 1 },
+      ],
+    );
+    await enqueueShoppingLists(key, (lists) =>
+      lists.map((list) => (list.id === school ? { ...list, archived: true } : list)),
+    );
+    expect((await readShopping(key)).local).toHaveLength(1);
+    expect((await readShopping(key)).lists?.find((list) => list.id === school)?.archived).toBe(
+      true,
+    );
+    await expect(
+      enqueueShoppingLists(key, (lists) => lists.map((list) => ({ ...list, archived: true }))),
+    ).rejects.toThrow("debe permanecer activa");
+  });
+});
+
+describe("shopping outbox safeguards", () => {
+  it("rejects a full-list overflow before queueing while another list remains usable", async () => {
+    const key = scope(),
+      defaultId = key.split(":")[1]!,
+      school = crypto.randomUUID();
+    const full = Array.from({ length: 1000 }, (_, index) => ({
+      ...item(`Product ${index}`),
+      listId: defaultId,
+    }));
+    await acceptShoppingSnapshot(key, full, [
+      defaultShoppingList(defaultId),
+      { id: school, name: "School", archived: false, revision: 1 },
+    ]);
+    await expect(
+      enqueueShopping(key, (rows) => [...rows, { ...item("Overflow"), listId: defaultId }]),
+    ).rejects.toThrow("1000");
+    expect((await readShopping(key)).queue).toHaveLength(0);
+    await enqueueShopping(key, (rows) => [...rows, { ...item("Notebook"), listId: school }]);
+    expect((await readShopping(key)).local).toHaveLength(1001);
+  });
+  it("keeps pending list changes when a malformed receipt duplicates an identifier", async () => {
+    const key = scope(),
+      school = crypto.randomUUID(),
+      travel = crypto.randomUUID();
+    await enqueueShoppingLists(key, (lists) => [
+      ...lists,
+      { id: school, name: "School", archived: false },
+      { id: travel, name: "Travel", archived: false },
+    ]);
+    const duplicate = { id: school, name: "School", archived: false, position: 1, revision: 1 };
+    await expect(
+      flushShopping(
+        key,
+        key.split(":")[1]!,
+        client(
+          vi
+            .fn<typeof fetch>()
+            .mockResolvedValue(response({ items: [], lists: [duplicate, duplicate] })),
+        ),
+      ),
+    ).rejects.toThrow("confirmar");
+    expect((await readShopping(key)).queue).toHaveLength(1);
+    expect((await readShopping(key)).lists).toHaveLength(3);
   });
 });

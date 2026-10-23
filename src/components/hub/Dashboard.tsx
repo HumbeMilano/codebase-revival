@@ -1,15 +1,14 @@
 import { useState } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
   ArrowUpRight,
   CalendarDays,
   Check,
   CheckCheck,
   CheckSquare,
+  Clock,
+  Target,
+  Zap,
   LayoutGrid,
-  Maximize2,
-  Minimize2,
   Pin,
   Plus,
   RotateCcw,
@@ -18,7 +17,6 @@ import {
   StickyNote,
   Users,
   Wallet,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,7 +32,6 @@ import { useToday } from "@/hooks/use-today";
 import { isChoreArchived } from "@/lib/chore-archive";
 import {
   defaultDashboardLayout,
-  moveDashboardWidget,
   WIDGET_IDS,
   type DashboardLayout,
   type DashboardScope,
@@ -48,6 +45,7 @@ import { monthKey, monthSummary } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { MEMBERS, type Member } from "./data";
 import { Avatar } from "./Kiosk";
+import { WidgetGrid } from "./WidgetGrid";
 import { dateKey, eventWhen, parseDate, upcomingEvents } from "./planner-data";
 import { Ring, type HubState } from "./Screens";
 
@@ -55,7 +53,7 @@ type Section = "chores" | "shopping" | "calendar" | "notes" | "finance";
 const widgets = {
   tasks: { title: "Tareas de hoy", Icon: CheckSquare, tone: "bg-success text-success-foreground" },
   shopping: {
-    title: "Lista de compras",
+    title: "Listas de compras",
     Icon: ShoppingBasket,
     tone: "bg-accent text-accent-foreground",
   },
@@ -67,7 +65,18 @@ const widgets = {
   notes: { title: "Notas", Icon: StickyNote, tone: "bg-card text-card-foreground" },
   family: { title: "La familia hoy", Icon: Users, tone: "bg-sky text-foreground" },
   finance: { title: "Fondo común", Icon: Wallet, tone: "bg-primary text-primary-foreground" },
+  clock: { title: "Reloj y fecha", Icon: Clock, tone: "bg-primary text-primary-foreground" },
+  "my-tasks": {
+    title: "Mis tareas",
+    Icon: CheckSquare,
+    tone: "bg-success text-success-foreground",
+  },
+  week: { title: "Esta semana", Icon: CalendarDays, tone: "bg-sky text-foreground" },
+  "pinned-note": { title: "Nota fijada", Icon: Pin, tone: "bg-accent text-accent-foreground" },
+  progress: { title: "Progreso del hogar", Icon: Target, tone: "bg-lilac text-foreground" },
+  "quick-add": { title: "Crear algo", Icon: Zap, tone: "bg-card text-card-foreground" },
 } as const;
+const describeWidget = (id: WidgetId) => widgets[id];
 const member = (id: string) => MEMBERS.find((person) => person.id === id);
 const money = (amount: number) =>
   amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -111,7 +120,9 @@ function WidgetContent({
   go,
   onCreate,
   onOpenRecord,
+  user,
 }: {
+  user: Member;
   widget: DashboardWidget;
   s: HubState;
   now: Date;
@@ -122,11 +133,13 @@ function WidgetContent({
   const today = dateKey(now);
   const chores = s.chores.filter(
     (chore) =>
+      (widget.id !== "my-tasks" || chore.memberId === user.id) &&
       !isChoreArchived(chore, now) &&
       (chore.dueDate === today || (!chore.done && !!chore.dueDate && chore.dueDate < today)),
   );
-  const count = widget.size === "wide" ? 6 : 4;
+  const count = widget.size === "large" ? 5 : widget.size === "wide" ? 3 : 2;
   switch (widget.id) {
+    case "my-tasks":
     case "tasks": {
       const pending = chores.filter((chore) => !chore.done).length;
       const ordered = [...chores].sort(
@@ -135,7 +148,7 @@ function WidgetContent({
       );
       return (
         <>
-          <WidgetHeader id="tasks" onOpen={() => go("chores")} />
+          <WidgetHeader id={widget.id} onOpen={() => go("chores")} />
           <div className="mb-4 flex items-end gap-3">
             <span className="font-display text-5xl font-extrabold tabular-nums">{pending}</span>
             <span className="pb-1 text-sm opacity-70">
@@ -200,7 +213,13 @@ function WidgetContent({
       );
     }
     case "shopping": {
-      const pending = s.items.filter((item) => !item.done);
+      const activeLists = s.shoppingLists?.filter((list) => !list.archived);
+      const pending = s.items.filter(
+        (item) =>
+          !item.done &&
+          (!activeLists ||
+            activeLists.some((list) => list.id === (item.listId ?? activeLists[0]?.id))),
+      );
       return (
         <>
           <WidgetHeader id="shopping" onOpen={() => go("shopping")} />
@@ -228,7 +247,12 @@ function WidgetContent({
                       className="size-5 shrink-0 rounded-md border border-current/35"
                       aria-hidden="true"
                     />
-                    <span className="min-w-0 break-words">{item.name}</span>
+                    <span className="min-w-0 break-words">
+                      {item.name}
+                      <span className="block text-xs font-normal opacity-65">
+                        {activeLists?.find((list) => list.id === item.listId)?.name}
+                      </span>
+                    </span>
                   </button>
                 </li>
               ))}
@@ -247,11 +271,18 @@ function WidgetContent({
         </>
       );
     }
+    case "week":
     case "calendar": {
-      const events = upcomingEvents(s.events, now, count);
+      const end = new Date(now);
+      end.setDate(end.getDate() + 7);
+      const events = upcomingEvents(
+        widget.id === "week" ? s.events.filter((event) => event.date < dateKey(end)) : s.events,
+        now,
+        count,
+      );
       return (
         <>
-          <WidgetHeader id="calendar" onOpen={() => go("calendar")} />
+          <WidgetHeader id={widget.id} onOpen={() => go("calendar")} />
           {events.length ? (
             <ul className="space-y-2">
               {events.map((event) => (
@@ -282,13 +313,15 @@ function WidgetContent({
         </>
       );
     }
+    case "pinned-note":
     case "notes": {
       const notes = [...s.notes]
+        .filter((note) => widget.id !== "pinned-note" || note.pinned)
         .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-        .slice(0, widget.size === "wide" ? 4 : 2);
+        .slice(0, widget.id === "pinned-note" ? 1 : widget.size === "large" ? 4 : 1);
       return (
         <>
-          <WidgetHeader id="notes" onOpen={() => go("notes")} />
+          <WidgetHeader id={widget.id} onOpen={() => go("notes")} />
           {notes.length ? (
             <ul className={cn("grid gap-3", widget.size === "wide" && "sm:grid-cols-2")}>
               {notes.map((note) => (
@@ -349,6 +382,69 @@ function WidgetContent({
                 </button>
               );
             })}
+          </div>
+        </>
+      );
+    case "clock":
+      return (
+        <>
+          <WidgetHeader id="clock" onOpen={() => go("calendar")} />
+          <div className="flex flex-1 flex-col justify-center py-6">
+            <time
+              dateTime={now.toISOString()}
+              className="font-display text-5xl font-extrabold tracking-tight tabular-nums"
+            >
+              {now.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
+            </time>
+            <p className="mt-3 text-sm font-semibold capitalize">
+              {now.toLocaleDateString("es", { weekday: "long" })}
+            </p>
+            <p className="text-sm opacity-70">
+              {now.toLocaleDateString("es", { day: "numeric", month: "long" })}
+            </p>
+          </div>
+        </>
+      );
+    case "progress": {
+      const done = chores.filter((chore) => chore.done).length;
+      const percent = chores.length ? Math.round((done / chores.length) * 100) : 0;
+      return (
+        <>
+          <WidgetHeader id="progress" onOpen={() => go("chores")} />
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 py-3">
+            <Ring pct={percent / 100} size={110} stroke={8}>
+              <span className="font-display text-3xl font-bold">{percent}%</span>
+            </Ring>
+            <p className="text-center text-sm">
+              {chores.length ? `${done} de ${chores.length} tareas de hoy` : "Sin tareas para hoy"}
+            </p>
+          </div>
+        </>
+      );
+    }
+    case "quick-add":
+      return (
+        <>
+          <WidgetHeader id="quick-add" onOpen={() => go("notes")} />
+          <div className="grid flex-1 grid-cols-2 gap-2">
+            {(
+              [
+                ["chores", "Tarea", CheckSquare],
+                ["shopping", "Producto", ShoppingBasket],
+                ["calendar", "Evento", CalendarDays],
+                ["notes", "Nota", StickyNote],
+              ] as const
+            ).map(([section, label, Icon]) => (
+              <button
+                type="button"
+                key={section}
+                onClick={() => onCreate(section)}
+                className="flex min-h-16 flex-col items-center justify-center gap-2 rounded-2xl bg-secondary px-2 py-3 text-sm font-semibold hover:bg-accent"
+              >
+                <Icon className="size-5" />
+                {label}
+              </button>
+            ))}
           </div>
         </>
       );
@@ -426,28 +522,23 @@ export function Dashboard({
 }) {
   const today = useToday();
   const now = clock ?? today;
-  // Keep the original actor's client through sign-out/context invalidation.
-  // The shell remounts this component for the next household/member identity.
   const [client] = useState(db);
   const preference = useDashboardLayout(scope, client);
   const [editor, setEditor] = useState<EditorState | null>(null);
-  const [opening, setOpening] = useState(false);
+  const [catalog, setCatalog] = useState(false);
   const financialAccess =
     canViewFinances(user.role, adultAuthorized) && (scope.kind === "account" || adultAuthorized);
   const allowed = (id: WidgetId) => id !== "finance" || financialAccess;
-  const open = async () => {
-    setOpening(true);
-    const fresh = await preference.reload();
-    setOpening(false);
-    if (fresh)
-      setEditor({
-        ...fresh,
-        layout: {
-          ...fresh.layout,
-          widgets: fresh.layout.widgets.filter((widget) => allowed(widget.id)),
-        },
-        hidden: fresh.layout.widgets.filter((widget) => !allowed(widget.id)),
-      });
+  const fromSnapshot = (snapshot: DashboardSnapshot): EditorState => ({
+    ...snapshot,
+    layout: {
+      ...snapshot.layout,
+      widgets: snapshot.layout.widgets.filter((widget) => allowed(widget.id)),
+    },
+    hidden: snapshot.layout.widgets.filter((widget) => !allowed(widget.id)),
+  });
+  const open = () => {
+    if (!editor && !preference.loading) setEditor(fromSnapshot(preference));
   };
   const save = async () => {
     if (!editor) return;
@@ -470,11 +561,14 @@ export function Dashboard({
       );
     }
   };
-  const visible = preference.layout.widgets.filter((widget) => allowed(widget.id));
+  const visible = editor?.layout ?? {
+    ...preference.layout,
+    widgets: preference.layout.widgets.filter((widget) => allowed(widget.id)),
+  };
   const updateDraft = (layout: DashboardLayout) =>
     setEditor((current) => (current ? { ...current, layout } : null));
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="mb-1 text-sm text-muted-foreground first-letter:uppercase">
@@ -482,276 +576,187 @@ export function Dashboard({
           </p>
           <h2 className="break-words font-display text-3xl font-extrabold">Hola, {user.name}</h2>
         </div>
-        <Button
-          variant="outline"
-          className="h-11 rounded-full bg-card"
-          disabled={preference.loading || opening}
-          onClick={() => void open()}
-        >
-          <SlidersHorizontal className="size-4" /> {opening ? "Abriendo…" : "Personalizar"}
-        </Button>
+        {!editor && (
+          <Button
+            variant="outline"
+            className="h-11 rounded-full bg-card"
+            disabled={preference.loading}
+            onClick={open}
+          >
+            <SlidersHorizontal className="size-4" />
+            Personalizar
+          </Button>
+        )}
       </div>
-      {preference.error && !editor ? (
-        <p
+      {editor && (
+        <section
+          aria-label="Personalizar inicio"
+          className="sticky top-2 z-40 rounded-2xl border bg-card/95 p-3 shadow-card backdrop-blur-md"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold">Personalizar inicio</p>
+              <p className="text-xs text-muted-foreground">
+                Arrastra para mover. Estira la esquina para cambiar el tamaño.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={preference.saving}
+              onClick={() => setCatalog(true)}
+            >
+              <Plus className="size-4" />
+              Widgets
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={preference.saving}
+              onClick={() => void save()}
+            >
+              {preference.saving ? "Guardando…" : "Guardar inicio"}
+            </Button>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={preference.saving}
+              onClick={() => setEditor(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-muted-foreground"
+              disabled={preference.saving}
+              onClick={() =>
+                updateDraft({
+                  ...defaultDashboardLayout(),
+                  widgets: defaultDashboardLayout().widgets.filter((widget) => allowed(widget.id)),
+                })
+              }
+            >
+              <RotateCcw className="size-3" />
+              Restablecer diseño
+            </Button>
+          </div>
+        </section>
+      )}
+      {preference.error && (
+        <div
           role="alert"
           className="rounded-2xl border border-destructive/25 bg-card p-4 text-sm text-destructive"
         >
-          {preference.error}{" "}
-          <button type="button" className="underline" onClick={() => void preference.reload()}>
-            Reintentar
+          <p>{preference.error}</p>
+          <button
+            type="button"
+            className="mt-2 underline"
+            disabled={preference.saving}
+            onClick={() =>
+              void preference.reload().then((fresh) => {
+                if (fresh && editor) setEditor(fromSnapshot(fresh));
+              })
+            }
+          >
+            {editor ? "Cargar versión actual" : "Reintentar"}
           </button>
-        </p>
-      ) : null}
+        </div>
+      )}
       {preference.loading ? (
-        <div role="status" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div role="status" className="grid grid-cols-2 gap-4">
           <span className="sr-only">Cargando tu inicio…</span>
-          {[0, 1, 2].map((id) => (
+          {[0, 1].map((id) => (
             <div
               key={id}
               className="h-64 animate-pulse rounded-3xl bg-muted motion-reduce:animate-none"
             />
           ))}
         </div>
-      ) : visible.length ? (
-        <div
-          aria-label="Widgets de inicio"
-          className={cn("grid items-start gap-4 sm:grid-cols-2", !compact && "xl:grid-cols-3")}
-        >
-          {visible.map((widget) => (
-            <section
-              key={widget.id}
-              aria-label={widgets[widget.id].title}
-              data-widget={widget.id}
-              data-size={widget.size}
-              className={cn(
-                "min-w-0 rounded-3xl p-5 shadow-card",
-                widgets[widget.id].tone,
-                widget.size === "wide" && "sm:col-span-2",
-              )}
-            >
+      ) : (
+        <>
+          <WidgetGrid
+            layout={visible}
+            editing={!!editor}
+            disabled={preference.saving || !!preference.error}
+            onEdit={open}
+            onChange={updateDraft}
+            describe={describeWidget}
+          >
+            {(widget) => (
               <WidgetContent
                 widget={widget}
                 s={s}
                 now={now}
+                user={user}
                 go={go}
                 onCreate={onCreate}
                 onOpenRecord={onOpenRecord ?? ((section) => go(section))}
               />
-            </section>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-3xl border border-dashed bg-card px-6 py-14 text-center">
-          <LayoutGrid className="mx-auto mb-4 size-9 text-muted-foreground" />
-          <h3 className="font-display text-xl font-bold">Tu inicio, a tu manera</h3>
-          <Button className="mt-5 rounded-full" onClick={() => void open()}>
-            Añadir widgets
-          </Button>
-        </div>
+            )}
+          </WidgetGrid>
+          {!visible.widgets.length && (
+            <div className="rounded-3xl border border-dashed bg-card px-6 py-14 text-center">
+              <LayoutGrid className="mx-auto mb-4 size-9 text-muted-foreground" />
+              <h3 className="font-display text-xl font-bold">Tu inicio, a tu manera</h3>
+              <Button
+                className="mt-5 rounded-full"
+                onClick={() => {
+                  open();
+                  setCatalog(true);
+                }}
+              >
+                Añadir widgets
+              </Button>
+            </div>
+          )}
+        </>
       )}
-      <Dialog
-        open={!!editor}
-        onOpenChange={(value) => {
-          if (!value && !preference.saving) setEditor(null);
-        }}
-      >
-        <DialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-3xl p-0">
-          <DialogHeader className="shrink-0 border-b px-5 pb-4 pt-6 text-left">
-            <DialogTitle className="font-display text-2xl font-bold">
-              Personalizar inicio
-            </DialogTitle>
-            <DialogDescription>Elige qué ver y en qué orden.</DialogDescription>
+      <Dialog open={catalog && !!editor} onOpenChange={setCatalog}>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl font-bold">Añadir widgets</DialogTitle>
+            <DialogDescription>Elige lo que quieres tener a mano.</DialogDescription>
           </DialogHeader>
-          {editor ? (
-            <>
-              <div className="space-y-5 overflow-y-auto px-5 py-4">
-                <ol aria-label="Orden de widgets" className="space-y-3">
-                  {editor.layout.widgets.map((widget, index) => {
-                    const { title, Icon, tone } = widgets[widget.id];
-                    return (
-                      <li
-                        key={widget.id}
-                        className="rounded-2xl border bg-card p-3"
-                        aria-label={title}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "grid size-10 shrink-0 place-items-center rounded-xl",
-                              tone,
-                            )}
-                          >
-                            <Icon className="size-5" />
-                          </span>
-                          <span className="min-w-0 flex-1 text-sm font-bold">{title}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-10 shrink-0 rounded-full"
-                            disabled={preference.saving}
-                            aria-label={`Ocultar ${title.toLocaleLowerCase("es")}`}
-                            onClick={() =>
-                              updateDraft({
-                                ...editor.layout,
-                                widgets: editor.layout.widgets.filter(
-                                  (entry) => entry.id !== widget.id,
-                                ),
-                              })
-                            }
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-10 rounded-xl"
-                            disabled={preference.saving}
-                            aria-label={`${widget.size === "wide" ? "Compactar" : "Ampliar"} ${title.toLocaleLowerCase("es")}`}
-                            aria-pressed={widget.size === "wide"}
-                            onClick={() =>
-                              updateDraft({
-                                ...editor.layout,
-                                widgets: editor.layout.widgets.map((entry) =>
-                                  entry.id === widget.id
-                                    ? { ...entry, size: entry.size === "wide" ? "compact" : "wide" }
-                                    : entry,
-                                ),
-                              })
-                            }
-                          >
-                            {widget.size === "wide" ? (
-                              <Maximize2 className="size-4" />
-                            ) : (
-                              <Minimize2 className="size-4" />
-                            )}{" "}
-                            {widget.size === "wide" ? "Amplio" : "Compacto"}
-                          </Button>
-                          <span className="flex gap-1">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="size-10 rounded-xl"
-                              disabled={index === 0 || preference.saving}
-                              aria-label={`Subir ${title.toLocaleLowerCase("es")}`}
-                              onClick={() =>
-                                updateDraft(moveDashboardWidget(editor.layout, widget.id, -1))
-                              }
-                            >
-                              <ArrowUp className="size-4" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="size-10 rounded-xl"
-                              disabled={
-                                index === editor.layout.widgets.length - 1 || preference.saving
-                              }
-                              aria-label={`Bajar ${title.toLocaleLowerCase("es")}`}
-                              onClick={() =>
-                                updateDraft(moveDashboardWidget(editor.layout, widget.id, 1))
-                              }
-                            >
-                              <ArrowDown className="size-4" />
-                            </Button>
-                          </span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-                {WIDGET_IDS.some(
-                  (id) => allowed(id) && !editor.layout.widgets.some((widget) => widget.id === id),
-                ) ? (
-                  <div>
-                    <h3 className="mb-3 text-sm font-bold">Añadir widgets</h3>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {WIDGET_IDS.filter(
-                        (id) =>
-                          allowed(id) && !editor.layout.widgets.some((widget) => widget.id === id),
-                      ).map((id) => {
-                        const { title, Icon } = widgets[id];
-                        return (
-                          <Button
-                            type="button"
-                            key={id}
-                            variant="outline"
-                            className="h-12 justify-start rounded-xl bg-card"
-                            disabled={preference.saving}
-                            aria-label={`Añadir ${title.toLocaleLowerCase("es")}`}
-                            onClick={() =>
-                              updateDraft({
-                                ...editor.layout,
-                                widgets: [...editor.layout.widgets, { id, size: "compact" }],
-                              })
-                            }
-                          >
-                            <Icon className="size-4" />
-                            <span className="min-w-0 flex-1 text-left">{title}</span>
-                            <Plus className="size-4" />
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-                <Button
+          <div className="grid grid-cols-2 gap-3">
+            {WIDGET_IDS.filter(allowed).map((id) => {
+              const { title, Icon, tone } = widgets[id];
+              const added = editor?.layout.widgets.some((widget) => widget.id === id);
+              return (
+                <button
                   type="button"
-                  variant="ghost"
-                  className="text-muted-foreground"
-                  disabled={preference.saving}
-                  onClick={() =>
+                  key={id}
+                  disabled={added || preference.saving}
+                  aria-label={`${added ? "Añadido" : "Añadir"} ${title.toLocaleLowerCase("es")}`}
+                  className={cn(
+                    "flex min-h-32 flex-col items-start justify-between gap-3 rounded-2xl p-4 text-left transition hover:scale-[1.02] disabled:opacity-45 motion-reduce:transform-none",
+                    tone,
+                  )}
+                  onClick={() => {
+                    if (!editor || added) return;
                     updateDraft({
-                      ...defaultDashboardLayout(),
-                      widgets: defaultDashboardLayout().widgets.filter((widget) =>
-                        allowed(widget.id),
-                      ),
-                    })
-                  }
+                      ...editor.layout,
+                      widgets: [...editor.layout.widgets, { id, size: "compact" }],
+                    });
+                  }}
                 >
-                  <RotateCcw className="size-4" /> Restablecer diseño
-                </Button>
-                {preference.error ? (
-                  <div
-                    role="alert"
-                    className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive"
-                  >
-                    <p>{preference.error}</p>
-                    <button
-                      type="button"
-                      className="mt-2 underline"
-                      disabled={preference.saving}
-                      onClick={() => void open()}
-                    >
-                      Cargar versión actual
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex shrink-0 gap-3 border-t bg-background p-5">
-                <Button
-                  variant="outline"
-                  className="h-12 flex-1 rounded-xl"
-                  disabled={preference.saving}
-                  onClick={() => setEditor(null)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  className="h-12 flex-1 rounded-xl"
-                  disabled={preference.saving || opening}
-                  onClick={() => void save()}
-                >
-                  {preference.saving ? "Guardando…" : "Guardar inicio"}
-                </Button>
-              </div>
-            </>
-          ) : null}
+                  <span className="flex w-full items-center justify-between">
+                    <Icon className="size-6" />
+                    {added ? <Check className="size-4" /> : <Plus className="size-4" />}
+                  </span>
+                  <span className="text-sm font-bold">{title}</span>
+                </button>
+              );
+            })}
+          </div>
+          <Button className="rounded-full" onClick={() => setCatalog(false)}>
+            Listo
+          </Button>
         </DialogContent>
       </Dialog>
     </div>

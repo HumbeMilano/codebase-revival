@@ -7,7 +7,14 @@ import { NativeInputShortcut } from "./NativeInputShortcut";
 import type { Contribution, LedgerBill } from "@/lib/ledger";
 import { Avatar } from "./Kiosk";
 import type { FamilyEvent, FamilyNote } from "./planner-data";
-import { MEMBERS, memberBg, type Chore, type Member, type ShopItem } from "./data";
+import {
+  MEMBERS,
+  memberBg,
+  type Chore,
+  type Member,
+  type ShopItem,
+  type ShoppingList,
+} from "./data";
 import { bindHubPersistence, HOUSEHOLD_ID } from "@/lib/hub-db";
 import { supabase } from "@/integrations/supabase/client";
 import { isDeviceMode } from "@/lib/db";
@@ -16,7 +23,6 @@ import {
   type PersistedSetter,
   type SyncGuard,
 } from "@/lib/persisted-collection";
-import { addShoppingItem } from "@/lib/shopping";
 import { persistenceErrorMessage } from "@/lib/persistence-errors";
 import { dateKey, parseDate } from "./planner-data";
 import { useToday } from "@/hooks/use-today";
@@ -79,6 +85,8 @@ export interface HubState {
   setChores: PersistedSetter<Chore[]>;
   items: ShopItem[];
   setItems: PersistedSetter<ShopItem[]>;
+  shoppingLists?: ShoppingList[];
+  setShoppingLists?: PersistedSetter<ShoppingList[]>;
   shoppingSync?: ReturnType<typeof useOfflineShopping>;
   bills: LedgerBill[];
   setBills: PersistedSetter<LedgerBill[]>;
@@ -127,6 +135,9 @@ export function useHubState({
     guard,
     saveError,
   );
+  const [shoppingLists, setShoppingLists, setShoppingListsRaw, listStatus] = usePersistedCollection<
+    ShoppingList[]
+  >([], binding.syncLists, guard, saveError);
   const [bills, setBills, setBillsRaw, billStatus] = usePersistedCollection<LedgerBill[]>(
     [],
     binding.syncBills,
@@ -168,8 +179,9 @@ export function useHubState({
         setEventsRaw(data.events);
         setNotesRaw(data.notes);
         setChoresRaw(data.chores);
-        if (shoppingContext) await replaceOfflineShopping(data.items);
+        if (shoppingContext) await replaceOfflineShopping(data.items, data.shoppingLists);
         else setItemsRaw(data.items);
+        setShoppingListsRaw(data.shoppingLists);
         setBillsRaw(data.bills);
         setContributionsRaw(data.contributions);
         failures = 0;
@@ -227,6 +239,16 @@ export function useHubState({
               event: "*",
               schema: "public",
               table: "shopping_items",
+              filter: `household_id=eq.${HOUSEHOLD_ID}`,
+            },
+            requestRefresh,
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "shopping_lists",
               filter: `household_id=eq.${HOUSEHOLD_ID}`,
             },
             requestRefresh,
@@ -294,6 +316,7 @@ export function useHubState({
     setNotesRaw,
     setChoresRaw,
     setItemsRaw,
+    setShoppingListsRaw,
     setBillsRaw,
     setContributionsRaw,
     shoppingContext,
@@ -311,6 +334,7 @@ export function useHubState({
     noteStatus,
     choreStatus,
     itemStatus,
+    listStatus,
     billStatus,
     contributionStatus,
   ];
@@ -330,6 +354,8 @@ export function useHubState({
     setChores,
     items: shoppingContext ? shopping.items : items,
     setItems: shoppingContext ? shopping.setItems : setItems,
+    shoppingLists: shoppingContext ? shopping.lists : shoppingLists,
+    setShoppingLists: shoppingContext ? shopping.setLists : setShoppingLists,
     ...(shoppingContext ? { shoppingSync: shopping } : {}),
     bills,
     setBills,
@@ -720,185 +746,4 @@ export function Chores({
   );
 }
 
-export function Shopping({
-  s,
-  createRequest = 0,
-}: {
-  s: Pick<HubState, "items" | "setItems" | "shoppingSync">;
-  compact: boolean;
-  createRequest?: number;
-}) {
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (createRequest) input.current?.focus();
-  }, [createRequest]);
-  const add = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (busy || !name.trim()) return;
-    const item = { id: crypto.randomUUID(), name: name.trim(), done: false };
-    if (
-      s.items.some((row) => row.name.trim().toLocaleLowerCase() === item.name.toLocaleLowerCase())
-    ) {
-      toast.info("Ese producto ya está en la lista.");
-      return;
-    }
-    setBusy(true);
-    const saved = await s.setItems((rows) => addShoppingItem(rows, item));
-    setBusy(false);
-    if (saved) {
-      setName("");
-      input.current?.focus();
-    }
-  };
-  const remove = async (item: ShopItem) => {
-    const position = s.items.findIndex((row) => row.id === item.id);
-    if (!(await s.setItems((rows) => rows.filter((row) => row.id !== item.id)))) return;
-    toast(`"${item.name}" eliminado`, {
-      action: {
-        label: "Deshacer",
-        onClick: () => {
-          void s.setItems((rows) => [
-            ...rows.slice(0, position),
-            { id: item.id, name: item.name, done: item.done },
-            ...rows.slice(position),
-          ]);
-        },
-      },
-    });
-  };
-  const toggle = (id: string) => {
-    void s.setItems((rows) =>
-      rows.map((row) => (row.id === id ? { ...row, done: !row.done } : row)),
-    );
-  };
-  return (
-    <div className="mx-auto max-w-2xl space-y-4">
-      {s.shoppingSync && (
-        <section
-          className="space-y-2 rounded-2xl bg-secondary p-4 text-sm"
-          aria-label="Sincronización de compras"
-        >
-          <p role="status">
-            {s.shoppingSync.loading
-              ? "Preparando almacenamiento local…"
-              : s.shoppingSync.syncing
-                ? "Sincronizando compras…"
-                : s.shoppingSync.pending
-                  ? `${s.shoppingSync.pending} cambios guardados en este dispositivo, pendientes de sincronizar.`
-                  : "Lista guardada en este dispositivo para usar sin conexión."}
-          </p>
-          {s.shoppingSync.error && <p role="alert">{s.shoppingSync.error}</p>}
-          {s.shoppingSync.conflict ? (
-            <div className="space-y-2">
-              <p>
-                Si aplicas tus cambios, tendrán prioridad en los productos que modificaste. Los
-                demás productos del hogar se conservarán.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={s.shoppingSync.syncing || navigator.onLine === false}
-                  onClick={() => void s.shoppingSync?.resolve(true)}
-                >
-                  Aplicar mis cambios
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={s.shoppingSync.syncing || navigator.onLine === false}
-                  onClick={() => void s.shoppingSync?.resolve(false)}
-                >
-                  Usar la lista del hogar
-                </Button>
-              </div>
-            </div>
-          ) : (
-            !!s.shoppingSync.pending && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={s.shoppingSync.syncing || navigator.onLine === false}
-                onClick={() => void s.shoppingSync?.sync()}
-              >
-                Sincronizar ahora
-              </Button>
-            )
-          )}
-        </section>
-      )}
-      <form
-        onSubmit={(event) => void add(event)}
-        className="flex items-center gap-2 rounded-2xl bg-card p-2 pl-4 shadow-card"
-      >
-        <input
-          ref={input}
-          id="shopping-product"
-          maxLength={150}
-          aria-label="Producto"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Añadir producto"
-          className="min-w-0 flex-1 bg-transparent text-base outline-none"
-        />
-        <NativeInputShortcut targetId="shopping-product" />
-        <Button
-          type="submit"
-          size="icon"
-          disabled={busy || !name.trim()}
-          aria-label="Añadir producto"
-          className="size-11 shrink-0 rounded-xl"
-        >
-          <Plus />
-        </Button>
-      </form>
-      <ul className="divide-y divide-border">
-        {s.items.map((item) => (
-          <li key={item.id} className="flex items-center gap-2 py-1">
-            <Button
-              variant="ghost"
-              aria-label={item.name}
-              aria-pressed={item.done}
-              onClick={() => toggle(item.id)}
-              className="h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-3 text-left"
-            >
-              <span
-                className={cn(
-                  "grid size-6 shrink-0 place-items-center rounded-full border-2",
-                  item.done ? "border-success-strong bg-success" : "border-foreground/25",
-                )}
-              >
-                {item.done && <Check />}
-              </span>
-              <span
-                className={cn(
-                  "min-w-0 break-words text-base",
-                  item.done && "text-muted-foreground line-through",
-                )}
-              >
-                {item.name}
-              </span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Eliminar ${item.name}`}
-              onClick={() => void remove(item)}
-            >
-              <Trash2 />
-            </Button>
-          </li>
-        ))}
-      </ul>
-      {!s.items.length && (
-        <p className="rounded-2xl bg-card py-12 text-center text-muted-foreground">
-          Tu lista de compras está vacía.
-        </p>
-      )}
-    </div>
-  );
-}
+export { Shopping } from "./ShoppingLists";

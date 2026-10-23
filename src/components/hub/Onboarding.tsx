@@ -95,7 +95,9 @@ function Shell({ children, compact }: { children: React.ReactNode; compact: bool
 /** First screen for a browser with no account and no paired tablet. */
 export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () => void }) {
   const [view, setView] = useState<"login" | "signup" | "pair" | "forgot">(() =>
-    pendingInvitation() ? "signup" : "login",
+    pendingInvitation() || new URLSearchParams(window.location.search).get("registro") === "1"
+      ? "signup"
+      : "login",
   );
   const [email, setEmail] = useState(() => {
     const parsed = credentials.shape.email.safeParse(

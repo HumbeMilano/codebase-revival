@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/integrations/supabase/types";
-import type { ShopItem } from "@/components/hub/data";
+import type { ShopItem, ShoppingList } from "@/components/hub/data";
 import { readAllPages } from "@/lib/hub-db";
 import {
   acceptShoppingSnapshot,
   enqueueShopping,
+  enqueueShoppingLists,
+  defaultShoppingList,
   flushShopping,
   readShopping,
   resolveShoppingConflict,
@@ -121,11 +123,37 @@ export function useOfflineShopping(
     },
     [scope, sync],
   );
+  const setLists: PersistedSetter<ShoppingList[]> = useCallback(
+    async (next) => {
+      if (!scope) return false;
+      try {
+        const result = await enqueueShoppingLists(scope, (lists) =>
+          typeof next === "function" ? next(lists) : next,
+        );
+        if (currentScope.current === scope) {
+          setRecord(result);
+          setError("");
+        }
+        if (typeof window.BroadcastChannel === "function") {
+          const channel = new BroadcastChannel("homehub-shopping");
+          channel.postMessage(scope);
+          channel.close();
+        }
+        void sync();
+        return true;
+      } catch (reason) {
+        if (currentScope.current === scope)
+          setError(reason instanceof Error ? reason.message : "No se pudo guardar la lista.");
+        return false;
+      }
+    },
+    [scope, sync],
+  );
   const replace = useCallback(
-    async (items: ShopItem[]) => {
+    async (items: ShopItem[], lists?: ShoppingList[]) => {
       if (!scope) return;
       try {
-        const next = await acceptShoppingSnapshot(scope, items);
+        const next = await acceptShoppingSnapshot(scope, items, lists);
         if (currentScope.current === scope) setRecord(next);
         if (next.queue.length) void sync();
       } catch {
@@ -144,23 +172,46 @@ export function useOfflineShopping(
       if (!scope || !allowSync || navigator.onLine === false) return;
       setSyncing(true);
       try {
-        const rows = await readAllPages<Tables<"shopping_items">>((from, to) =>
-          client
-            .from("shopping_items")
-            .select("*", { count: "exact" })
-            .eq("household_id", householdId)
-            .order("position")
-            .order("id")
-            .range(from, to),
-        );
+        const [rows, listRows] = await Promise.all([
+          readAllPages<Tables<"shopping_items">>((from, to) =>
+            client
+              .from("shopping_items")
+              .select("*", { count: "exact" })
+              .eq("household_id", householdId)
+              .order("position")
+              .order("id")
+              .range(from, to),
+          ),
+          readAllPages<Tables<"shopping_lists">>((from, to) =>
+            client
+              .from("shopping_lists")
+              .select("*", { count: "exact" })
+              .eq("household_id", householdId)
+              .order("position")
+              .order("id")
+              .range(from, to),
+          ),
+        ]);
         const remote = rows.map((r) => ({
           id: r.id,
           name: r.name,
           done: r.done,
           position: r.position,
           revision: r.revision,
+          listId: r.list_id,
         }));
-        const next = await resolveShoppingConflict(scope, remote, keepLocal);
+        const next = await resolveShoppingConflict(
+          scope,
+          remote,
+          keepLocal,
+          listRows.map((list) => ({
+            id: list.id,
+            name: list.name,
+            archived: list.archived,
+            position: list.position,
+            revision: list.revision,
+          })),
+        );
         if (currentScope.current === scope) {
           setRecord(next);
           setError("");
@@ -175,8 +226,11 @@ export function useOfflineShopping(
     [scope, allowSync, client, householdId, sync],
   );
   return {
+    householdId,
     items: record?.local ?? [],
+    lists: record?.lists ?? (householdId ? [defaultShoppingList(householdId)] : []),
     setItems,
+    setLists,
     replace,
     pending: record?.queue.length ?? 0,
     conflict: record?.conflict ?? false,
