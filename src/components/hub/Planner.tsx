@@ -47,20 +47,25 @@ export function FamilyCalendar({
   user,
   compact,
   createRequest,
+  initialEventId,
 }: {
   events: FamilyEvent[];
   setEvents: Setter<FamilyEvent>;
   user: Member;
   compact: boolean;
   createRequest?: number;
+  initialEventId?: string | undefined;
 }) {
+  const initialEvent = events.find((event) => event.id === initialEventId);
   const [month, setMonth] = useState(() => {
-    const now = new Date();
+    const now = initialEvent ? parseDate(initialEvent.date) : new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [selected, setSelected] = useState(() => dateKey(new Date()));
+  const [selected, setSelected] = useState(() => initialEvent?.date ?? dateKey(new Date()));
   const [who, setWho] = useState("all");
-  const [draft, setDraft] = useState<FamilyEvent | null>(null);
+  const [draft, setDraft] = useState<FamilyEvent | null>(() =>
+    initialEvent ? { ...initialEvent } : null,
+  );
   const [saving, setSaving] = useState(false);
   const openedRequest = useRef(0);
   useEffect(() => {
@@ -327,14 +332,19 @@ export function FamilyNotes({
   user,
   compact,
   createRequest,
+  initialNoteId,
 }: {
   notes: FamilyNote[];
   setNotes: Setter<FamilyNote>;
   user: Member;
   compact: boolean;
   createRequest?: number;
+  initialNoteId?: string | undefined;
 }) {
-  const [draft, setDraft] = useState<FamilyNote | null>(null);
+  const [draft, setDraft] = useState<FamilyNote | null>(() => {
+    const note = notes.find((entry) => entry.id === initialNoteId);
+    return note ? { ...note } : null;
+  });
   const [saving, setSaving] = useState(false);
   const openedRequest = useRef(0);
   useEffect(() => {

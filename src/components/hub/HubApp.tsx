@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { canViewFinances } from "@/lib/finance-visibility";
 import { Avatar, Kiosk, PinPad, useClock } from "./Kiosk";
-import { Chores, Dashboard, Shopping, useHubState } from "./Screens";
+import { Chores, Shopping, useHubState } from "./Screens";
 import { HOUSEHOLD, MEMBERS, setMembers, type Member } from "./data";
 import { HouseholdSettings, SetupHousehold, Welcome } from "./Onboarding";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +52,7 @@ import {
 } from "@/lib/offline-shopping";
 import { OfflineShopping } from "./OfflineShopping";
 
+const Dashboard = lazy(() => import("./Dashboard").then((m) => ({ default: m.Dashboard })));
 const Finance = lazy(() => import("./Finance").then((m) => ({ default: m.Finance })));
 const FamilyCalendar = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyCalendar })));
 const FamilyNotes = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyNotes })));
@@ -457,6 +458,7 @@ function HubShell({
   const [askAdmin, setAskAdmin] = useState(false);
   const [more, setMore] = useState(false);
   const [create, setCreate] = useState<{ tab: Tab; id: number } | null>(null);
+  const [record, setRecord] = useState<{ tab: "calendar" | "notes"; id: string } | null>(null);
   const now = useClock();
   useEffect(() => {
     setUser((previous) =>
@@ -486,6 +488,7 @@ function HubShell({
   const go = (next: Tab) => {
     setMore(false);
     setCreate(null);
+    setRecord(null);
     if (next === "finance" && !financialAccess) {
       setAskAdmin(true);
       return;
@@ -533,7 +536,9 @@ function HubShell({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs text-muted-foreground">{HOUSEHOLD.name}</p>
                 <p className="truncate font-display text-lg font-bold">
-                  {compact ? TABS.find((t) => t.id === tab)?.label : `Hola, ${user.name}`}
+                  {compact || tab === "home"
+                    ? TABS.find((t) => t.id === tab)?.label
+                    : `Hola, ${user.name}`}
                 </p>
               </div>
               {!compact && (
@@ -606,7 +611,19 @@ function HubShell({
                     s={s}
                     user={user}
                     compact={compact}
+                    key={mode === "account" ? shoppingContext?.accountId : user.id}
+                    scope={
+                      mode === "account" && shoppingContext
+                        ? { kind: "account", accountId: shoppingContext.accountId }
+                        : { kind: "device", householdId: HOUSEHOLD.id, memberId: user.id }
+                    }
+                    now={now}
                     go={go}
+                    onCreate={quickAdd}
+                    onOpenRecord={(next, id) => {
+                      go(next);
+                      setRecord({ tab: next, id });
+                    }}
                     adultAuthorized={financialAccess}
                   />
                 )}
@@ -638,6 +655,7 @@ function HubShell({
                     user={user}
                     compact={compact}
                     createRequest={create?.tab === "calendar" ? create.id : 0}
+                    initialEventId={record?.tab === "calendar" ? record.id : undefined}
                   />
                 )}
                 {tab === "notes" && (
@@ -647,6 +665,7 @@ function HubShell({
                     user={user}
                     compact={compact}
                     createRequest={create?.tab === "notes" ? create.id : 0}
+                    initialNoteId={record?.tab === "notes" ? record.id : undefined}
                   />
                 )}
                 {tab === "household" && canManage && (

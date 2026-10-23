@@ -235,6 +235,27 @@ export type Database = {
           },
         ];
       };
+      dashboard_preferences: {
+        Row: {
+          layout: Json;
+          revision: number;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          layout: Json;
+          revision?: number;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          layout?: Json;
+          revision?: number;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       devices: {
         Row: {
           created_at: string;
@@ -949,6 +970,21 @@ export type Database = {
         Args: { _changes: Json; _household: string; _table: string };
         Returns: Json;
       };
+      save_dashboard_layout: {
+        Args: { _expected_revision: number; _layout: Json };
+        Returns: {
+          layout: Json;
+          revision: number;
+          updated_at: string;
+          user_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "dashboard_preferences";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       sync_shopping: {
         Args: {
           _changes: Json;
@@ -971,6 +1007,7 @@ export type Database = {
         Args: { _key: string; _name?: string; _pin?: string; _role?: string };
         Returns: undefined;
       };
+      valid_dashboard_layout: { Args: { _layout: Json }; Returns: boolean };
       verify_pin: {
         Args: { _admin_only?: boolean; _pin: string };
         Returns: {
