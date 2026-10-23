@@ -19,16 +19,12 @@ export function OfflineShopping({
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">{context.householdName}</p>
-          <h1 className="font-display text-3xl font-bold">Compras sin conexión</h1>
+          <h1 className="font-display text-3xl font-bold">Compras</h1>
         </div>
         <Button type="button" variant="outline" onClick={onReconnect}>
           Volver a conectar
         </Button>
       </header>
-      <p className="text-sm text-muted-foreground">
-        Puedes añadir, marcar y quitar productos. Los cambios se enviarán cuando vuelva la conexión
-        y se confirme de nuevo tu acceso al hogar.
-      </p>
       <Shopping
         compact
         s={{

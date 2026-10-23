@@ -105,7 +105,6 @@ export function HubApp() {
   }, []);
   const [gate, setGate] = useState<Gate>({ status: "loading" });
   const [compact, setCompact] = useState(false);
-  const [online, setOnline] = useState(true);
   const [timeFormat, setTimeFormat] = useState<"12" | "24">("24");
   const [membersVersion, setMembersVersion] = useState(0);
   const sequence = useRef(0);
@@ -145,8 +144,7 @@ export function HubApp() {
         }
         setGate({
           status: "error",
-          message:
-            "Abre las compras con conexión al menos una vez en este dispositivo antes de utilizarlas sin internet.",
+          message: "Conéctate para abrir tus listas.",
         });
         return;
       }
@@ -273,15 +271,12 @@ export function HubApp() {
     const media = window.matchMedia("(max-width: 899px)");
     const resize = () => setCompact(media.matches);
     const network = () => {
-      setOnline(navigator.onLine);
       if (navigator.onLine && !currentDbIdentity()) void reload();
     };
     resize();
-    setOnline(navigator.onLine);
     void reload();
     media.addEventListener("change", resize);
     window.addEventListener("online", network);
-    window.addEventListener("offline", network);
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "TOKEN_REFRESHED" && session) {
         if (currentDbIdentity() === sessionIdentity(session.user.id, session.access_token))
@@ -314,7 +309,6 @@ export function HubApp() {
       preferencesRevision.current++;
       media.removeEventListener("change", resize);
       window.removeEventListener("online", network);
-      window.removeEventListener("offline", network);
       data.subscription.unsubscribe();
     };
   }, [reload]);
@@ -368,12 +362,6 @@ export function HubApp() {
   };
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      {!online && (
-        <p role="status" className="z-40 bg-accent px-4 py-2 text-center text-sm">
-          Sin conexión. Las compras se guardan en este dispositivo; las otras secciones necesitan
-          internet para guardar.
-        </p>
-      )}
       <div className="relative flex min-h-0 flex-1 flex-col">
         {gate.status === "offline" && (
           <OfflineShopping context={gate.context} onReconnect={() => void reload()} />
@@ -681,15 +669,13 @@ function HubShell({
               aria-live="polite"
               className="mt-6 text-right text-xs text-muted-foreground"
             >
-              {s.shoppingSync?.pending
-                ? `${s.shoppingSync.pending} cambios de compras guardados en este dispositivo, pendientes de sincronizar`
-                : s.saving
-                  ? "Guardando cambios…"
-                  : s.error
-                    ? "Hay cambios que no se guardaron"
-                    : s.lastSavedAt
-                      ? "Cambios guardados"
-                      : ""}
+              {s.saving
+                ? "Guardando cambios…"
+                : s.error
+                  ? "Hay cambios que no se guardaron"
+                  : s.lastSavedAt
+                    ? "Cambios guardados"
+                    : ""}
             </p>
           </main>
           {compact && (

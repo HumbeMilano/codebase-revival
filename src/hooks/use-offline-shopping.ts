@@ -54,7 +54,7 @@ export function useOfflineShopping(
         setError(
           ["40001", "23505"].includes(code)
             ? "La lista cambió en otro dispositivo. Elige qué cambios conservar."
-            : "Los cambios siguen guardados en este dispositivo. No se pudieron sincronizar todavía.",
+            : "No se pudieron sincronizar los cambios. Vuelve a intentarlo.",
         );
       }
     } finally {
@@ -218,7 +218,7 @@ export function useOfflineShopping(
         }
         void sync();
       } catch {
-        setError("No se pudo cargar la lista actual. Tus cambios permanecen en este dispositivo.");
+        setError("No se pudo cargar la lista actual.");
       } finally {
         setSyncing(false);
       }
