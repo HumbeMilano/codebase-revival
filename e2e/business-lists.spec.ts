@@ -112,3 +112,39 @@ test("the business console edits both subscription prices and records external p
   expect(backend.unexpectedRequests).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("business-console.png"), fullPage: true });
 });
+
+test("signing out of the business console closes offline household access", async ({
+  page,
+  context,
+}) => {
+  const backend = new HouseholdBackend();
+  backend.platformAdmin = true;
+  await backend.install(page);
+  await signIn(page);
+  await section(page, "Compras");
+  await page.getByLabel("Producto", { exact: true }).fill("Compra privada");
+  await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
+  await expect.poll(() => backend.rows["shopping_items"]?.length).toBe(1);
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller)
+      await new Promise<void>((resolve) =>
+        navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), {
+          once: true,
+        }),
+      );
+  });
+  await page.goto("/admin");
+  await page.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
+  await expect(page.getByLabel("Correo", { exact: true })).toBeVisible();
+  await context.setOffline(true);
+  await page.goto("/");
+  await expect(
+    page.getByText(
+      "Abre las compras con conexión al menos una vez en este dispositivo antes de utilizarlas sin internet.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Compra privada", exact: true })).toHaveCount(0);
+  expect(backend.unexpectedRequests).toEqual([]);
+});

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { createAdminClient } from "@/lib/admin-client";
 import { clearFinanceAccess, invalidateDbContext } from "@/lib/db";
+import { ACTIVE_SHOPPING_ACCOUNT } from "@/lib/offline-shopping";
 import { BusinessConsole, type BusinessTab } from "./BusinessConsole";
 
 type Stats = {
@@ -123,8 +124,15 @@ export function AdminPage() {
   useEffect(() => {
     void load();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const { data } = supabase.auth.onAuthStateChange((event) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+        if (
+          event === "SIGNED_OUT" ||
+          (event === "SIGNED_IN" &&
+            session &&
+            localStorage.getItem(ACTIVE_SHOPPING_ACCOUNT) !== session.user.id)
+        )
+          localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
         if (event === "SIGNED_OUT") invalidateDbContext();
         sequence.current += 1;
         if (actor.current) actor.current.valid = false;
