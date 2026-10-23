@@ -640,6 +640,9 @@ function HubShell({
                   <FamilyCalendar
                     events={s.events}
                     setEvents={s.setEvents}
+                    bills={financialAccess ? s.bills : []}
+                    setBills={s.setBills}
+                    financialAccess={financialAccess}
                     user={user}
                     compact={compact}
                     createRequest={create?.tab === "calendar" ? create.id : 0}

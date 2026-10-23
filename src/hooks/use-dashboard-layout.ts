@@ -22,7 +22,11 @@ type Binding = {
   save: (layout: DashboardLayout, revision: number) => Promise<DashboardSnapshot | null>;
 };
 const readDevice = (key: string): DashboardSnapshot => {
-  const text = localStorage.getItem(key);
+  const text =
+    localStorage.getItem(key) ??
+    localStorage.getItem(
+      key.replace("homehub-dashboard-device:v2:", "homehub-dashboard-device:v1:"),
+    );
   let value: unknown;
   try {
     value = text ? JSON.parse(text) : null;
@@ -132,7 +136,14 @@ export function useDashboardLayout(scope: DashboardScope, client: SupabaseClient
       if (document.visibilityState !== "hidden") void operation.load();
     };
     const storage = (event: StorageEvent) => {
-      if (!accountId && event.key === key) reload();
+      if (
+        !accountId &&
+        (event.key === key ||
+          (!localStorage.getItem(key) &&
+            event.key ===
+              key.replace("homehub-dashboard-device:v2:", "homehub-dashboard-device:v1:")))
+      )
+        reload();
     };
     window.addEventListener("focus", reload);
     window.addEventListener("online", reload);

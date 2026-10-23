@@ -293,9 +293,13 @@ export type Database = {
       };
       events: {
         Row: {
+          completed: boolean;
+          completed_at: string | null;
           date: string;
+          end_time: string;
           household_id: string;
           id: string;
+          kind: string;
           member_key: string;
           note: string;
           revision: number;
@@ -303,9 +307,13 @@ export type Database = {
           title: string;
         };
         Insert: {
+          completed?: boolean;
+          completed_at?: string | null;
           date: string;
+          end_time?: string;
           household_id: string;
           id?: string;
+          kind?: string;
           member_key: string;
           note?: string;
           revision?: number;
@@ -313,9 +321,13 @@ export type Database = {
           title: string;
         };
         Update: {
+          completed?: boolean;
+          completed_at?: string | null;
           date?: string;
+          end_time?: string;
           household_id?: string;
           id?: string;
+          kind?: string;
           member_key?: string;
           note?: string;
           revision?: number;

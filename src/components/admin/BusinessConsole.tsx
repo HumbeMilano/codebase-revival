@@ -58,7 +58,7 @@ const auditSchema = z.object({
   action: z.string(),
   target_id: z.string(),
   created_at: z.string(),
-  details: z.record(z.unknown()),
+  details: z.record(z.string(), z.unknown()),
 });
 const overviewSchema = z.object({
   settings: settingsSchema,

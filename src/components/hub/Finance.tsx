@@ -195,12 +195,14 @@ function BillRow({
 
 type SplitMode = "one" | "equal" | "percent" | "amount" | "mixed";
 
-function BillForm({
+export function BillForm({
   initial,
+  defaultDay,
   onSave,
   onClose,
 }: {
   initial?: LedgerBill | undefined;
+  defaultDay?: number;
   onSave: (b: LedgerBill) => Promise<boolean>;
   onClose: () => void;
 }) {
@@ -214,7 +216,7 @@ function BillForm({
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState(initial?.name ?? "");
   const [amount, setAmount] = useState(initial ? String(initial.base) : "");
-  const [day, setDay] = useState(initial ? String(initial.dueDay) : "");
+  const [day, setDay] = useState(initial ? String(initial.dueDay) : String(defaultDay ?? ""));
   const [category, setCategory] = useState(initial?.category ?? "Vivienda");
   const [autoPay, setAutoPay] = useState(initial?.autoPay ?? false);
   const [mode, setMode] = useState<SplitMode>(initMode);

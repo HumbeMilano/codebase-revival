@@ -20,19 +20,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDashboardLayout } from "@/hooks/use-dashboard-layout";
 import { useToday } from "@/hooks/use-today";
 import { isChoreArchived } from "@/lib/chore-archive";
 import {
   defaultDashboardLayout,
   WIDGET_IDS,
+  WIDGET_SIZES,
+  widgetDimensions,
   type DashboardLayout,
   type DashboardScope,
   type DashboardSnapshot,
@@ -46,11 +42,21 @@ import { cn } from "@/lib/utils";
 import { MEMBERS, type Member } from "./data";
 import { Avatar } from "./Kiosk";
 import { WidgetGrid } from "./WidgetGrid";
-import { dateKey, eventWhen, parseDate, upcomingEvents } from "./planner-data";
+import { dateKey, eventWhen, parseDate } from "./planner-data";
+import { PersonalWidget, TinyWidget } from "./PersonalWidgets";
+import { upcomingCalendarItems } from "@/lib/calendar";
 import { Ring, type HubState } from "./Screens";
 
 type Section = "chores" | "shopping" | "calendar" | "notes" | "finance";
 const widgets = {
+  "member-summary": { title: "Resumen de miembro", Icon: Users, tone: "bg-sky text-foreground" },
+  "month-calendar": { title: "Calendario", Icon: CalendarDays, tone: "bg-lilac text-foreground" },
+  bills: { title: "Facturas", Icon: Wallet, tone: "bg-card text-card-foreground" },
+  "specific-note": {
+    title: "Nota específica",
+    Icon: StickyNote,
+    tone: "bg-accent text-accent-foreground",
+  },
   tasks: { title: "Tareas de hoy", Icon: CheckSquare, tone: "bg-success text-success-foreground" },
   shopping: {
     title: "Listas de compras",
@@ -120,8 +126,10 @@ function WidgetContent({
   go,
   onCreate,
   onOpenRecord,
+  configure,
   user,
 }: {
+  configure: () => void;
   user: Member;
   widget: DashboardWidget;
   s: HubState;
@@ -130,6 +138,30 @@ function WidgetContent({
   onCreate: (section: Section) => void;
   onOpenRecord: (section: "calendar" | "notes", id: string) => void;
 }) {
+  if (widgetDimensions[widget.size][1] === 1)
+    return (
+      <TinyWidget
+        widget={widget}
+        s={s}
+        now={now}
+        user={user}
+        configure={configure}
+        open={onOpenRecord}
+        go={go}
+      />
+    );
+  if (["member-summary", "month-calendar", "bills", "specific-note"].includes(widget.id))
+    return (
+      <PersonalWidget
+        widget={widget}
+        s={s}
+        now={now}
+        user={user}
+        configure={configure}
+        open={onOpenRecord}
+        go={go}
+      />
+    );
   const today = dateKey(now);
   const chores = s.chores.filter(
     (chore) =>
@@ -137,7 +169,8 @@ function WidgetContent({
       !isChoreArchived(chore, now) &&
       (chore.dueDate === today || (!chore.done && !!chore.dueDate && chore.dueDate < today)),
   );
-  const count = widget.size === "large" ? 5 : widget.size === "wide" ? 3 : 2;
+  const count =
+    widgetDimensions[widget.size][1] > 2 ? 5 : widgetDimensions[widget.size][0] > 1 ? 3 : 2;
   switch (widget.id) {
     case "my-tasks":
     case "tasks": {
@@ -275,10 +308,12 @@ function WidgetContent({
     case "calendar": {
       const end = new Date(now);
       end.setDate(end.getDate() + 7);
-      const events = upcomingEvents(
-        widget.id === "week" ? s.events.filter((event) => event.date < dateKey(end)) : s.events,
+      const events = upcomingCalendarItems(
+        s.events,
+        s.bills,
         now,
         count,
+        widget.id === "week" ? dateKey(end) : undefined,
       );
       return (
         <>
@@ -318,7 +353,7 @@ function WidgetContent({
       const notes = [...s.notes]
         .filter((note) => widget.id !== "pinned-note" || note.pinned)
         .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-        .slice(0, widget.id === "pinned-note" ? 1 : widget.size === "large" ? 4 : 1);
+        .slice(0, widget.id === "pinned-note" ? 1 : widgetDimensions[widget.size][1] >= 3 ? 4 : 1);
       return (
         <>
           <WidgetHeader id={widget.id} onOpen={() => go("notes")} />
@@ -495,6 +530,7 @@ function WidgetContent({
       );
     }
   }
+  return null;
 }
 
 type EditorState = DashboardSnapshot & { hidden: DashboardWidget[] };
@@ -526,9 +562,11 @@ export function Dashboard({
   const preference = useDashboardLayout(scope, client);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [catalog, setCatalog] = useState(false);
+  const [configuration, setConfiguration] = useState<string | null>(null);
   const financialAccess =
     canViewFinances(user.role, adultAuthorized) && (scope.kind === "account" || adultAuthorized);
-  const allowed = (id: WidgetId) => id !== "finance" || financialAccess;
+  const allowed = (id: WidgetId) =>
+    !["finance", "bills", "member-summary"].includes(id) || financialAccess;
   const fromSnapshot = (snapshot: DashboardSnapshot): EditorState => ({
     ...snapshot,
     layout: {
@@ -548,7 +586,7 @@ export function Dashboard({
         widgets: [
           ...editor.layout.widgets,
           ...editor.hidden.filter(
-            (hidden) => !editor.layout.widgets.some((widget) => widget.id === hidden.id),
+            (hidden) => !editor.layout.widgets.some((widget) => widget.key === hidden.key),
           ),
         ],
       },
@@ -596,9 +634,6 @@ export function Dashboard({
           <div className="flex flex-wrap items-center gap-2">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold">Personalizar inicio</p>
-              <p className="text-xs text-muted-foreground">
-                Arrastra para mover. Estira la esquina para cambiar el tamaño.
-              </p>
             </div>
             <Button
               type="button"
@@ -687,11 +722,16 @@ export function Dashboard({
             onEdit={open}
             onChange={updateDraft}
             describe={describeWidget}
+            onConfigure={setConfiguration}
           >
             {(widget) => (
               <WidgetContent
+                configure={() => {
+                  open();
+                  setConfiguration(widget.key);
+                }}
                 widget={widget}
-                s={s}
+                s={financialAccess ? s : { ...s, bills: [], contributions: [] }}
                 now={now}
                 user={user}
                 go={go}
@@ -717,22 +757,128 @@ export function Dashboard({
           )}
         </>
       )}
+      <Dialog
+        open={!!configuration && !!editor}
+        onOpenChange={(value) => {
+          if (!value) setConfiguration(null);
+        }}
+      >
+        <DialogContent
+          className="max-h-[85dvh] overflow-y-auto rounded-3xl"
+          aria-describedby={undefined}
+        >
+          <DialogHeader>
+            <DialogTitle>Configurar widget</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const widget = editor?.layout.widgets.find((w) => w.key === configuration);
+            if (!widget || !editor) return null;
+            const change = (value: Partial<DashboardWidget>) =>
+              updateDraft({
+                ...editor.layout,
+                widgets: editor.layout.widgets.map((w) =>
+                  w.key === widget.key ? { ...w, ...value } : w,
+                ),
+              });
+            return (
+              <div className="space-y-5">
+                {widget.id === "member-summary" && (
+                  <label className="block text-sm font-bold">
+                    Miembro
+                    <select
+                      aria-label="Miembro del widget"
+                      className="mt-2 w-full rounded-xl border bg-background p-3"
+                      value={widget.memberId ?? ""}
+                      onChange={(e) => change({ memberId: e.target.value || undefined })}
+                    >
+                      <option value="">Elegir miembro</option>
+                      {MEMBERS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {widget.id === "specific-note" && (
+                  <label className="block text-sm font-bold">
+                    Nota
+                    <select
+                      aria-label="Nota del widget"
+                      className="mt-2 w-full rounded-xl border bg-background p-3"
+                      value={widget.noteId ?? ""}
+                      onChange={(e) => change({ noteId: e.target.value || undefined })}
+                    >
+                      <option value="">Elegir nota</option>
+                      {s.notes.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <fieldset>
+                  <legend className="mb-3 text-sm font-bold">Tamaño</legend>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[...WIDGET_SIZES]
+                      .sort(
+                        (a, b) =>
+                          widgetDimensions[a][0] - widgetDimensions[b][0] ||
+                          widgetDimensions[a][1] - widgetDimensions[b][1],
+                      )
+                      .map((size) => {
+                        const [columns, rows] = widgetDimensions[size];
+                        return (
+                          <button
+                            key={size}
+                            type="button"
+                            aria-label={`Tamaño ${columns} por ${rows}`}
+                            aria-pressed={widget.size === size}
+                            onClick={() => change({ size })}
+                            className={cn(
+                              "flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border p-2 text-sm",
+                              widget.size === size ? "border-primary bg-accent" : "bg-background",
+                            )}
+                          >
+                            <span
+                              aria-hidden="true"
+                              style={{ width: columns * 13, height: rows * 9 }}
+                              className="rounded border-2 border-current"
+                            />
+                            {columns} × {rows}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </fieldset>
+                <Button className="w-full rounded-full" onClick={() => setConfiguration(null)}>
+                  Listo
+                </Button>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
       <Dialog open={catalog && !!editor} onOpenChange={setCatalog}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-3xl">
+        <DialogContent
+          className="max-h-[85dvh] overflow-y-auto rounded-3xl"
+          aria-describedby={undefined}
+        >
           <DialogHeader>
             <DialogTitle className="font-display text-2xl font-bold">Añadir widgets</DialogTitle>
-            <DialogDescription>Elige lo que quieres tener a mano.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             {WIDGET_IDS.filter(allowed).map((id) => {
               const { title, Icon, tone } = widgets[id];
-              const added = editor?.layout.widgets.some((widget) => widget.id === id);
+              const added =
+                (editor?.layout.widgets.length ?? 0) + (editor?.hidden.length ?? 0) >= 36;
               return (
                 <button
                   type="button"
                   key={id}
                   disabled={added || preference.saving}
-                  aria-label={`${added ? "Añadido" : "Añadir"} ${title.toLocaleLowerCase("es")}`}
+                  aria-label={`Añadir ${title.toLocaleLowerCase("es")}`}
                   className={cn(
                     "flex min-h-32 flex-col items-start justify-between gap-3 rounded-2xl p-4 text-left transition hover:scale-[1.02] disabled:opacity-45 motion-reduce:transform-none",
                     tone,
@@ -741,13 +887,24 @@ export function Dashboard({
                     if (!editor || added) return;
                     updateDraft({
                       ...editor.layout,
-                      widgets: [...editor.layout.widgets, { id, size: "compact" }],
+                      widgets: [
+                        ...editor.layout.widgets,
+                        {
+                          id,
+                          key: crypto.randomUUID(),
+                          size: id === "month-calendar" ? "square" : "compact",
+                          ...(id === "member-summary" ? { memberId: user.id } : {}),
+                          ...(id === "specific-note" && s.notes[0]
+                            ? { noteId: s.notes[0].id }
+                            : {}),
+                        },
+                      ],
                     });
                   }}
                 >
                   <span className="flex w-full items-center justify-between">
                     <Icon className="size-6" />
-                    {added ? <Check className="size-4" /> : <Plus className="size-4" />}
+                    <Plus className="size-4" />
                   </span>
                   <span className="text-sm font-bold">{title}</span>
                 </button>

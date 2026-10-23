@@ -13,21 +13,92 @@ export const WIDGET_IDS = [
   "pinned-note",
   "progress",
   "quick-add",
+  "member-summary",
+  "month-calendar",
+  "bills",
+  "specific-note",
 ] as const;
 export type WidgetId = (typeof WIDGET_IDS)[number];
-
-export const dashboardLayoutSchema = z
+export const WIDGET_SIZES = [
+  "compact",
+  "wide",
+  "large",
+  "small",
+  "tall",
+  "column",
+  "short",
+  "square",
+  "portrait",
+  "banner",
+  "panorama",
+  "full",
+] as const;
+export const widgetDimensions = {
+  small: [1, 1],
+  compact: [1, 2],
+  tall: [1, 3],
+  column: [1, 4],
+  short: [2, 1],
+  wide: [2, 2],
+  square: [2, 3],
+  portrait: [2, 4],
+  banner: [3, 1],
+  panorama: [3, 2],
+  large: [3, 3],
+  full: [3, 4],
+} as const;
+export type WidgetSize = keyof typeof widgetDimensions;
+export const widgetSizeFor = (columns: number, rows: number): WidgetSize =>
+  WIDGET_SIZES.find(
+    (size) => widgetDimensions[size][0] === columns && widgetDimensions[size][1] === rows,
+  ) ?? "compact";
+export const widgetSchema = z
+  .object({
+    id: z.enum(WIDGET_IDS),
+    key: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+    size: z.enum(WIDGET_SIZES),
+    memberId: z
+      .string()
+      .regex(/^[a-zA-Z0-9_-]{1,100}$/)
+      .optional(),
+    noteId: z.string().uuid().optional(),
+  })
+  .strict()
+  .refine(
+    (w) => (!w.memberId || w.id === "member-summary") && (!w.noteId || w.id === "specific-note"),
+  );
+const currentLayout = z
+  .object({
+    version: z.literal(2),
+    widgets: z
+      .array(widgetSchema)
+      .max(36)
+      .refine((xs) => new Set(xs.map((w) => w.key)).size === xs.length),
+  })
+  .strict();
+const legacyLayout = z
   .object({
     version: z.literal(1),
     widgets: z
       .array(
-        z.object({ id: z.enum(WIDGET_IDS), size: z.enum(["compact", "wide", "large"]) }).strict(),
+        z
+          .object({
+            id: z.enum(WIDGET_IDS.slice(0, 12) as [WidgetId, ...WidgetId[]]),
+            size: z.enum(["compact", "wide", "large"]),
+          })
+          .strict(),
       )
-      .max(WIDGET_IDS.length)
-      .refine((widgets) => new Set(widgets.map((widget) => widget.id)).size === widgets.length),
+      .max(12)
+      .refine((xs) => new Set(xs.map((w) => w.id)).size === xs.length),
   })
   .strict();
-export type DashboardLayout = z.infer<typeof dashboardLayoutSchema>;
+export const dashboardLayoutSchema = z
+  .union([currentLayout, legacyLayout])
+  .transform((layout): z.infer<typeof currentLayout> => ({
+    version: 2 as const,
+    widgets: layout.widgets.map((w) => ({ ...w, key: "key" in w ? w.key : w.id })),
+  }));
+export type DashboardLayout = z.output<typeof dashboardLayoutSchema>;
 export type DashboardWidget = DashboardLayout["widgets"][number];
 export const dashboardSnapshotSchema = z.object({
   layout: dashboardLayoutSchema,
@@ -37,47 +108,43 @@ export type DashboardSnapshot = { layout: DashboardLayout; revision: number };
 export type DashboardScope =
   | { kind: "account"; accountId: string }
   | { kind: "device"; householdId: string; memberId: string };
-
 export const defaultDashboardLayout = (): DashboardLayout => ({
-  version: 1,
-  // New widgets stay in the catalogue; existing choices remain unchanged.
-  widgets: WIDGET_IDS.slice(0, 6).map((id) => ({ id, size: "compact" })),
+  version: 2,
+  widgets: WIDGET_IDS.slice(0, 6).map((id) => ({ id, key: id, size: "compact" })),
 });
 export const initialDashboardSnapshot = (): DashboardSnapshot => ({
   layout: defaultDashboardLayout(),
   revision: 0,
 });
-
-/** Device PINs do not establish an Auth identity. Keep their layout local and
- * separate for each household/member, without caching any household records. */
 export const dashboardScopeKey = (scope: DashboardScope) =>
   scope.kind === "account"
     ? `account:${scope.accountId}`
-    : `homehub-dashboard-device:v1:${scope.householdId}:${scope.memberId}`;
-
+    : `homehub-dashboard-device:v2:${scope.householdId}:${scope.memberId}`;
 export function moveDashboardWidget(
   layout: DashboardLayout,
-  id: WidgetId,
+  key: string,
   direction: -1 | 1,
 ): DashboardLayout {
+  const index = layout.widgets.findIndex((w) => w.key === key),
+    next = index + direction;
+  if (index < 0 || next < 0 || next >= layout.widgets.length) return layout;
   const widgets = [...layout.widgets];
-  const index = widgets.findIndex((widget) => widget.id === id);
-  const next = index + direction;
-  if (index < 0 || next < 0 || next >= widgets.length) return layout;
   [widgets[index], widgets[next]] = [widgets[next]!, widgets[index]!];
   return { ...layout, widgets };
 }
-
-export function placeDashboardWidget(layout: DashboardLayout, id: WidgetId, target: WidgetId) {
-  const from = layout.widgets.findIndex((widget) => widget.id === id);
-  const to = layout.widgets.findIndex((widget) => widget.id === target);
+export function placeDashboardWidget(
+  layout: DashboardLayout,
+  key: string,
+  target: string,
+): DashboardLayout {
+  const from = layout.widgets.findIndex((w) => w.key === key),
+    to = layout.widgets.findIndex((w) => w.key === target);
   if (from < 0 || to < 0 || from === to) return layout;
   const widgets = [...layout.widgets];
   const [widget] = widgets.splice(from, 1);
   widgets.splice(to, 0, widget!);
   return { ...layout, widgets };
 }
-
 export class DashboardConflict extends Error {
   constructor() {
     super(
@@ -85,10 +152,8 @@ export class DashboardConflict extends Error {
     );
   }
 }
-
 export const sameDashboardLayout = (a: DashboardLayout, b: DashboardLayout) =>
   JSON.stringify(a) === JSON.stringify(b);
-
 export function dashboardErrorMessage(error: unknown): string {
   if (error instanceof DashboardConflict) return error.message;
   if (error && typeof error === "object" && "code" in error && error.code === "40001")

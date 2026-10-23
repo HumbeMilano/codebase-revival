@@ -222,6 +222,9 @@ export function bindHubPersistence(
         time: row.time,
         memberId: row.member_key,
         note: row.note,
+        kind: row.kind === "reminder" ? "reminder" : "event",
+        completed: row.completed,
+        endTime: row.end_time,
         revision: row.revision,
       })),
       notes: notes.map((row) => ({
@@ -476,6 +479,9 @@ export function bindHubPersistence(
         time: item.time,
         member_key: item.memberId,
         note: item.note,
+        kind: item.kind ?? "event",
+        completed: item.completed ?? false,
+        end_time: item.endTime ?? "",
       })),
     syncNotes: (previous: FamilyNote[], next: FamilyNote[]) =>
       syncCollection("notes", previous, next, (item) => ({
