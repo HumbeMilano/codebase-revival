@@ -72,6 +72,19 @@ test("shopping survives an offline reload and synchronizes each change once on r
         }),
       );
   });
+  // Cloudflare serves /index.html through a canonical redirect to /. A cached
+  // redirected response must still be usable for an offline navigation.
+  await page.route("**/canonical-shell", (route) =>
+    route.fulfill({ status: 307, headers: { Location: "/" } }),
+  );
+  const redirected = await page.evaluate(async () => {
+    const response = await fetch("/canonical-shell");
+    const names = await caches.keys();
+    const cache = await caches.open(names.find((name) => name.startsWith("homehub-shell-"))!);
+    await cache.put("/index.html", response.clone());
+    return response.redirected;
+  });
+  expect(redirected).toBe(true);
   const before = backend.writeRequests;
   await context.setOffline(true);
   await page.getByLabel("Producto", { exact: true }).fill("Comprado en el mercado");

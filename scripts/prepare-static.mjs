@@ -27,13 +27,16 @@ await inspect(root);
 // Public immutable assets can be requested with different Origin headers by
 // module loaders. A server's Vary: Origin must not hide the precached copy.
 const cache = "homehub-shell-" + digest.digest("hex").slice(0, 16);
+// Cloudflare canonicalizes /index.html to /. Browsers reject a redirected
+// cached Response for a navigation, so restore it through a fresh Response.
 await writeFile(
   path.join(root, "sw.js"),
   `
 const CACHE=${JSON.stringify(cache)}, ASSETS=${JSON.stringify(files)};
 self.addEventListener("install",event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);await cache.addAll(ASSETS);await self.skipWaiting();})()));
 self.addEventListener("activate",event=>event.waitUntil((async()=>{const names=(await caches.keys()).filter(name=>name.startsWith("homehub-shell-")).reverse();const keep=new Set([CACHE,...names.filter(name=>name!==CACHE).slice(0,2)]);await Promise.all(names.filter(name=>!keep.has(name)).map(name=>caches.delete(name)));await self.clients.claim();})()));
-self.addEventListener("fetch",event=>{const request=event.request,url=new URL(request.url);if(request.method!=="GET"||url.origin!==self.location.origin||url.pathname.startsWith("/api/"))return;if(request.mode==="navigate"){event.respondWith(fetch(request).catch(()=>caches.open(CACHE).then(cache=>cache.match("/index.html"))));return;}if(url.pathname.startsWith("/assets/")||ASSETS.includes(url.pathname))event.respondWith(caches.match(request,{ignoreVary:true}).then(async cached=>{if(cached)return cached;const response=await fetch(request);if(response.ok&&url.pathname.startsWith("/assets/")){const cache=await caches.open(CACHE);await cache.put(request,response.clone());}return response;}));});
+async function offlineShell(){const response=await(await caches.open(CACHE)).match("/index.html",{ignoreVary:true});if(!response)return Response.error();return response.redirected?new Response(response.body,{status:response.status,statusText:response.statusText,headers:response.headers}):response;}
+self.addEventListener("fetch",event=>{const request=event.request,url=new URL(request.url);if(request.method!=="GET"||url.origin!==self.location.origin||url.pathname.startsWith("/api/"))return;if(request.mode==="navigate"){event.respondWith(fetch(request).catch(offlineShell));return;}if(url.pathname.startsWith("/assets/")||ASSETS.includes(url.pathname))event.respondWith(caches.match(request,{ignoreVary:true}).then(async cached=>{if(cached)return cached;const response=await fetch(request);if(response.ok&&url.pathname.startsWith("/assets/")){const cache=await caches.open(CACHE);await cache.put(request,response.clone());}return response;}));});
 `,
 );
 console.log("Static deployment checked against Cloudflare Free asset limits.");
