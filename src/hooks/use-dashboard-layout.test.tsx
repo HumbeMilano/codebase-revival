@@ -10,7 +10,10 @@ import {
 } from "@/lib/dashboard-layout";
 import { useDashboardLayout } from "./use-dashboard-layout";
 
-const chosen: DashboardLayout = { version: 1, widgets: [{ id: "notes", size: "wide" }] };
+const chosen: DashboardLayout = {
+  version: 2,
+  widgets: [{ id: "notes", key: "notes", size: "wide" }],
+};
 const row = (user_id: string, revision: number, layout = chosen) => ({ user_id, revision, layout });
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -134,6 +137,35 @@ describe("dashboard persistence", () => {
     await waitFor(() => expect(result.current.revision).toBe(0));
     expect(result.current.layout).toEqual(defaultDashboardLayout());
     expect(server.from).not.toHaveBeenCalled();
+    expect(server.rpc).not.toHaveBeenCalled();
+  });
+
+  it("imports old tablet choices and protects upgraded preferences from older tabs", async () => {
+    const server = backend();
+    const scope: DashboardScope = { kind: "device", householdId: "home", memberId: "child" };
+    const oldKey = "homehub-dashboard-device:v1:home:child";
+    const original = {
+      layout: { version: 1, widgets: [{ id: "notes", size: "wide" }] },
+      revision: 4,
+    };
+    localStorage.setItem(oldKey, JSON.stringify(original));
+    const { result } = renderHook(() => useDashboardLayout(scope, server.client));
+    await waitFor(() => expect(result.current.revision).toBe(4));
+    expect(result.current.layout.widgets[0]).toEqual({ id: "notes", key: "notes", size: "wide" });
+    await act(async () => {
+      await result.current.save(chosen, 4);
+    });
+    expect(result.current.revision).toBe(5);
+    expect(JSON.parse(localStorage.getItem(oldKey)!)).toEqual(original);
+    localStorage.setItem(
+      oldKey,
+      JSON.stringify({ layout: { version: 1, widgets: [] }, revision: 5 }),
+    );
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", { key: oldKey }));
+    });
+    expect(result.current.layout).toEqual(chosen);
+    expect(JSON.parse(localStorage.getItem(dashboardScopeKey(scope))!).layout).toEqual(chosen);
     expect(server.rpc).not.toHaveBeenCalled();
   });
 

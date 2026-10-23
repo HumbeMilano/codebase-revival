@@ -17,7 +17,7 @@ const schema = z.object({
       event_type: z.string(),
       object_id: z.string(),
       received_at: z.string(),
-      summary: z.record(z.unknown()),
+      summary: z.record(z.string(), z.unknown()),
     }),
   ),
 });

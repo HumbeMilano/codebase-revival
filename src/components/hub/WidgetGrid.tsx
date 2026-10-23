@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Grip, Maximize2, Minus } from "lucide-react";
+import { ArrowDown, ArrowUp, Grip, Maximize2, Minus, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   moveDashboardWidget,
@@ -7,11 +7,14 @@ import {
   type DashboardLayout,
   type DashboardWidget,
   type WidgetId,
+  widgetDimensions,
+  WIDGET_SIZES,
+  widgetSizeFor,
 } from "@/lib/dashboard-layout";
 import { cn } from "@/lib/utils";
 
 type Gesture = {
-  id: WidgetId;
+  id: string;
   pointer: number;
   kind: "move" | "resize";
   x: number;
@@ -21,7 +24,7 @@ type Gesture = {
   rect: DOMRect;
   original: DashboardLayout;
   activated: boolean;
-  over: WidgetId;
+  over: string;
   timer?: ReturnType<typeof setTimeout>;
   frame?: number;
 };
@@ -32,6 +35,7 @@ type Props = {
   onEdit: () => void;
   onChange: (layout: DashboardLayout) => void;
   describe: (id: WidgetId) => { title: string; tone: string };
+  onConfigure: (key: string) => void;
   children: (widget: DashboardWidget) => React.ReactNode;
 };
 
@@ -45,6 +49,7 @@ export function WidgetGrid({
   onChange,
   describe,
   children,
+  onConfigure,
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const props = useRef({ layout, editing, disabled, onEdit, onChange });
@@ -54,7 +59,7 @@ export function WidgetGrid({
   const previous = useRef(
     new Map<string, { left: number; top: number; width: number; height: number }>(),
   );
-  const [active, setActive] = useState<WidgetId | null>(null);
+  const [active, setActive] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const reduced = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -102,7 +107,7 @@ export function WidgetGrid({
   }, [layout, active]);
 
   useEffect(() => {
-    const card = (id: WidgetId) =>
+    const card = (id: string) =>
       root.current?.querySelector<HTMLElement>(`[data-widget-card="${id}"]`);
     const finish = (cancel = false) => {
       const g = gesture.current;
@@ -152,12 +157,14 @@ export function WidgetGrid({
         const target = document
           .elementFromPoint(g.lastX, g.lastY)
           ?.closest<HTMLElement>("[data-grid-widget]");
-        const id = target?.dataset["gridWidget"] as WidgetId | undefined;
+        const id = target?.dataset["gridWidget"] as string | undefined;
         if (id === g.id) g.over = id;
         if (id && id !== g.id && id !== g.over && root.current?.contains(target!)) {
           g.over = id;
           props.current.onChange(placeDashboardWidget(props.current.layout, g.id, id));
-          setAnnouncement(`Nueva posición de ${describe(g.id).title}`);
+          setAnnouncement(
+            `Nueva posición de ${describe(props.current.layout.widgets.find((w) => w.key === g.id)?.id ?? "notes").title}`,
+          );
         }
         // Scroll the page while moving to the edge, including long dashboards.
         const margin = 70;
@@ -166,22 +173,28 @@ export function WidgetGrid({
       } else if (g.kind === "resize") {
         const dx = g.lastX - g.x;
         const dy = g.lastY - g.y;
-        const original = g.original.widgets.find((w) => w.id === g.id)!;
-        const width = original.size === "compact" ? g.rect.width * 2 : g.rect.width;
+        const original = g.original.widgets.find((w) => w.key === g.id)!;
+        const [cols, rows] = widgetDimensions[original.size];
+        const styles = getComputedStyle(root.current!);
+        const gap = parseFloat(styles.columnGap) || 0;
+        const unit = (root.current!.clientWidth - gap * 2) / 3;
+        const row = parseFloat(styles.gridAutoRows) || 120;
+        const columns = Math.max(
+          1,
+          Math.min(3, Math.round((g.rect.width + dx + gap) / (unit + gap))),
+        );
+        const height = Math.max(
+          1,
+          Math.min(4, Math.round((g.rect.height + dy + gap) / (row + gap))),
+        );
         const size =
-          dy > 65
-            ? "large"
-            : dx < -width * 0.28
-              ? "compact"
-              : dx > 40
-                ? "wide"
-                : dy < -65
-                  ? "wide"
-                  : original.size;
-        if (props.current.layout.widgets.find((w) => w.id === g.id)?.size !== size)
+          Math.abs(dx) + Math.abs(dy) < 12
+            ? original.size
+            : widgetSizeFor(columns || cols, height || rows);
+        if (props.current.layout.widgets.find((w) => w.key === g.id)?.size !== size)
           props.current.onChange({
             ...props.current.layout,
-            widgets: props.current.layout.widgets.map((w) => (w.id === g.id ? { ...w, size } : w)),
+            widgets: props.current.layout.widgets.map((w) => (w.key === g.id ? { ...w, size } : w)),
           });
       }
       g.frame = requestAnimationFrame(paint);
@@ -231,7 +244,7 @@ export function WidgetGrid({
 
   const begin = (
     event: React.PointerEvent<HTMLElement>,
-    id: WidgetId,
+    id: string,
     kind: Gesture["kind"] = "move",
   ) => {
     if (disabled || gesture.current || event.button !== 0 || !event.isPrimary) return;
@@ -282,19 +295,21 @@ export function WidgetGrid({
       }
       props.current.onEdit();
       setActive(id);
-      setAnnouncement(`${describe(id).title}: arrastra para mover`);
+      setAnnouncement(
+        `${describe(props.current.layout.widgets.find((w) => w.key === id)?.id ?? "notes").title}: arrastra para mover`,
+      );
     };
     if (editing) {
       event.preventDefault();
       activate();
     } else g.timer = setTimeout(activate, 480);
   };
-  const cycleSize = (id: WidgetId) => {
-    const sizes = ["compact", "wide", "large"] as const;
+  const cycleSize = (id: string) => {
+    const sizes = WIDGET_SIZES;
     onChange({
       ...layout,
       widgets: layout.widgets.map((w) =>
-        w.id === id ? { ...w, size: sizes[(sizes.indexOf(w.size) + 1) % sizes.length]! } : w,
+        w.key === id ? { ...w, size: sizes[(sizes.indexOf(w.size) + 1) % sizes.length]! } : w,
       ),
     });
   };
@@ -313,18 +328,22 @@ export function WidgetGrid({
           const { title, tone } = describe(widget.id);
           return (
             <section
-              key={widget.id}
+              key={widget.key}
               aria-label={title}
               data-widget={widget.id}
-              data-grid-widget={widget.id}
+              data-widget-key={widget.key}
+              data-grid-widget={widget.key}
               data-size={widget.size}
               className={cn(
                 "dashboard-widget",
-                widget.size !== "compact" && "widget-wide",
-                widget.size === "large" && "widget-large",
-                active === widget.id && "widget-lifted",
+                widgetDimensions[widget.size][0] > 1 && "widget-wide",
+                active === widget.key && "widget-lifted",
               )}
-              onPointerDown={(event) => begin(event, widget.id)}
+              style={{
+                gridColumn: `span ${widgetDimensions[widget.size][0]}`,
+                gridRow: `span ${widgetDimensions[widget.size][1]}`,
+              }}
+              onPointerDown={(event) => begin(event, widget.key)}
               onContextMenu={(event) => event.preventDefault()}
               onClickCapture={(event) => {
                 if (
@@ -336,13 +355,23 @@ export function WidgetGrid({
                 }
               }}
             >
-              <div data-widget-card={widget.id} className={cn("widget-card shadow-card", tone)}>
+              <div data-widget-card={widget.key} className={cn("widget-card shadow-card", tone)}>
                 <div className="widget-content" inert={editing || undefined}>
                   {children(widget)}
                 </div>
               </div>
               {editing && (
                 <div className="widget-controls">
+                  <button
+                    type="button"
+                    data-widget-control
+                    className="widget-settings"
+                    disabled={disabled}
+                    aria-label={`Configurar ${title.toLocaleLowerCase("es")}`}
+                    onClick={() => onConfigure(widget.key)}
+                  >
+                    <Settings2 className="size-4" />
+                  </button>
                   <Button
                     data-widget-control
                     type="button"
@@ -354,7 +383,7 @@ export function WidgetGrid({
                     onClick={() =>
                       onChange({
                         ...layout,
-                        widgets: layout.widgets.filter((w) => w.id !== widget.id),
+                        widgets: layout.widgets.filter((w) => w.key !== widget.key),
                       })
                     }
                   >
@@ -373,7 +402,7 @@ export function WidgetGrid({
                         onChange(
                           moveDashboardWidget(
                             layout,
-                            widget.id,
+                            widget.key,
                             ["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1,
                           ),
                         );
@@ -388,7 +417,7 @@ export function WidgetGrid({
                       type="button"
                       disabled={disabled || index === 0}
                       aria-label={`Subir ${title.toLocaleLowerCase("es")}`}
-                      onClick={() => onChange(moveDashboardWidget(layout, widget.id, -1))}
+                      onClick={() => onChange(moveDashboardWidget(layout, widget.key, -1))}
                     >
                       <ArrowUp className="size-4" />
                     </button>
@@ -396,7 +425,7 @@ export function WidgetGrid({
                       type="button"
                       disabled={disabled || index === layout.widgets.length - 1}
                       aria-label={`Bajar ${title.toLocaleLowerCase("es")}`}
-                      onClick={() => onChange(moveDashboardWidget(layout, widget.id, 1))}
+                      onClick={() => onChange(moveDashboardWidget(layout, widget.key, 1))}
                     >
                       <ArrowDown className="size-4" />
                     </button>
@@ -409,20 +438,16 @@ export function WidgetGrid({
                     aria-label={`Cambiar tamaño de ${title.toLocaleLowerCase("es")}`}
                     onPointerDown={(event) => {
                       event.stopPropagation();
-                      begin(event, widget.id, "resize");
+                      begin(event, widget.key, "resize");
                     }}
                     onClick={(event) => {
-                      if (event.detail === 0 || !resized.current) cycleSize(widget.id);
+                      if (event.detail === 0 || !resized.current) cycleSize(widget.key);
                       resized.current = false;
                     }}
                   >
                     <Maximize2 className="size-4" />
                     <span className="sr-only">
-                      {widget.size === "compact"
-                        ? "Pequeño"
-                        : widget.size === "wide"
-                          ? "Mediano"
-                          : "Grande"}
+                      {widgetDimensions[widget.size][0]} por {widgetDimensions[widget.size][1]}
                     </span>
                   </button>
                 </div>

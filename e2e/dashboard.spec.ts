@@ -105,7 +105,7 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.locator('[data-widget="shopping"]')).toHaveCount(0);
-  const key = `homehub-dashboard-device:v1:${HOME_ID}:m_nico`;
+  const key = `homehub-dashboard-device:v2:${HOME_ID}:m_nico`;
   expect(await page.evaluate((key) => localStorage.getItem(key), key)).not.toBeNull();
   await page.getByRole("button", { name: "Bloquear tablet", exact: true }).click();
   await unlock("1234");
@@ -265,13 +265,13 @@ test("holding a widget enables direct dragging and corner resizing", async ({ pa
       type: "touchMove",
       touchPoints: [{ x: point.x, y: point.y + 90 }],
     });
-    await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "large");
+    await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "tall");
     await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   } else {
     await page.mouse.move(point.x, point.y);
     await page.mouse.down();
     await page.mouse.move(point.x, point.y + 90, { steps: 8 });
-    await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "large");
+    await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "tall");
     await page.mouse.up();
   }
   await page.getByRole("button", { name: "Widgets", exact: true }).click();
@@ -284,7 +284,7 @@ test("holding a widget enables direct dragging and corner resizing", async ({ pa
     0,
   );
   await page.reload();
-  await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "large");
+  await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "tall");
   await expect(page.locator('[data-widget="clock"]')).toBeVisible();
   expect(backend.unexpectedRequests).toEqual([]);
   await page.screenshot({

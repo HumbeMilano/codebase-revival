@@ -105,7 +105,7 @@ describe("dashboard permissions and editing", () => {
 
   it("keeps an empty layout usable and cancelling a reset makes no write", async () => {
     const prefs = preference();
-    prefs.layout = { version: 1, widgets: [] };
+    prefs.layout = { version: 2, widgets: [] };
     prefs.reload.mockResolvedValue({ layout: prefs.layout, revision: 0 });
     vi.mocked(useDashboardLayout).mockReturnValue(prefs);
     render(

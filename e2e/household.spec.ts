@@ -34,7 +34,7 @@ test("a real viewport can create household records and reload confirmed data", a
   await expect(dialog).toHaveCount(0);
 
   await section(page, "Calendario");
-  await page.getByRole("button", { name: "Evento", exact: true }).click();
+  await page.getByRole("button", { name: "Añadir al calendario", exact: true }).click();
   dialog = page.getByRole("dialog", { name: "Nuevo evento", exact: true });
   await dialog.getByLabel("Título", { exact: true }).fill("Excursión familiar");
   await dialog.getByRole("button", { name: "Guardar", exact: true }).click();

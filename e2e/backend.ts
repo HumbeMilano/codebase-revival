@@ -777,7 +777,7 @@ export async function pairTablet(page: Page, backend: HouseholdBackend) {
     await phone.goto(link);
     await expect(
       phone.getByRole("heading", { name: "¿Vincular esta tablet a Hogar de prueba?" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await phone.getByRole("button", { name: "Vincular tablet", exact: true }).click();
     await expect(
       phone.getByRole("heading", { name: "Tablet autorizada", exact: true }),

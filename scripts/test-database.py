@@ -142,7 +142,7 @@ def run():
     check('dashboard revision advances once', json.loads(save_layout(empty_layout, 1, user=USER_A))['revision'], 2)
     save_layout(layout, 1, user=USER_A, fail='Dashboard changed')
     check('stale dashboard save preserves confirmed layout', json.loads(sql(f"SELECT layout FROM dashboard_preferences WHERE user_id='{USER_A}';", user=USER_A)), empty_layout)
-    for invalid_layout in [None, [], {}, {'version': 2, 'widgets': []}, {'version': 1, 'widgets': None},
+    for invalid_layout in [None, [], {}, {'version': 3, 'widgets': []}, {'version': 1, 'widgets': None},
                            {'version': 1, 'widgets': [{'id': 'unknown', 'size': 'compact'}]},
                            {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'giant'}]},
                            {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'wide'}] * 2},
@@ -168,6 +168,17 @@ def run():
     check('first concurrent dashboard save succeeds', first_layout.returncode, 0)
     check('second concurrent dashboard save cannot overwrite it', second_layout.returncode != 0, True)
     check('concurrent dashboard saves advance only one revision', sql(f"SELECT revision FROM dashboard_preferences WHERE user_id='{USER_A}';", user=USER_A), '3')
+    instances = {'version':2,'widgets':[{'id':'specific-note','key':'first','size':'small','noteId':str(uuid.uuid4())},{'id':'specific-note','key':'second','size':'column','noteId':str(uuid.uuid4())},{'id':'member-summary','key':'person','size':'square','memberId':'m_example'}]}
+    check('dashboard instances and references round trip privately',json.loads(save_layout(instances,3,user=USER_A))['layout'],instances)
+    for bad in [
+        {**instances,'widgets':[instances['widgets'][0]]*2},
+        {'version':2,'widgets':[{'id':'tasks','key':'a','size':'small','memberId':'m_example'}]},
+        {'version':2,'widgets':[{'id':'specific-note','key':'a','size':'small','noteId':'bad-id'}]},
+        {'version':2,'widgets':[{'id':'member-summary','key':'a','size':'small','amount':100}]},
+        {'version':2,'widgets':[{'id':'tasks','key':12,'size':'small'}]},
+        {'version':2,'widgets':[{'id':'tasks','key':str(i),'size':'small'} for i in range(37)]},
+    ]:
+        save_layout(bad,4,user=USER_A,fail='Invalid dashboard layout')
     hid = sql("SELECT create_household('Test Home','Adult A','1234');", user=USER_A)
     member_a = sql('SELECT member_key FROM my_context();', user=USER_A)
     invite = sql("SELECT prepare_email_invite('Adult B','admin','b@example.invalid')->>'code';", user=USER_A)
@@ -221,6 +232,20 @@ def run():
     collection('shopping_items', foreign_hid, changes, fail='Household access denied')
     collection('shopping_items', hid, [{'id': str(uuid.uuid4()), 'operation': 'insert', 'values': {'name': 'Bad', 'household_id': foreign_hid}}], fail='Invalid fields')
     check('RPC cannot call internal privileged helpers', sql("SELECT has_schema_privilege('authenticated','homehub_private','USAGE');"), 'f')
+    event_id=str(uuid.uuid4())
+    reminder={'title':'Remember school','date':'2026-10-23','member_key':member_a,'kind':'reminder','completed':False}
+    saved_event=json.loads(collection('events',hid,[{'id':event_id,'operation':'insert','values':reminder}]))[0]
+    check('reminder starts incomplete',saved_event['completed'],False)
+    saved_event=json.loads(collection('events',hid,[{'id':event_id,'operation':'update','expected_revision':1,'values':{'completed':True}}]))[0]
+    check('completing a reminder stamps a server timestamp',bool(saved_event['completed_at']),True)
+    check('other households cannot read calendar entries',sql(f"SELECT count(*) FROM events WHERE id='{event_id}';",user=USER_C),'0')
+    collection('events',hid,[{'id':event_id,'operation':'update','expected_revision':1,'values':{'completed':False}}],fail='Record changed')
+    collection('events',hid,[{'id':event_id,'operation':'update','expected_revision':2,'values':{'kind':'event'}}],fail='calendar_completion_valid')
+    collection('events',hid,[{'id':str(uuid.uuid4()),'operation':'insert','values':{**reminder,'kind':'bill'}}],fail='calendar_kind_valid')
+    collection('events',hid,[{'id':str(uuid.uuid4()),'operation':'insert','values':{**reminder,'completed_at':'2026-01-01'}}],fail='Invalid fields')
+    collection('events',hid,[{'id':str(uuid.uuid4()),'operation':'insert','values':{**reminder,'kind':'event','time':'18:00','end_time':'17:00'}}],fail='calendar_end_valid')
+    saved_event=json.loads(collection('events',hid,[{'id':event_id,'operation':'update','expected_revision':2,'values':{'completed':False,'date':'2026-10-24'}}]))[0]
+    check('postponing and reopening a reminder clear completion time',(saved_event['date'],saved_event['completed_at']),('2026-10-24',None))
     # All financial subrecords are one transaction and all effective amounts validate.
     billid = str(uuid.uuid4())
     bill = {'id': billid, 'name': 'Rent', 'category': 'Vivienda', 'base': 100, 'due_day': 31, 'auto_pay': False, 'position': 0, 'splits': [{'person_key': member_a, 'type': 'amount', 'value': 100}], 'overrides': []}

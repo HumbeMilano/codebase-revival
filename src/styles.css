@@ -177,11 +177,12 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Home screen widgets: the same two-column units on phones and tablets. */
+/* Three columns with independent widths and heights on every device. */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 145px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: clamp(104px, 14vw, 142px);
+  grid-auto-flow: row dense;
   gap: 16px;
 }
 .dashboard-widget {
@@ -332,13 +333,13 @@ body {
 }
 @media (min-width: 1100px) {
   .dashboard-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 @media (max-width: 600px) {
   .dashboard-grid {
-    gap: 12px;
-    grid-auto-rows: 135px;
+    gap: 10px;
+    grid-auto-rows: 110px;
   }
   .widget-card {
     border-radius: 22px;
@@ -361,7 +362,7 @@ body {
     font-size: 36px;
   }
   .dashboard-widget:not(.widget-wide) .widget-content .grid-cols-3 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
   .dashboard-widget:not(.widget-wide) .widget-content > button:last-child {
     font-size: 11px;
@@ -380,4 +381,86 @@ body {
 .widget-content {
   -webkit-user-select: none;
   user-select: none;
+}
+
+.widget-settings {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 2px 9px #0002;
+  pointer-events: auto;
+}
+.widget-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  align-content: start;
+  text-align: center;
+  font-size: 11px;
+}
+.widget-month-grid button {
+  display: flex;
+  min-height: 26px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+.widget-month-grid button[aria-current="date"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.widget-month-grid button:hover {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.planner-field {
+  box-sizing: border-box;
+  min-height: 48px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.planner-field[type="date"],
+.planner-field[type="time"] {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+.planner-field::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.5em;
+}
+.planner-field::-webkit-datetime-edit {
+  padding: 0;
+}
+.planner-form textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+.dashboard-widget[data-size="small"] .widget-card,
+.dashboard-widget[data-size="short"] .widget-card,
+.dashboard-widget[data-size="banner"] .widget-card {
+  padding: 14px;
+}
+
+select.planner-field {
+  -webkit-appearance: menulist;
+  appearance: auto;
+}
+
+.planner-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--card);
+  padding-bottom: 2px;
 }
