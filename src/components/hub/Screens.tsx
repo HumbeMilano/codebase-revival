@@ -149,6 +149,7 @@ export function useHubState({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const finances = useRef(includeFinances);
+  const previousFinanceAccess = useRef(includeFinances);
   const validate = useRef(onContextRefresh);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   finances.current = includeFinances;
@@ -327,7 +328,12 @@ export function useHubState({
       setBillsRaw([]);
       setContributionsRaw([]);
     }
-    void guard.queue.then(refresh);
+    // The main effect already loads the initial snapshot. Fetch again only if
+    // financial authorization actually changes, not on every first mount.
+    if (previousFinanceAccess.current !== includeFinances) {
+      previousFinanceAccess.current = includeFinances;
+      void guard.queue.then(refresh);
+    }
   }, [includeFinances, guard, refresh, setBillsRaw, setContributionsRaw]);
   const statuses = [
     eventStatus,
