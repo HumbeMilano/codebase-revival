@@ -176,3 +176,208 @@
 body {
   font-family: var(--font-sans);
 }
+
+/* Home screen widgets: the same two-column units on phones and tablets. */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 145px;
+  gap: 16px;
+}
+.dashboard-widget {
+  position: relative;
+  min-width: 0;
+  grid-row: span 2;
+  touch-action: pan-y;
+}
+.dashboard-widget.widget-wide {
+  grid-column: span 2;
+}
+.dashboard-widget.widget-large {
+  grid-row: span 3;
+}
+.widget-card {
+  height: 100%;
+  overflow: hidden;
+  border-radius: 26px;
+  padding: 20px;
+  transition:
+    box-shadow 0.22s ease,
+    border-radius 0.22s ease;
+}
+.widget-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.widget-content > header {
+  flex-shrink: 0;
+}
+.widget-content > ul {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.widget-content > button:last-child {
+  flex-shrink: 0;
+}
+.is-editing .dashboard-widget {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.is-editing .widget-card {
+  outline: 2px dashed color-mix(in oklch, var(--foreground), transparent 65%);
+  outline-offset: 3px;
+}
+.is-editing .widget-content {
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.8;
+}
+.is-editing .widget-content > ul {
+  overflow: hidden;
+}
+.widget-lifted {
+  z-index: 50;
+}
+.widget-lifted::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--muted-foreground);
+  border-radius: 26px;
+  background: var(--muted);
+}
+.widget-lifted .widget-card {
+  box-shadow: 0 20px 55px oklch(0 0 0 / 22%);
+}
+.widget-controls {
+  position: absolute;
+  inset: 0;
+  border-radius: 26px;
+  cursor: grab;
+}
+.widget-remove {
+  position: absolute;
+  top: -10px;
+  left: -8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--background);
+  box-shadow: var(--shadow-card);
+}
+.widget-drag-label {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  min-height: 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 4px 10px;
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--shadow-card);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: grab;
+}
+.widget-order-controls {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+}
+.widget-order-controls button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
+  border-radius: 16px;
+}
+.widget-order-controls button:disabled {
+  opacity: 0.25;
+}
+.widget-resize {
+  position: absolute;
+  right: -6px;
+  bottom: -8px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  background: var(--foreground);
+  color: var(--background);
+  border: 3px solid var(--background);
+  border-radius: 16px 4px 16px 4px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.widget-drag-label:focus-visible,
+.widget-resize:focus-visible,
+.widget-order-controls button:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (min-width: 1100px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .dashboard-grid {
+    gap: 12px;
+    grid-auto-rows: 135px;
+  }
+  .widget-card {
+    border-radius: 22px;
+    padding: 14px;
+  }
+  .dashboard-widget:not(.widget-wide) .widget-content header h3 {
+    font-size: 13px;
+    line-height: 1.25;
+    gap: 6px;
+  }
+  .dashboard-widget:not(.widget-wide) .widget-content header h3 svg {
+    width: 16px;
+    height: 16px;
+  }
+  .dashboard-widget:not(.widget-wide) .widget-content header button {
+    width: 28px;
+    height: 32px;
+  }
+  .dashboard-widget:not(.widget-wide) .widget-content .text-5xl {
+    font-size: 36px;
+  }
+  .dashboard-widget:not(.widget-wide) .widget-content .grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-widget:not(.widget-wide) .widget-content > button:last-child {
+    font-size: 11px;
+    gap: 4px;
+    padding-inline: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .widget-card {
+    transition: none;
+  }
+}
+.dashboard-widget {
+  -webkit-touch-callout: none;
+}
+.widget-content {
+  -webkit-user-select: none;
+  user-select: none;
+}

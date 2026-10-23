@@ -4,6 +4,7 @@ import { AdminPage } from "../components/admin/AdminPage";
 
 const backend = vi.hoisted(() => ({
   getUser: vi.fn(),
+  getSession: vi.fn(),
   rpc: vi.fn(),
   listener: null as ((event: string) => void) | null,
 }));
@@ -11,6 +12,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: {
       getUser: backend.getUser,
+      getSession: backend.getSession,
       onAuthStateChange: (callback: (event: string) => void) => {
         backend.listener = callback;
         return { data: { subscription: { unsubscribe: vi.fn() } } };
@@ -19,6 +21,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     rpc: backend.rpc,
   },
 }));
+vi.mock("@/lib/admin-client", () => ({ createAdminClient: () => ({ rpc: backend.rpc }) }));
 vi.mock("@tanstack/react-router", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-router")>();
   return {
@@ -28,9 +31,34 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 });
 
 beforeEach(() => {
+  backend.getSession.mockResolvedValue({
+    data: { session: { user: { id: "owner" }, access_token: "fixture" } },
+    error: null,
+  });
   backend.getUser.mockReset().mockResolvedValue({ data: { user: { id: "owner" } }, error: null });
   backend.rpc.mockReset().mockImplementation(async (name: string) => {
     if (name === "am_platform_admin") return { data: true, error: null };
+    if (name === "admin_business_overview")
+      return {
+        data: {
+          settings: {
+            business_name: null,
+            country: "US",
+            currency: "USD",
+            support_email: null,
+            revision: 1,
+          },
+          plans: [],
+          payments: [],
+          audit: [],
+          totals: [],
+          unconfirmed_accounts: 0,
+          recent_accounts: 1,
+          automatic_billing: false,
+          can_delegate: true,
+        },
+        error: null,
+      };
     if (name === "admin_stats")
       return {
         data: [

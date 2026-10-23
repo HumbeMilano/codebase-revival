@@ -8,7 +8,15 @@
     "SUPABASE_URL": "https://rwbeiestzyzceramgtdw.supabase.co",
     "SUPABASE_PUBLIC_KEY": "sb_publishable_Aal707QWHprU7mfaJMbrnw_Xw3Ycei7",
   },
-  "secrets": { "required": ["RESEND_API_KEY", "TABLET_PAIRING_KEY"] },
+  "secrets": {
+    "required": [
+      "RESEND_API_KEY",
+      "TABLET_PAIRING_KEY",
+      "SecreteStripe",
+      "BILLING_GATEWAY_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+    ],
+  },
   "ratelimits": [
     {
       "name": "TABLET_PAIRING_RATE",

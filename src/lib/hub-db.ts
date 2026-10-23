@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json, Tables } from "@/integrations/supabase/types";
-import type { Chore, ShopItem } from "@/components/hub/data";
+import type { Chore, ShopItem, ShoppingList } from "@/components/hub/data";
 import type { FamilyEvent, FamilyNote } from "@/components/hub/planner-data";
 import type { Contribution, LedgerBill, MonthOverride } from "@/lib/ledger";
 import type { Split } from "@/lib/split";
@@ -15,6 +15,7 @@ export const setHouseholdId = (id: string) => {
 export interface HubData {
   chores: Chore[];
   items: ShopItem[];
+  shoppingLists: ShoppingList[];
   events: FamilyEvent[];
   notes: FamilyNote[];
   bills: LedgerBill[];
@@ -58,6 +59,7 @@ export function bindHubPersistence(
 ) {
   let disposed = false;
   const revisions = new Map<string, number>();
+  const listMutations = new Map<string, string>();
   const assertActive = () => {
     if (disposed || !householdId) throw new Error("Household session is inactive");
     if (typeof navigator !== "undefined" && navigator.onLine === false)
@@ -91,7 +93,7 @@ export function bindHubPersistence(
     includeFinances = false,
   }: { includeFinances?: boolean } = {}): Promise<HubData> => {
     assertActive();
-    const [chores, items, events, notes, bills, contributions] = await Promise.all([
+    const [chores, items, events, notes, bills, shoppingLists, contributions] = await Promise.all([
       readAllPages<Tables<"chores">>((from, to) =>
         client
           .from("chores")
@@ -138,6 +140,15 @@ export function bindHubPersistence(
               .range(from, to),
           )
         : Promise.resolve([]),
+      readAllPages<Tables<"shopping_lists">>((from, to) =>
+        client
+          .from("shopping_lists")
+          .select("*", { count: "exact" })
+          .eq("household_id", householdId)
+          .order("position")
+          .order("id")
+          .range(from, to),
+      ),
       includeFinances
         ? readAllPages<Tables<"contributions">>((from, to) =>
             client
@@ -195,6 +206,14 @@ export function bindHubPersistence(
         done: row.done,
         position: row.position,
         revision: row.revision,
+        listId: row.list_id,
+      })),
+      shoppingLists: shoppingLists.map((list) => ({
+        id: list.id,
+        name: list.name,
+        archived: list.archived,
+        position: list.position,
+        revision: list.revision,
       })),
       events: events.map((row) => ({
         id: row.id,
@@ -403,7 +422,53 @@ export function bindHubPersistence(
         name: item.name,
         done: item.done,
         position,
+        list_id: item.listId ?? householdId,
       })),
+    syncLists: async (previous: ShoppingList[], next: ShoppingList[]) => {
+      assertActive();
+      const changes = next.flatMap((list) => {
+        const old = previous.find((row) => row.id === list.id);
+        if (old && old.name === list.name && old.archived === list.archived) return [];
+        return [
+          {
+            id: list.id,
+            operation: old ? "update" : "insert",
+            expected_revision: old?.revision ?? null,
+            values: {
+              name: list.name,
+              archived: list.archived,
+              position: list.position ?? next.indexOf(list),
+            },
+          },
+        ];
+      });
+      if (!changes.length) return next;
+      const key = JSON.stringify(changes);
+      const mutation = listMutations.get(key) ?? crypto.randomUUID();
+      listMutations.set(key, mutation);
+      const { data, error } = await client.rpc("sync_shopping_lists", {
+        _household: householdId,
+        _mutation_id: mutation,
+        _changes: [],
+        _list_changes: changes,
+      });
+      if (error) throw error;
+      const receipt = data as unknown as { lists: ShoppingList[] };
+      const expected = new Set(changes.map((change) => change.id));
+      if (
+        !Array.isArray(receipt?.lists) ||
+        receipt.lists.length !== expected.size ||
+        new Set(receipt.lists.map((row) => row.id)).size !== expected.size ||
+        receipt.lists.some(
+          (row) =>
+            !expected.has(row.id) || !Number.isSafeInteger(row.revision) || (row.revision ?? 0) < 1,
+        )
+      )
+        throw new Error("Invalid list receipt");
+      assertActive();
+      listMutations.delete(key);
+      return next.map((list) => receipt.lists.find((row) => row.id === list.id) ?? list);
+    },
     syncEvents: (previous: FamilyEvent[], next: FamilyEvent[]) =>
       syncCollection("events", previous, next, (item) => ({
         title: item.title,

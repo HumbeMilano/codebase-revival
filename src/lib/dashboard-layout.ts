@@ -1,13 +1,28 @@
 import { z } from "zod";
 
-export const WIDGET_IDS = ["tasks", "shopping", "calendar", "notes", "family", "finance"] as const;
+export const WIDGET_IDS = [
+  "tasks",
+  "shopping",
+  "calendar",
+  "notes",
+  "family",
+  "finance",
+  "clock",
+  "my-tasks",
+  "week",
+  "pinned-note",
+  "progress",
+  "quick-add",
+] as const;
 export type WidgetId = (typeof WIDGET_IDS)[number];
 
 export const dashboardLayoutSchema = z
   .object({
     version: z.literal(1),
     widgets: z
-      .array(z.object({ id: z.enum(WIDGET_IDS), size: z.enum(["compact", "wide"]) }).strict())
+      .array(
+        z.object({ id: z.enum(WIDGET_IDS), size: z.enum(["compact", "wide", "large"]) }).strict(),
+      )
       .max(WIDGET_IDS.length)
       .refine((widgets) => new Set(widgets.map((widget) => widget.id)).size === widgets.length),
   })
@@ -25,7 +40,8 @@ export type DashboardScope =
 
 export const defaultDashboardLayout = (): DashboardLayout => ({
   version: 1,
-  widgets: WIDGET_IDS.map((id) => ({ id, size: "compact" })),
+  // New widgets stay in the catalogue; existing choices remain unchanged.
+  widgets: WIDGET_IDS.slice(0, 6).map((id) => ({ id, size: "compact" })),
 });
 export const initialDashboardSnapshot = (): DashboardSnapshot => ({
   layout: defaultDashboardLayout(),
@@ -49,6 +65,16 @@ export function moveDashboardWidget(
   const next = index + direction;
   if (index < 0 || next < 0 || next >= widgets.length) return layout;
   [widgets[index], widgets[next]] = [widgets[next]!, widgets[index]!];
+  return { ...layout, widgets };
+}
+
+export function placeDashboardWidget(layout: DashboardLayout, id: WidgetId, target: WidgetId) {
+  const from = layout.widgets.findIndex((widget) => widget.id === id);
+  const to = layout.widgets.findIndex((widget) => widget.id === target);
+  if (from < 0 || to < 0 || from === to) return layout;
+  const widgets = [...layout.widgets];
+  const [widget] = widgets.splice(from, 1);
+  widgets.splice(to, 0, widget!);
   return { ...layout, widgets };
 }
 

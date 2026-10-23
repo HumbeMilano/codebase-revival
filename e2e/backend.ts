@@ -33,6 +33,7 @@ export class HouseholdBackend {
     [
       "chores",
       "shopping_items",
+      "shopping_lists",
       "events",
       "notes",
       "bills",
@@ -41,6 +42,47 @@ export class HouseholdBackend {
       "contributions",
     ].map((table) => [table, []]),
   );
+  constructor() {
+    this.rows["shopping_lists"] = [
+      {
+        id: HOME_ID,
+        household_id: HOME_ID,
+        name: "Groceries",
+        archived: false,
+        position: 0,
+        revision: 1,
+      },
+    ];
+  }
+  businessSettings: Row = {
+    business_name: null,
+    country: "US",
+    currency: "USD",
+    support_email: null,
+    revision: 1,
+  };
+  businessPlans: Row[] = [
+    {
+      id: "free",
+      name: "HomeHub",
+      amount_cents: 0,
+      annual_amount_cents: 0,
+      currency: "USD",
+      billing_interval: "none",
+      revision: 1,
+    },
+    {
+      id: "pro",
+      name: "Family Pro",
+      amount_cents: 299,
+      annual_amount_cents: 599,
+      currency: "USD",
+      billing_interval: "month",
+      revision: 1,
+    },
+  ];
+  businessPayments: Row[] = [];
+  businessAudit: Row[] = [];
   failNextSave = false;
   platformAdmin = false;
   failAdminAction = false;
@@ -69,6 +111,18 @@ export class HouseholdBackend {
   >();
 
   async install(page: Page) {
+    await page.route("**/api/billing/status", (route) =>
+      route.fulfill({
+        json: {
+          provider: "stripe",
+          mode: "sandbox",
+          key_configured: true,
+          gateway_configured: true,
+          live_payments: false,
+        },
+      }),
+    );
+
     await page.route("**/api/tablet-pairing", async (route) => {
       const data = route.request().postDataJSON();
       const expiresAt = new Date(Date.now() + 300000).toISOString();
@@ -409,6 +463,77 @@ export class HouseholdBackend {
       case "revoke_finance_session":
         this.financeActive = false;
         return { json: null };
+      case "admin_business_overview":
+        return this.platformAdmin
+          ? {
+              json: {
+                settings: this.businessSettings,
+                plans: this.businessPlans,
+                payments: this.businessPayments,
+                audit: this.businessAudit,
+                totals: [],
+                unconfirmed_accounts: 0,
+                recent_accounts: 1,
+                automatic_billing: false,
+                can_delegate: true,
+              },
+            }
+          : { status: 403, json: { message: "Forbidden" } };
+      case "admin_stripe_sandbox_status":
+        return {
+          json: {
+            configured: false,
+            account_id: null,
+            webhook_id: null,
+            mode: "sandbox",
+            automatic_billing: false,
+            events: [],
+          },
+        };
+      case "admin_save_business_plan": {
+        const value = args["_plan"] as Row;
+        const old = this.businessPlans.find((plan) => plan["id"] === value["id"]);
+        if (!old || old["revision"] !== args["_expected_revision"])
+          return { status: 409, json: { code: "40001", message: "Plan changed" } };
+        const saved = { ...value, revision: Number(old["revision"]) + 1 };
+        this.businessPlans = this.businessPlans.map((plan) =>
+          plan["id"] === value["id"] ? saved : plan,
+        );
+        return { json: saved };
+      }
+      case "admin_create_business_payment": {
+        const saved: Row = {
+          id: args["_id"],
+          sequence: this.businessPayments.length + 1,
+          household_id: args["_household"],
+          household_label: "Hogar de prueba",
+          amount_cents: args["_amount_cents"],
+          currency: args["_currency"],
+          status: "pending",
+          source: "manual",
+          reference: args["_reference"],
+          note: args["_note"],
+          created_at: new Date().toISOString(),
+          revision: 1,
+        };
+        this.businessPayments.unshift(saved);
+        return { json: saved };
+      }
+      case "admin_update_business_payment": {
+        const old = this.businessPayments.find((payment) => payment["id"] === args["_id"]);
+        if (!old || old["revision"] !== args["_expected_revision"])
+          return { status: 409, json: { code: "40001", message: "Payment changed" } };
+        const saved: Row = {
+          ...old,
+          status: args["_status"],
+          reference: args["_reference"],
+          revision: Number(old["revision"]) + 1,
+        };
+        this.businessPayments = this.businessPayments.map((payment) =>
+          payment["id"] === saved["id"] ? saved : payment,
+        );
+        return { json: saved };
+      }
       case "am_platform_admin":
         return { json: this.platformAdmin };
       case "admin_stats":
@@ -463,6 +588,25 @@ export class HouseholdBackend {
       case "list_invites":
       case "list_email_invites":
         return { json: [] };
+      case "sync_shopping_lists": {
+        const id = String(args["_mutation_id"]);
+        if (this.shoppingReceipts.has(id)) return { json: this.shoppingReceipts.get(id) };
+        const lists = await this.rpc(
+          "save_collection",
+          { ...args, _table: "shopping_lists", _changes: args["_list_changes"] ?? [] },
+          headers,
+        );
+        if (lists.status) return lists;
+        const items = await this.rpc(
+          "save_collection",
+          { ...args, _table: "shopping_items" },
+          headers,
+        );
+        if (items.status) return items;
+        const saved = { items: items.json, lists: lists.json };
+        this.shoppingReceipts.set(id, saved);
+        return { json: saved };
+      }
       case "sync_shopping": {
         const id = String(args["_mutation_id"]);
         if (this.shoppingReceipts.has(id)) return { json: this.shoppingReceipts.get(id) };
@@ -502,6 +646,11 @@ export class HouseholdBackend {
               household_id: HOME_ID,
               revision: Number(index >= 0 ? next[index]?.["revision"] : 0) + 1,
             };
+            if (table === "shopping_items") row["list_id"] ??= HOME_ID;
+            if (table === "shopping_lists") {
+              row["archived"] ??= false;
+              row["position"] ??= next.length;
+            }
             if (table === "chores")
               row["completed_at"] = row["done"]
                 ? (next[index]?.["completed_at"] ?? new Date().toISOString())

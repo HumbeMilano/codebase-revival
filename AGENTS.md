@@ -15,6 +15,8 @@
 
 - This is a functional household application, not a device preview. Use responsive layouts and real household data. Do not restore demo PINs, fixed weather, fixed calendar dates or fictitious agenda entries.
 - Use the shared finance visibility predicate for every financial UI surface; financial tables also require server-side authorization through `db()`.
+- Dashboard gestures use deliberate holds, pointer cancellation, keyboard alternatives and reduced-motion transitions. Preserve saved layouts when expanding the widget catalogue.
+- Shopping lists are independent household records, not product categories. The original list keeps the household UUID so pre-update outboxes still target it. Preserve durable list/product queues, caller-bound receipts and revision conflicts; archiving must retain products.
 - Dashboard layouts contain widget IDs and sizes only. Personal accounts save their own RLS-scoped preferences with revision checks; shared-tablet PIN members keep separate local layouts and must never query personal account preferences. A layout cannot grant financial access.
 - Calendar and notes persist in household tables. Keep date-only values local, and put overflow navigation in the mobile More menu so navigation never scrolls horizontally.
 - Use native-keyboard focus shortcuts for optional dictation. Browsers cannot start the keyboard microphone directly. Do not add web microphone capture, speech recognition, speech models or audio processing dependencies; never put these shortcuts in the PIN keypad.
@@ -34,6 +36,7 @@
 - Save a bill, its splits and monthly overrides atomically with optimistic concurrency. Monetary allocations must conserve cents and reference members of the same household.
 - Personal profiles contain private avatar paths and preferences only; roles remain in protected household members. Restrict avatar storage to the owner's UUID folder and keep the bucket private.
 - Preserve invitation codes through confirmation redirects. Recovery has its own public route. Distinguish denied access, expired authorization, suspension and connection failures in the UI.
+- Business payments and Stripe sandbox events are separate from family finances. Never grant paid entitlements or count revenue from sandbox events. Checkout prices come from protected configuration, not browser input; verify webhook HMAC over the original bytes, deduplicate events, keep secrets server-side and leave live charges disabled until separately implemented and verified.
 - `/admin` uses only `admin_*` RPCs gated by a protected `platform_admin` role. Provision the first platform administrator through an owner-controlled backend operation; never expose a first-user claim flow.
 - The private `platform_owners` allowlist may provision only addresses verified by Supabase Auth. Clients must never modify that list or use editable metadata to obtain roles.
 

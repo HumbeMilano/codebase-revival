@@ -8,14 +8,14 @@ test("widgets can be hidden, resized, reordered and retained after reload", asyn
   await backend.install(page);
   await signIn(page);
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Personalizar inicio", exact: true });
+  const editor = page.getByRole("region", { name: "Personalizar inicio", exact: true });
   await editor.screenshot({ path: testInfo.outputPath("widget-customizer.png") });
-  await editor.getByRole("button", { name: "Ocultar la familia hoy", exact: true }).click();
-  await editor.getByRole("button", { name: "Ocultar fondo común", exact: true }).click();
-  await editor.getByRole("button", { name: "Ampliar tareas de hoy", exact: true }).click();
+  await page.getByRole("button", { name: "Ocultar la familia hoy", exact: true }).click();
+  await page.getByRole("button", { name: "Ocultar fondo común", exact: true }).click();
+  await page.getByRole("button", { name: "Cambiar tamaño de tareas de hoy", exact: true }).click();
   for (let index = 0; index < 3; index++)
-    await editor.getByRole("button", { name: "Subir notas", exact: true }).click();
-  await editor.getByRole("button", { name: "Guardar inicio", exact: true }).click();
+    await page.getByRole("button", { name: "Subir notas", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(editor).toHaveCount(0);
   const ids = () =>
     page
@@ -53,12 +53,12 @@ test("a lost dashboard response retries once and stale editors cannot overwrite 
   await backend.install(page);
   await signIn(page);
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Personalizar inicio", exact: true });
-  await editor.getByRole("button", { name: "Ocultar próximos eventos", exact: true }).click();
-  await editor.getByRole("button", { name: "Guardar inicio", exact: true }).click();
-  await expect(editor.getByRole("alert")).toContainText("Comprueba la conexión");
+  const editor = page.getByRole("region", { name: "Personalizar inicio", exact: true });
+  await page.getByRole("button", { name: "Ocultar próximos eventos", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Comprueba la conexión");
   expect(backend.dashboardPreference?.["revision"]).toBe(1);
-  await editor.getByRole("button", { name: "Guardar inicio", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(editor).toHaveCount(0);
   expect(backend.dashboardPreference?.["revision"]).toBe(1);
   expect(backend.dashboardSaveRequests).toBe(2);
@@ -68,15 +68,13 @@ test("a lost dashboard response retries once and stale editors cannot overwrite 
     revision: 2,
     layout: { version: 1, widgets: [{ id: "notes", size: "wide" }] },
   };
-  await editor.getByRole("button", { name: "Ocultar lista de compras", exact: true }).click();
-  await editor.getByRole("button", { name: "Guardar inicio", exact: true }).click();
-  await expect(editor.getByRole("alert")).toContainText("otra ventana o dispositivo");
+  await page.getByRole("button", { name: "Ocultar listas de compras", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("otra ventana o dispositivo");
   expect(backend.dashboardPreference["revision"]).toBe(2);
-  await editor.getByRole("button", { name: "Cargar versión actual", exact: true }).click();
-  await expect(
-    editor.getByRole("list", { name: "Orden de widgets" }).getByRole("listitem"),
-  ).toHaveCount(1);
-  await editor.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.getByRole("button", { name: "Cargar versión actual", exact: true }).click();
+  await expect(page.locator("[data-widget]")).toHaveCount(1);
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(page.locator("[data-widget]")).toHaveCount(1);
   await expect(page.locator('[data-widget="notes"]')).toHaveAttribute("data-size", "wide");
   expect(backend.unexpectedRequests).toEqual([]);
@@ -99,12 +97,12 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   await unlock("5678");
   await expect(page.locator('[data-widget="finance"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Personalizar inicio", exact: true });
-  await expect(editor.getByRole("button", { name: "Añadir fondo común", exact: true })).toHaveCount(
+  const editor = page.getByRole("region", { name: "Personalizar inicio", exact: true });
+  await expect(page.getByRole("button", { name: "Añadir fondo común", exact: true })).toHaveCount(
     0,
   );
-  await editor.getByRole("button", { name: "Ocultar lista de compras", exact: true }).click();
-  await editor.getByRole("button", { name: "Guardar inicio", exact: true }).click();
+  await page.getByRole("button", { name: "Ocultar listas de compras", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.locator('[data-widget="shopping"]')).toHaveCount(0);
   const key = `homehub-dashboard-device:v1:${HOME_ID}:m_nico`;
@@ -194,7 +192,7 @@ test("widget actions update real records and open the selected note or future ev
   let editor = page.getByRole("dialog", { name: "Editar nota", exact: true });
   await expect(editor.getByLabel("Contenido", { exact: true })).toHaveValue("En el cajón");
   await editor.getByLabel("Contenido", { exact: true }).fill("En la entrada");
-  await editor.getByRole("button", { name: "Guardar", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await section(page, "Inicio");
   await page
@@ -204,7 +202,7 @@ test("widget actions update real records and open the selected note or future ev
   editor = page.getByRole("dialog", { name: "Editar evento", exact: true });
   await expect(editor.getByLabel("Título", { exact: true })).toHaveValue("Visita familiar");
   await expect(editor.getByLabel("Fecha", { exact: true })).toHaveValue(date(future));
-  await editor.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(
     page.getByRole("heading", {
       name: future.toLocaleDateString("es", { month: "long", year: "numeric" }),
@@ -226,4 +224,71 @@ test("widget actions update real records and open the selected note or future ev
     page.locator('[data-widget="notes"]').getByText("En la entrada", { exact: true }),
   ).toBeVisible();
   expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("holding a widget enables direct dragging and corner resizing", async ({ page }, testInfo) => {
+  const backend = new HouseholdBackend();
+  await backend.install(page);
+  await signIn(page);
+  await expect(page.locator('[data-widget="tasks"]')).toBeVisible();
+  const first = (await page.locator('[data-widget="tasks"]').boundingBox())!;
+  const touch =
+    testInfo.project.name === "mobile" ? await page.context().newCDPSession(page) : null;
+  const start = { x: first.x + first.width / 2, y: first.y + 85 };
+  if (touch)
+    await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [start] });
+  else {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+  }
+  await expect(
+    page.getByRole("region", { name: "Personalizar inicio", exact: true }),
+  ).toBeVisible();
+  const target = (await page.locator('[data-widget="shopping"]').boundingBox())!;
+  const end = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+  if (touch) {
+    await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [end] });
+    await expect(page.locator("[data-widget]").first()).toHaveAttribute("data-widget", "shopping");
+    await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  } else {
+    await page.mouse.move(end.x, end.y, { steps: 12 });
+    await expect(page.locator("[data-widget]").first()).toHaveAttribute("data-widget", "shopping");
+    await page.mouse.up();
+  }
+  const resize = page.getByRole("button", { name: "Cambiar tamaño de tareas de hoy", exact: true });
+  await resize.scrollIntoViewIfNeeded();
+  const handle = (await resize.boundingBox())!;
+  const point = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 };
+  if (touch) {
+    await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+    await touch.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: point.x, y: point.y + 90 }],
+    });
+    await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "large");
+    await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  } else {
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+    await page.mouse.move(point.x, point.y + 90, { steps: 8 });
+    await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "large");
+    await page.mouse.up();
+  }
+  await page.getByRole("button", { name: "Widgets", exact: true }).click();
+  const catalogue = page.getByRole("dialog", { name: "Añadir widgets", exact: true });
+  await catalogue.getByRole("button", { name: "Añadir reloj y fecha", exact: true }).click();
+  await catalogue.getByRole("button", { name: "Añadir progreso del hogar", exact: true }).click();
+  await catalogue.getByRole("button", { name: "Listo", exact: true }).click();
+  await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Personalizar inicio", exact: true })).toHaveCount(
+    0,
+  );
+  await page.reload();
+  await expect(page.locator('[data-widget="tasks"]')).toHaveAttribute("data-size", "large");
+  await expect(page.locator('[data-widget="clock"]')).toBeVisible();
+  expect(backend.unexpectedRequests).toEqual([]);
+  await page.screenshot({
+    path: testInfo.outputPath("hold-and-move-dashboard.png"),
+    fullPage: true,
+  });
 });

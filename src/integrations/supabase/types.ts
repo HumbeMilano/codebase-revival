@@ -712,6 +712,7 @@ export type Database = {
           done: boolean;
           household_id: string;
           id: string;
+          list_id: string;
           name: string;
           position: number;
           revision: number;
@@ -720,6 +721,7 @@ export type Database = {
           done?: boolean;
           household_id: string;
           id?: string;
+          list_id: string;
           name: string;
           position?: number;
           revision?: number;
@@ -728,6 +730,7 @@ export type Database = {
           done?: boolean;
           household_id?: string;
           id?: string;
+          list_id?: string;
           name?: string;
           position?: number;
           revision?: number;
@@ -735,6 +738,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "shopping_items_household_id_fkey";
+            columns: ["household_id"];
+            isOneToOne: false;
+            referencedRelation: "households";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shopping_items_list_household_fk";
+            columns: ["list_id", "household_id"];
+            isOneToOne: false;
+            referencedRelation: "shopping_lists";
+            referencedColumns: ["id", "household_id"];
+          },
+        ];
+      };
+      shopping_lists: {
+        Row: {
+          archived: boolean;
+          created_at: string;
+          household_id: string;
+          id: string;
+          name: string;
+          position: number;
+          revision: number;
+        };
+        Insert: {
+          archived?: boolean;
+          created_at?: string;
+          household_id: string;
+          id?: string;
+          name: string;
+          position?: number;
+          revision?: number;
+        };
+        Update: {
+          archived?: boolean;
+          created_at?: string;
+          household_id?: string;
+          id?: string;
+          name?: string;
+          position?: number;
+          revision?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shopping_lists_household_id_fkey";
             columns: ["household_id"];
             isOneToOne: false;
             referencedRelation: "households";
@@ -769,6 +817,22 @@ export type Database = {
     };
     Functions: {
       add_household_photo: { Args: { _path: string }; Returns: string };
+      admin_business_overview: { Args: never; Returns: Json };
+      admin_business_page: {
+        Args: { _before?: number; _section: string };
+        Returns: Json;
+      };
+      admin_create_business_payment: {
+        Args: {
+          _amount_cents: number;
+          _currency: string;
+          _household: string;
+          _id: string;
+          _note?: string;
+          _reference?: string;
+        };
+        Returns: Json;
+      };
       admin_list_accounts: {
         Args: never;
         Returns: {
@@ -798,6 +862,14 @@ export type Database = {
         Args: { _id: string };
         Returns: undefined;
       };
+      admin_save_business_plan: {
+        Args: { _expected_revision: number; _plan: Json };
+        Returns: Json;
+      };
+      admin_save_business_settings: {
+        Args: { _expected_revision: number; _settings: Json };
+        Returns: Json;
+      };
       admin_set_household: {
         Args: { _id: string; _plan: string; _suspended: boolean };
         Returns: undefined;
@@ -819,12 +891,23 @@ export type Database = {
           suspended: number;
         }[];
       };
+      admin_stripe_sandbox_status: { Args: never; Returns: Json };
+      admin_update_business_payment: {
+        Args: {
+          _expected_revision: number;
+          _id: string;
+          _reference: string;
+          _status: string;
+        };
+        Returns: Json;
+      };
       am_platform_admin: { Args: never; Returns: boolean };
       approve_tablet_pairing: {
         Args: { _approval_secret: string; _id: string };
         Returns: undefined;
       };
       authorize_finances: { Args: { _pin: string }; Returns: string };
+      business_catalog: { Args: never; Returns: Json };
       can_access_finances: { Args: { _household: string }; Returns: boolean };
       cancel_tablet_pairing: {
         Args: { _claim_secret: string; _id: string };
@@ -833,6 +916,15 @@ export type Database = {
       claim_platform_admin: { Args: never; Returns: boolean };
       claim_tablet_pairing: {
         Args: { _claim_secret: string; _id: string };
+        Returns: Json;
+      };
+      configure_stripe_sandbox: {
+        Args: {
+          _account_id: string;
+          _gateway_key: string;
+          _webhook_id: string;
+          _webhook_secret: string;
+        };
         Returns: Json;
       };
       create_household: {
@@ -955,6 +1047,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      record_stripe_sandbox_event: {
+        Args: { _event: Json; _gateway_key: string };
+        Returns: Json;
+      };
       redeem_invite: { Args: { _code: string; _pin: string }; Returns: string };
       remove_household_photo: { Args: { _id: string }; Returns: undefined };
       reorder_household_photos: { Args: { _ids: string[] }; Returns: undefined };
@@ -985,10 +1081,24 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      stripe_sandbox_configuration: {
+        Args: { _gateway_key: string };
+        Returns: Json;
+      };
       sync_shopping: {
         Args: {
           _changes: Json;
           _household: string;
+          _member_key?: string;
+          _mutation_id: string;
+        };
+        Returns: Json;
+      };
+      sync_shopping_lists: {
+        Args: {
+          _changes: Json;
+          _household: string;
+          _list_changes?: Json;
           _member_key?: string;
           _mutation_id: string;
         };

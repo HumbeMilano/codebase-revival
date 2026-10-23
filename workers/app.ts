@@ -1,3 +1,4 @@
+import { billing } from "./billing";
 export type WorkerEnv = Cloudflare.Env;
 const json = (value: unknown, status = 200) =>
   Response.json(value, {
@@ -154,6 +155,7 @@ export default {
     const path = new URL(request.url).pathname;
     if (path === "/api/invitations") return sendInvitation(request, env);
     if (path === "/api/tablet-pairing") return createTabletPairing(request, env);
+    if (path.startsWith("/api/billing/")) return billing(request, env);
     if (path.startsWith("/api/"))
       return Promise.resolve(json({ error: "Ruta no encontrada." }, 404));
     return env.ASSETS.fetch(request);

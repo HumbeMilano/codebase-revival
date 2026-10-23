@@ -92,7 +92,7 @@ describe("dashboard permissions and editing", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Personalizar" }));
-    await screen.findByRole("dialog", { name: "Personalizar inicio" });
+    await screen.findByRole("region", { name: "Personalizar inicio" });
     expect(screen.queryByRole("button", { name: "Añadir fondo común" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ocultar fondo común" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Ocultar notas" }));
@@ -120,7 +120,9 @@ describe("dashboard permissions and editing", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Añadir widgets" }));
-    await screen.findByRole("dialog", { name: "Personalizar inicio" });
+    await screen.findByRole("dialog", { name: "Añadir widgets" });
+    fireEvent.click(screen.getByRole("button", { name: "Listo" }));
+    await screen.findByRole("region", { name: "Personalizar inicio" });
     fireEvent.click(screen.getByRole("button", { name: "Restablecer diseño" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(prefs.save).not.toHaveBeenCalled();

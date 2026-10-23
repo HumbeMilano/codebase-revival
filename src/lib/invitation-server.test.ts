@@ -4,6 +4,9 @@ import { sendInvitation, type WorkerEnv } from "../../workers/app";
 
 const env: WorkerEnv = {
   ASSETS: {} as WorkerEnv["ASSETS"],
+  SecreteStripe: "sk_test_fixture",
+  BILLING_GATEWAY_KEY: "fixture",
+  STRIPE_WEBHOOK_SECRET: "whsec_fixture",
   SUPABASE_URL: "https://fixture.invalid",
   SUPABASE_PUBLIC_KEY: "sb_publishable_fixture",
   RESEND_API_KEY: "fixture-private-server-key",

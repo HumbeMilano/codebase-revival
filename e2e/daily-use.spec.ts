@@ -62,7 +62,7 @@ test("shopping survives an offline reload and synchronizes each change once on r
   await backend.install(page);
   await signIn(page);
   await section(page, "Compras");
-  await expect(page.getByRole("status").filter({ hasText: "Lista guardada" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Listas disponibles" })).toBeVisible();
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller)

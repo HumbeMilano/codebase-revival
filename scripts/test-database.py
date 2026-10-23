@@ -89,6 +89,10 @@ def run():
         migration_count = len(list((ROOT / 'drizzle/migrations').glob('*.sql'))) + len(list((ROOT / 'supabase/migrations').glob('*.sql')))
         check('new installation tracks every source migration', sql('SELECT count(*) FROM drizzle.__drizzle_migrations;'), str(migration_count))
         check('all new-install constraints are validated', sql("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='public' AND NOT c.convalidated;"), '0')
+        check('shopping list events are published for realtime refresh',sql("SELECT count(*) FROM pg_publication_tables WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='shopping_lists';"),'1')
+        sql("UPDATE homehub_private.business_settings SET country='CA' WHERE id;")
+        check('public catalogue follows the edited operating country',json.loads(sql('SELECT business_catalog();',device=''))['country'],'CA')
+        sql("UPDATE homehub_private.business_settings SET country='US' WHERE id;")
         check('admin allowlist is private', sql("SELECT has_schema_privilege('authenticated','homehub_private','USAGE');"), 'f')
         sql("INSERT INTO homehub_private.platform_owners(email) VALUES('owner@example.invalid');")
         sql(f"INSERT INTO auth.users(id,email) VALUES('{USER_A}','owner@example.invalid');")
@@ -172,6 +176,31 @@ def run():
     child = sql("SELECT create_member('Child','member','2468');", user=USER_A)
     foreign_hid = sql("SELECT create_household('Other Home','Other Adult','4321');", user=USER_C)
     foreign_member = sql('SELECT member_key FROM my_context();', user=USER_C)
+    check('new households receive a default shopping list', sql(f"SELECT name FROM shopping_lists WHERE id='{hid}';", user=USER_A), 'Groceries')
+    school = str(uuid.uuid4())
+    list_mutation = str(uuid.uuid4())
+    list_edit = [{'id': school, 'operation': 'insert', 'expected_revision': None, 'values': {'name': 'School'}}]
+    bundle = lambda mutation, changes, lists, **kw: sql(f"SELECT sync_shopping_lists('{hid}','{mutation}','{j(changes)}','{j(lists)}','{member_a}');", **kw)
+    school_receipt = json.loads(bundle(list_mutation, [], list_edit, user=USER_A))
+    check('independent shopping lists are persisted', school_receipt['lists'][0]['name'], 'School')
+    check('list creation retries preserve their receipt', json.loads(bundle(list_mutation, [], list_edit, user=USER_A)), school_receipt)
+    bundle(list_mutation, [], [{**list_edit[0], 'values': {'name': 'Changed payload'}}], user=USER_A, fail='identity reused')
+    check('shopping lists are isolated between households', sql(f"SELECT count(*) FROM shopping_lists WHERE household_id='{hid}';", user=USER_C), '0')
+    bundle(str(uuid.uuid4()), [], [], user=USER_C, fail='Household access')
+    shared_name_items = [{'id': str(uuid.uuid4()), 'operation': 'insert', 'expected_revision': None, 'values': {'name':'Reusable bottle','list_id': lid}} for lid in [hid,school]]
+    collection('shopping_items', hid, shared_name_items)
+    check('same product is allowed in different lists', sql(f"SELECT count(*) FROM shopping_items WHERE household_id='{hid}' AND name='Reusable bottle';", user=USER_A), '2')
+    foreign_list = [{'id': str(uuid.uuid4()), 'operation':'insert', 'expected_revision':None, 'values':{'name':'Foreign product','list_id':foreign_hid}}]
+    collection('shopping_items',hid,foreign_list,fail='Shopping list changed')
+    archive_list = [{'id':school,'operation':'update','expected_revision':1,'values':{'archived':True}}]
+    bundle(str(uuid.uuid4()),[],archive_list,user=USER_A)
+    collection('shopping_items',hid,[{'id':str(uuid.uuid4()),'operation':'insert','expected_revision':None,'values':{'name':'Archived list write','list_id':school}}],fail='Shopping list changed')
+    bundle(str(uuid.uuid4()),[],archive_list,user=USER_A,fail='Shopping list changed')
+    check('archiving preserves list products',sql(f"SELECT count(*) FROM shopping_items WHERE list_id='{school}';",user=USER_A),'1')
+    bundle(str(uuid.uuid4()),[],[{'id':school,'operation':'update','expected_revision':2,'values':{'archived':False}}],user=USER_A)
+    bundle(str(uuid.uuid4()),[],[{'id':hid,'operation':'update','expected_revision':1,'values':{'archived':True}}],user=USER_A,fail='check constraint')
+    sql(f"UPDATE shopping_lists SET name='Bypass' WHERE id='{school}';",user=USER_A,fail='permission denied')
+    check('all twelve widget types and large size are accepted',sql("SELECT valid_dashboard_layout('{\"version\":1,\"widgets\":[{\"id\":\"clock\",\"size\":\"large\"},{\"id\":\"my-tasks\",\"size\":\"compact\"},{\"id\":\"week\",\"size\":\"wide\"},{\"id\":\"pinned-note\",\"size\":\"large\"},{\"id\":\"progress\",\"size\":\"compact\"},{\"id\":\"quick-add\",\"size\":\"wide\"}]}');"),'t')
     rowid = str(uuid.uuid4())
     changes = [{'id': rowid, 'operation': 'insert', 'expected_revision': None, 'values': {'name': 'Milk', 'done': False, 'position': 0}}]
     rows = json.loads(collection('shopping_items', hid, changes))
@@ -435,6 +464,65 @@ def run():
     # Histories without an account also prevent destructive member deletion.
     sql(f"DELETE FROM household_accounts WHERE household_id='{hid}' AND member_key='{member_a}';")
     sql(f"SELECT delete_member('{member_a}');", user=USER_B, fail='household history')
+    # The service owner has no household membership and still administers the business.
+    master = str(uuid.uuid4())
+    sql("INSERT INTO homehub_private.platform_owners(email) VALUES('master@example.invalid');")
+    sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{master}','master@example.invalid',now());")
+    check('master administration works without a household',sql("SELECT count(*) FROM my_context();",user=master),'0')
+    overview = json.loads(sql('SELECT admin_business_overview();',user=master))
+    check('automatic charges remain disabled until a provider is configured',overview['automatic_billing'],False)
+    check('only the verified owner delegates staff administration',overview['can_delegate'],True)
+    sql('SELECT admin_business_overview();',user=USER_A,fail='Forbidden')
+    sql('SELECT admin_business_overview();',device='',fail='permission denied')
+    sql('SELECT * FROM homehub_private.business_payments;',user=USER_A,fail='permission denied')
+    payment = str(uuid.uuid4())
+    create_payment = f"SELECT admin_create_business_payment('{payment}','{hid}',1250,'USD','bank-ref','Internal test');"
+    created = json.loads(sql(create_payment,user=master))
+    check('business payments start pending without charging anyone',created['status'],'pending')
+    check('payment creation is safe after a lost response',json.loads(sql(create_payment,user=master))['id'],payment)
+    sql(f"SELECT admin_create_business_payment('{payment}','{hid}',1500,'USD','bank-ref','Internal test');",user=master,fail='identity reused')
+    sql(f"SELECT admin_update_business_payment('{payment}',1,'received','');",user=master,fail='check constraint')
+    sql(f"SELECT admin_update_business_payment('{payment}',0,'received','bank-verified');",user=master,fail='Payment changed')
+    received = f"SELECT admin_update_business_payment('{payment}',1,'received','bank-verified');"
+    check('external receipt is required to register a received payment',json.loads(sql(received,user=master))['status'],'received')
+    check('payment confirmation retry advances the revision only once',json.loads(sql(received,user=master))['revision'],2)
+    sql(f"SELECT admin_update_business_payment('{payment}',2,'pending','bank-verified');",user=master,fail='Invalid payment transition')
+    totals = json.loads(sql('SELECT admin_business_overview();',user=master))['totals']
+    check('business totals use exact cents and separate currencies',totals,[{'currency':'USD','status':'received','count':1,'amount_cents':1250}])
+    settings = {'business_name':'Business test','country':'US','currency':'USD','support_email':'support@example.invalid'}
+    settings_query = f"SELECT admin_save_business_settings('{j(settings)}',1);"
+    check('business settings use revisions',json.loads(sql(settings_query,user=master))['revision'],2)
+    check('business settings retry is idempotent',json.loads(sql(settings_query,user=master))['revision'],2)
+    sql("SELECT admin_save_business_settings('{\"automatic_billing\":true}',2);",user=master,fail='Invalid business fields')
+    plan = {'id':'pro','name':'Family Pro test','amount_cents':500,'annual_amount_cents':4000,'currency':'USD','billing_interval':'month'}
+    check('plan preparation does not activate automatic billing',json.loads(sql(f"SELECT admin_save_business_plan('{j(plan)}',1);",user=master))['amount_cents'],500)
+    check('plan prices never implicitly enable charging',json.loads(sql('SELECT admin_business_overview();',user=master))['automatic_billing'],False)
+    sql(f"SELECT admin_set_platform_admin('{USER_B}',true);",user=master)
+    sql(f"SELECT admin_set_platform_admin('{USER_A}',true);",user=USER_B,fail='Only the verified platform owner')
+    sql(f"SELECT admin_set_platform_admin('{master}',false);",user=master,fail='Cannot remove')
+    check('administrative actions leave an append-only business audit',sql("SELECT count(*)>=5 FROM homehub_private.platform_audit;"),'t')
+    sql("DELETE FROM homehub_private.platform_audit;",user=master,fail='permission denied')
+    check('business records never create family contributions',sql("SELECT count(*) FROM contributions WHERE note='Internal test';"),'0')
+    test_gateway = 'fixture-gateway-' + 'x' * 48
+    sql(f"INSERT INTO homehub_private.billing_gateway_keys(id,key_hash) VALUES(true,encode(extensions.digest('{test_gateway}','sha256'),'hex'));")
+    sql("SELECT stripe_sandbox_configuration('wrong-key');",device='',fail='Forbidden billing gateway')
+    configure = f"SELECT configure_stripe_sandbox('{test_gateway}','acct_fixture','we_fixture','whsec_fixture');"
+    check('sandbox webhook setup is private and idempotent',json.loads(sql(configure,device=''))['configured'],True)
+    check('sandbox setup retry returns the same endpoint',json.loads(sql(configure,device=''))['webhook_id'],'we_fixture')
+    stripe_status = json.loads(sql('SELECT admin_stripe_sandbox_status();',user=master))
+    check('administration never receives webhook signing secrets','webhook_secret' in stripe_status,False)
+    sql('SELECT admin_stripe_sandbox_status();',user=USER_A,fail='Forbidden')
+    before_plan = sql(f"SELECT plan FROM households WHERE id='{hid}';")
+    test_event = {'id':'evt_fixture','type':'checkout.session.completed','livemode':False,'created':int(time.time()),'data':{'object':{'id':'cs_fixture','amount_total':299,'currency':'usd','customer_email':'private@example.invalid','payment_status':'paid','metadata':{'application':'homehub','environment':'sandbox'}}}}
+    event_query = f"SELECT record_stripe_sandbox_event('{test_gateway}','{j(test_event)}');"
+    check('verified sandbox events have their own ledger',json.loads(sql(event_query,device=''))['received'],True)
+    check('replayed Stripe events are processed only once',json.loads(sql(event_query,device=''))['duplicate'],True)
+    check('sandbox event history contains no customer email',sql("SELECT summary ? 'customer_email' FROM homehub_private.stripe_sandbox_events WHERE event_id='evt_fixture';"),'f')
+    check('sandbox payments never change real household plans',sql(f"SELECT plan FROM households WHERE id='{hid}';"),before_plan)
+    live_event = {**test_event,'id':'evt_live','livemode':True}
+    sql(f"SELECT record_stripe_sandbox_event('{test_gateway}','{j(live_event)}');",device='',fail='Only supported sandbox events')
+    check('sandbox ledger is inaccessible to ordinary accounts',sql("SELECT has_table_privilege('authenticated','homehub_private.stripe_sandbox_events','SELECT');"),'f')
+    check('public catalogue exposes the editable monthly and annual prices',json.loads(sql('SELECT business_catalog();',device=''))['plans'][1]['annual_amount_cents'],4000)
     print(f'\n{COUNT} database checks passed (plus negative permission/validation assertions).', flush=True)
 
 

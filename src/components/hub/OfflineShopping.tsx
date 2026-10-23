@@ -31,7 +31,13 @@ export function OfflineShopping({
       </p>
       <Shopping
         compact
-        s={{ items: shopping.items, setItems: shopping.setItems, shoppingSync: shopping }}
+        s={{
+          items: shopping.items,
+          setItems: shopping.setItems,
+          shoppingSync: shopping,
+          shoppingLists: shopping.lists,
+          setShoppingLists: shopping.setLists,
+        }}
       />
     </main>
   );

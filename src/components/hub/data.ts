@@ -33,11 +33,20 @@ export interface Chore {
 }
 
 export interface ShopItem {
+  listId?: string;
   revision?: number;
   position?: number;
   id: string;
   name: string;
   done: boolean;
+}
+
+export interface ShoppingList {
+  id: string;
+  name: string;
+  archived: boolean;
+  position?: number;
+  revision?: number;
 }
 
 export const CATEGORIES: Record<string, string> = {
