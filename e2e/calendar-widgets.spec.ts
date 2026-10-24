@@ -39,7 +39,7 @@ function seed(backend: HouseholdBackend) {
   ];
   backend.rows["bill_splits"] = [{ bill_id: billId, person_key: "m_ana", type: "equal", value: 0 }];
 }
-test("three small widgets, vertical shapes and separately configured copies survive reload", async ({
+test("three small widgets and legacy selections upgrade without repeated types", async ({
   page,
 }) => {
   const backend = new HouseholdBackend();
@@ -75,7 +75,7 @@ test("three small widgets, vertical shapes and separately configured copies surv
   expect(Math.abs(rects[0]!.y - rects[2]!.y)).toBeLessThan(1);
   expect(rects[2]!.x).toBeGreaterThan(rects[1]!.x);
   await expect(page.locator('[data-widget-key="note-a"]')).toContainText("Llevar cuaderno");
-  await expect(page.locator('[data-widget-key="note-b"]')).toContainText("Llevar pasaporte");
+  await expect(page.locator('[data-widget-key="note-b"]')).toHaveCount(0);
   await expect(page.locator('[data-widget-key="member"]')).toContainText("$45.00");
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
   await page
@@ -88,14 +88,16 @@ test("three small widgets, vertical shapes and separately configured copies surv
   await config.getByRole("button", { name: "Listo", exact: true }).click();
   await page.getByRole("button", { name: "Widgets", exact: true }).click();
   const catalogue = page.getByRole("dialog", { name: "Añadir widgets", exact: true });
-  await catalogue.getByRole("button", { name: "Añadir reloj y fecha", exact: true }).click();
+  await expect(
+    catalogue.getByRole("button", { name: "Añadir reloj y fecha", exact: true }),
+  ).toBeDisabled();
   await catalogue.getByRole("button", { name: "Listo", exact: true }).click();
   await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(page.getByRole("region", { name: "Personalizar inicio", exact: true })).toHaveCount(
     0,
   );
   await page.reload();
-  await expect(page.locator('[data-widget="clock"]')).toHaveCount(2);
+  await expect(page.locator('[data-widget="clock"]')).toHaveCount(1);
   await expect(page.locator('[data-widget-key="note-a"]')).toContainText("Llevar pasaporte");
   await expect(page.locator('[data-widget-key="note-a"]')).toHaveAttribute("data-size", "column");
   expect(JSON.stringify(backend.dashboardPreference?.["layout"])).not.toContain("Llevar");

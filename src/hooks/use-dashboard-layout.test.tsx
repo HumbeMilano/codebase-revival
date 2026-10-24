@@ -11,7 +11,7 @@ import {
 import { useDashboardLayout } from "./use-dashboard-layout";
 
 const chosen: DashboardLayout = {
-  version: 2,
+  version: 3,
   widgets: [{ id: "notes", key: "notes", size: "wide" }],
 };
 const row = (user_id: string, revision: number, layout = chosen) => ({ user_id, revision, layout });

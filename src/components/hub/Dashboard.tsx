@@ -1,29 +1,10 @@
-import { useState } from "react";
-import {
-  ArrowUpRight,
-  CalendarDays,
-  Check,
-  CheckCheck,
-  CheckSquare,
-  Clock,
-  Target,
-  Zap,
-  LayoutGrid,
-  Pin,
-  Plus,
-  RotateCcw,
-  ShoppingBasket,
-  SlidersHorizontal,
-  StickyNote,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, LayoutGrid, Plus, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDashboardLayout } from "@/hooks/use-dashboard-layout";
 import { useToday } from "@/hooks/use-today";
-import { isChoreArchived } from "@/lib/chore-archive";
 import {
   defaultDashboardLayout,
   WIDGET_IDS,
@@ -35,514 +16,62 @@ import {
   type DashboardWidget,
   type WidgetId,
 } from "@/lib/dashboard-layout";
+import { dashboardLists, isFinancialWidget } from "@/lib/dashboard-data";
 import { db } from "@/lib/db";
 import { canViewFinances } from "@/lib/finance-visibility";
-import { monthKey, monthSummary } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { MEMBERS, type Member } from "./data";
-import { Avatar } from "./Kiosk";
 import { WidgetGrid } from "./WidgetGrid";
-import { dateKey, eventWhen, parseDate } from "./planner-data";
-import { PersonalWidget, TinyWidget } from "./PersonalWidgets";
-import { upcomingCalendarItems } from "@/lib/calendar";
-import { Ring, type HubState } from "./Screens";
+import { DashboardWidgetContent } from "./DashboardWidgets";
+import { describeWidget, widgetCatalogue } from "./widget-catalogue";
+import type { HubState } from "./Screens";
 
 type Section = "chores" | "shopping" | "calendar" | "notes" | "finance";
-const widgets = {
-  "member-summary": { title: "Resumen de miembro", Icon: Users, tone: "bg-sky text-foreground" },
-  "month-calendar": { title: "Calendario", Icon: CalendarDays, tone: "bg-lilac text-foreground" },
-  bills: { title: "Facturas", Icon: Wallet, tone: "bg-card text-card-foreground" },
-  "specific-note": {
-    title: "Nota específica",
-    Icon: StickyNote,
-    tone: "bg-accent text-accent-foreground",
-  },
-  tasks: { title: "Tareas de hoy", Icon: CheckSquare, tone: "bg-success text-success-foreground" },
-  shopping: {
-    title: "Listas de compras",
-    Icon: ShoppingBasket,
-    tone: "bg-accent text-accent-foreground",
-  },
-  calendar: {
-    title: "Próximos eventos",
-    Icon: CalendarDays,
-    tone: "bg-lilac text-foreground",
-  },
-  notes: { title: "Notas", Icon: StickyNote, tone: "bg-card text-card-foreground" },
-  family: { title: "La familia hoy", Icon: Users, tone: "bg-sky text-foreground" },
-  finance: { title: "Fondo común", Icon: Wallet, tone: "bg-primary text-primary-foreground" },
-  clock: { title: "Reloj y fecha", Icon: Clock, tone: "bg-primary text-primary-foreground" },
-  "my-tasks": {
-    title: "Mis tareas",
-    Icon: CheckSquare,
-    tone: "bg-success text-success-foreground",
-  },
-  week: { title: "Esta semana", Icon: CalendarDays, tone: "bg-sky text-foreground" },
-  "pinned-note": { title: "Nota fijada", Icon: Pin, tone: "bg-accent text-accent-foreground" },
-  progress: { title: "Progreso del hogar", Icon: Target, tone: "bg-lilac text-foreground" },
-  "quick-add": { title: "Crear algo", Icon: Zap, tone: "bg-card text-card-foreground" },
-} as const;
-const describeWidget = (id: WidgetId) => widgets[id];
-const member = (id: string) => MEMBERS.find((person) => person.id === id);
-const money = (amount: number) =>
-  amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
-
-function WidgetHeader({ id, onOpen }: { id: WidgetId; onOpen: () => void }) {
-  const { title, Icon } = widgets[id];
-  return (
-    <header className="mb-4 flex items-center justify-between gap-3">
-      <h3 className="flex min-w-0 items-center gap-2 font-display text-lg font-bold">
-        <Icon className="size-5 shrink-0" aria-hidden="true" /> {title}
-      </h3>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-10 shrink-0 rounded-full text-current hover:bg-foreground/10 hover:text-current"
-        aria-label={`Abrir ${title.toLocaleLowerCase("es")}`}
-        onClick={onOpen}
-      >
-        <ArrowUpRight className="size-5" />
-      </Button>
-    </header>
-  );
-}
-
-function WidgetAction({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <Button
-      variant="ghost"
-      onClick={onClick}
-      className="mt-4 h-11 w-full justify-start rounded-xl border border-current/15 text-current hover:bg-foreground/10 hover:text-current"
-    >
-      <Plus className="size-4" /> {children}
-    </Button>
-  );
-}
-
-function WidgetContent({
-  widget,
-  s,
-  now,
-  go,
-  onCreate,
-  onOpenRecord,
-  configure,
-  user,
+type Choice = { id: string; name: string };
+const sortedSizes = [...WIDGET_SIZES].sort(
+  (a, b) =>
+    widgetDimensions[a][0] - widgetDimensions[b][0] ||
+    widgetDimensions[a][1] - widgetDimensions[b][1],
+);
+function ReferenceSelect({
+  label,
+  value,
+  choices,
+  onChange,
 }: {
-  configure: () => void;
-  user: Member;
-  widget: DashboardWidget;
-  s: HubState;
-  now: Date;
-  go: (section: Section) => void;
-  onCreate: (section: Section) => void;
-  onOpenRecord: (section: "calendar" | "notes", id: string) => void;
+  label: string;
+  value: string | undefined;
+  choices: Choice[];
+  onChange: (value: string | undefined) => void;
 }) {
-  if (widgetDimensions[widget.size][1] === 1)
-    return (
-      <TinyWidget
-        widget={widget}
-        s={s}
-        now={now}
-        user={user}
-        configure={configure}
-        open={onOpenRecord}
-        go={go}
-      />
-    );
-  if (["member-summary", "month-calendar", "bills", "specific-note"].includes(widget.id))
-    return (
-      <PersonalWidget
-        widget={widget}
-        s={s}
-        now={now}
-        user={user}
-        configure={configure}
-        open={onOpenRecord}
-        go={go}
-      />
-    );
-  const today = dateKey(now);
-  const chores = s.chores.filter(
-    (chore) =>
-      (widget.id !== "my-tasks" || chore.memberId === user.id) &&
-      !isChoreArchived(chore, now) &&
-      (chore.dueDate === today || (!chore.done && !!chore.dueDate && chore.dueDate < today)),
+  return (
+    <label className="block text-sm font-bold">
+      {label}
+      <select
+        aria-label={`${label} del widget`}
+        className="mt-2 w-full rounded-xl border bg-background p-3"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || undefined)}
+      >
+        <option value="">Elegir {label.toLocaleLowerCase("es")}</option>
+        {value && !choices.some((choice) => choice.id === value) && (
+          <option value={value}>Ya no está disponible</option>
+        )}
+        {choices.map((choice) => (
+          <option key={choice.id} value={choice.id}>
+            {choice.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
-  const count =
-    widgetDimensions[widget.size][1] > 2 ? 5 : widgetDimensions[widget.size][0] > 1 ? 3 : 2;
-  switch (widget.id) {
-    case "my-tasks":
-    case "tasks": {
-      const pending = chores.filter((chore) => !chore.done).length;
-      const ordered = [...chores].sort(
-        (a, b) =>
-          Number(a.done) - Number(b.done) || (a.dueDate ?? "").localeCompare(b.dueDate ?? ""),
-      );
-      return (
-        <>
-          <WidgetHeader id={widget.id} onOpen={() => go("chores")} />
-          <div className="mb-4 flex items-end gap-3">
-            <span className="font-display text-5xl font-extrabold tabular-nums">{pending}</span>
-            <span className="pb-1 text-sm opacity-70">
-              {pending === 1 ? "pendiente" : "pendientes"}
-            </span>
-          </div>
-          {ordered.length ? (
-            <ul className="space-y-1">
-              {ordered.slice(0, count).map((chore) => (
-                <li key={chore.id}>
-                  <button
-                    type="button"
-                    aria-label={chore.title}
-                    aria-pressed={chore.done}
-                    onClick={() =>
-                      void s.setChores((rows) =>
-                        rows.map((row) =>
-                          row.id === chore.id ? { ...row, done: !row.done } : row,
-                        ),
-                      )
-                    }
-                    className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    <span
-                      className={cn(
-                        "grid size-6 shrink-0 place-items-center rounded-full border border-current/30",
-                        chore.done && "bg-foreground text-background",
-                      )}
-                    >
-                      {chore.done ? <Check className="size-4" /> : null}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={cn(
-                          "block break-words text-sm font-semibold",
-                          chore.done && "line-through opacity-60",
-                        )}
-                      >
-                        {chore.title}
-                      </span>
-                      <span className="block text-xs opacity-65">
-                        {member(chore.memberId)?.name ?? "Sin miembro"}
-                        {chore.dueDate && chore.dueDate < today ? " · Atrasada" : ""}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="flex items-center gap-2 py-4 text-sm opacity-75">
-              <CheckCheck className="size-5" /> Todo al día
-            </p>
-          )}
-          {chores.length > count ? (
-            <Button variant="link" className="px-0 text-current" onClick={() => go("chores")}>
-              Ver todas las tareas
-            </Button>
-          ) : null}
-          <WidgetAction onClick={() => onCreate("chores")}>Crear tarea</WidgetAction>
-        </>
-      );
-    }
-    case "shopping": {
-      const activeLists = s.shoppingLists?.filter((list) => !list.archived);
-      const pending = s.items.filter(
-        (item) =>
-          !item.done &&
-          (!activeLists ||
-            activeLists.some((list) => list.id === (item.listId ?? activeLists[0]?.id))),
-      );
-      return (
-        <>
-          <WidgetHeader id="shopping" onOpen={() => go("shopping")} />
-          <div className="mb-4 flex items-end gap-3">
-            <span className="font-display text-5xl font-extrabold tabular-nums">
-              {pending.length}
-            </span>
-            <span className="pb-1 text-sm opacity-70">por comprar</span>
-          </div>
-          {pending.length ? (
-            <ul className="space-y-1">
-              {pending.slice(0, count).map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    aria-label={`Marcar ${item.name} como comprado`}
-                    onClick={() =>
-                      void s.setItems((rows) =>
-                        rows.map((row) => (row.id === item.id ? { ...row, done: true } : row)),
-                      )
-                    }
-                    className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm font-semibold transition hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    <span
-                      className="size-5 shrink-0 rounded-md border border-current/35"
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 break-words">
-                      {item.name}
-                      <span className="block text-xs font-normal opacity-65">
-                        {activeLists?.find((list) => list.id === item.listId)?.name}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="py-4 text-sm opacity-75">
-              {s.items.length ? "La compra está lista" : "Tu próxima compra empieza aquí"}
-            </p>
-          )}
-          {pending.length > count ? (
-            <Button variant="link" className="px-0 text-current" onClick={() => go("shopping")}>
-              Ver lista completa
-            </Button>
-          ) : null}
-          <WidgetAction onClick={() => onCreate("shopping")}>Añadir producto</WidgetAction>
-        </>
-      );
-    }
-    case "week":
-    case "calendar": {
-      const end = new Date(now);
-      end.setDate(end.getDate() + 7);
-      const events = upcomingCalendarItems(
-        s.events,
-        s.bills,
-        now,
-        count,
-        widget.id === "week" ? dateKey(end) : undefined,
-      );
-      return (
-        <>
-          <WidgetHeader id={widget.id} onOpen={() => go("calendar")} />
-          {events.length ? (
-            <ul className="space-y-2">
-              {events.map((event) => (
-                <li key={event.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenRecord("calendar", event.id)}
-                    className="flex min-h-16 w-full items-center gap-3 rounded-2xl bg-background/50 p-3 text-left transition hover:bg-background/80 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    <span className="flex size-11 shrink-0 flex-col items-center justify-center rounded-xl bg-background text-xs">
-                      <span className="text-lg font-bold leading-none">
-                        {parseDate(event.date).getDate()}
-                      </span>
-                      {parseDate(event.date).toLocaleDateString("es", { month: "short" })}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block break-words text-sm font-semibold">{event.title}</span>
-                      <span className="block text-xs opacity-65">{eventWhen(event)}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="py-7 text-sm opacity-75">Sin próximos eventos</p>
-          )}
-          <WidgetAction onClick={() => onCreate("calendar")}>Añadir evento</WidgetAction>
-        </>
-      );
-    }
-    case "pinned-note":
-    case "notes": {
-      const notes = [...s.notes]
-        .filter((note) => widget.id !== "pinned-note" || note.pinned)
-        .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-        .slice(0, widget.id === "pinned-note" ? 1 : widgetDimensions[widget.size][1] >= 3 ? 4 : 1);
-      return (
-        <>
-          <WidgetHeader id={widget.id} onOpen={() => go("notes")} />
-          {notes.length ? (
-            <ul className={cn("grid gap-3", widget.size === "wide" && "sm:grid-cols-2")}>
-              {notes.map((note) => (
-                <li key={note.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenRecord("notes", note.id)}
-                    className="h-full w-full space-y-1 rounded-2xl bg-accent/50 p-4 text-left transition hover:bg-accent/80 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    <span className="flex items-start gap-2 text-sm font-bold">
-                      <span className="min-w-0 flex-1 break-words">{note.title}</span>
-                      {note.pinned ? <Pin className="size-4 shrink-0" aria-label="Fijada" /> : null}
-                    </span>
-                    <span className="line-clamp-2 whitespace-pre-line break-words text-sm text-muted-foreground">
-                      {note.body}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="py-7 text-sm text-muted-foreground">
-              Un lugar para lo que no quieres olvidar
-            </p>
-          )}
-          <WidgetAction onClick={() => onCreate("notes")}>Escribir nota</WidgetAction>
-        </>
-      );
-    }
-    case "family":
-      return (
-        <>
-          <WidgetHeader id="family" onOpen={() => go("chores")} />
-          <div
-            className={cn(
-              "grid grid-cols-3 gap-x-2 gap-y-4 py-2",
-              widget.size === "wide" && "sm:grid-cols-5",
-            )}
-          >
-            {MEMBERS.map((person) => {
-              const assigned = chores.filter((chore) => chore.memberId === person.id);
-              const done = assigned.filter((chore) => chore.done).length;
-              return (
-                <button
-                  type="button"
-                  key={person.id}
-                  onClick={() => go("chores")}
-                  className="flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-2 hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  aria-label={`Tareas de ${person.name}: ${done} de ${assigned.length}`}
-                >
-                  <Ring pct={assigned.length ? done / assigned.length : 1} size={58} stroke={3}>
-                    <Avatar m={person} />
-                  </Ring>
-                  <span className="max-w-full truncate text-xs font-bold">{person.name}</span>
-                  <span className="text-xs opacity-65">
-                    {assigned.length ? `${done}/${assigned.length}` : "Al día"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      );
-    case "clock":
-      return (
-        <>
-          <WidgetHeader id="clock" onOpen={() => go("calendar")} />
-          <div className="flex flex-1 flex-col justify-center py-6">
-            <time
-              dateTime={now.toISOString()}
-              className="font-display text-5xl font-extrabold tracking-tight tabular-nums"
-            >
-              {now.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
-            </time>
-            <p className="mt-3 text-sm font-semibold capitalize">
-              {now.toLocaleDateString("es", { weekday: "long" })}
-            </p>
-            <p className="text-sm opacity-70">
-              {now.toLocaleDateString("es", { day: "numeric", month: "long" })}
-            </p>
-          </div>
-        </>
-      );
-    case "progress": {
-      const done = chores.filter((chore) => chore.done).length;
-      const percent = chores.length ? Math.round((done / chores.length) * 100) : 0;
-      return (
-        <>
-          <WidgetHeader id="progress" onOpen={() => go("chores")} />
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 py-3">
-            <Ring pct={percent / 100} size={110} stroke={8}>
-              <span className="font-display text-3xl font-bold">{percent}%</span>
-            </Ring>
-            <p className="text-center text-sm">
-              {chores.length ? `${done} de ${chores.length} tareas de hoy` : "Sin tareas para hoy"}
-            </p>
-          </div>
-        </>
-      );
-    }
-    case "quick-add":
-      return (
-        <>
-          <WidgetHeader id="quick-add" onOpen={() => go("notes")} />
-          <div className="grid flex-1 grid-cols-2 gap-2">
-            {(
-              [
-                ["chores", "Tarea", CheckSquare],
-                ["shopping", "Producto", ShoppingBasket],
-                ["calendar", "Evento", CalendarDays],
-                ["notes", "Nota", StickyNote],
-              ] as const
-            ).map(([section, label, Icon]) => (
-              <button
-                type="button"
-                key={section}
-                onClick={() => onCreate(section)}
-                className="flex min-h-16 flex-col items-center justify-center gap-2 rounded-2xl bg-secondary px-2 py-3 text-sm font-semibold hover:bg-accent"
-              >
-                <Icon className="size-5" />
-                {label}
-              </button>
-            ))}
-          </div>
-        </>
-      );
-    case "finance": {
-      const summary = monthSummary(
-        s.bills,
-        s.contributions,
-        monthKey(now.getFullYear(), now.getMonth()),
-        now,
-        MEMBERS.map((person) => person.id),
-      );
-      return (
-        <>
-          <WidgetHeader id="finance" onOpen={() => go("finance")} />
-          <p className="text-xs font-semibold opacity-70 first-letter:uppercase">
-            {now.toLocaleDateString("es", { month: "long", year: "numeric" })}
-          </p>
-          <p className="mt-2 break-words font-display text-3xl font-extrabold tabular-nums">
-            {money(summary.contributed - summary.paid)}
-          </p>
-          <p className="mt-1 text-xs opacity-70">Saldo después de pagos</p>
-          <div className="mt-6 space-y-2 text-sm">
-            <div className="flex justify-between gap-3">
-              <span className="opacity-75">Aportado</span>
-              <span className="font-semibold tabular-nums">{money(summary.contributed)}</span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span className="opacity-75">Pagado</span>
-              <span className="font-semibold tabular-nums">{money(summary.paid)}</span>
-            </div>
-            <div
-              className="h-1.5 overflow-hidden rounded-full bg-primary-foreground/15"
-              aria-hidden="true"
-            >
-              <div
-                className="h-full rounded-full bg-success"
-                style={{
-                  width: `${Math.min(100, Math.max(0, summary.total ? (summary.paid / summary.total) * 100 : 0))}%`,
-                }}
-              />
-            </div>
-            <p className="text-xs opacity-70">
-              {summary.pendingCount}{" "}
-              {summary.pendingCount === 1 ? "factura pendiente" : "facturas pendientes"}
-            </p>
-          </div>
-        </>
-      );
-    }
-  }
-  return null;
 }
-
-type EditorState = DashboardSnapshot & { hidden: DashboardWidget[] };
 
 export function Dashboard({
   s,
   user,
-  compact,
   scope,
-  go,
   onCreate,
-  onOpenRecord,
   now: clock,
   adultAuthorized = false,
 }: {
@@ -556,57 +85,107 @@ export function Dashboard({
   now: Date | null;
   adultAuthorized?: boolean;
 }) {
-  const today = useToday();
-  const now = clock ?? today;
+  const today = useToday(),
+    now = clock ?? today;
   const [client] = useState(db);
   const preference = useDashboardLayout(scope, client);
-  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [editor, setEditor] = useState<DashboardSnapshot | null>(null);
   const [catalog, setCatalog] = useState(false);
+  const [group, setGroup] = useState("Todos");
+  const [selecting, setSelecting] = useState<WidgetId | null>(null);
   const [configuration, setConfiguration] = useState<string | null>(null);
   const financialAccess =
     canViewFinances(user.role, adultAuthorized) && (scope.kind === "account" || adultAuthorized);
-  const allowed = (id: WidgetId) =>
-    !["finance", "bills", "member-summary"].includes(id) || financialAccess;
-  const fromSnapshot = (snapshot: DashboardSnapshot): EditorState => ({
-    ...snapshot,
-    layout: {
-      ...snapshot.layout,
-      widgets: snapshot.layout.widgets.filter((widget) => allowed(widget.id)),
-    },
-    hidden: snapshot.layout.widgets.filter((widget) => !allowed(widget.id)),
-  });
+  const allowed = (id: WidgetId) => !isFinancialWidget(id) || financialAccess;
+  const source = editor?.layout ?? preference.layout;
+  const visible = useMemo(
+    () => ({
+      ...source,
+      widgets: source.widgets.filter((widget) => !isFinancialWidget(widget.id) || financialAccess),
+    }),
+    [source, financialAccess],
+  );
+  const lists = dashboardLists(s);
+  const choices = (id: WidgetId): Choice[] =>
+    id === "shopping"
+      ? lists.map((list) => ({ id: list.id, name: list.name }))
+      : id === "specific-note"
+        ? s.notes.map((note) => ({ id: note.id, name: note.title }))
+        : ["member-summary", "member-tasks"].includes(id)
+          ? MEMBERS
+          : [];
+  const reference = (id: WidgetId, value: string) =>
+    id === "shopping"
+      ? { listId: value }
+      : id === "specific-note"
+        ? { noteId: value }
+        : { memberId: value };
   const open = () => {
-    if (!editor && !preference.loading) setEditor(fromSnapshot(preference));
+    if (!editor && !preference.loading)
+      setEditor({ layout: preference.layout, revision: preference.revision });
+  };
+  const close = () => {
+    setEditor(null);
+    setCatalog(false);
+    setSelecting(null);
+    setConfiguration(null);
+  };
+  // Keep inaccessible preferences at their original positions, including when a grant expires mid-edit.
+  const updateDraft = (layout: DashboardLayout) =>
+    setEditor((current) => {
+      if (!current) return null;
+      const queue = layout.widgets.filter((widget) => allowed(widget.id));
+      const widgets: DashboardWidget[] = [];
+      for (const old of current.layout.widgets) {
+        if (!allowed(old.id)) widgets.push(old);
+        else if (queue.length) widgets.push(queue.shift()!);
+      }
+      widgets.push(...queue);
+      return { ...current, layout: { ...layout, widgets } };
+    });
+  const add = (id: WidgetId, value?: string) => {
+    if (!editor || !allowed(id) || editor.layout.widgets.some((widget) => widget.id === id)) return;
+    if (value && !choices(id).some((choice) => choice.id === value)) return;
+    updateDraft({
+      ...visible,
+      widgets: [
+        ...visible.widgets,
+        {
+          id,
+          key: crypto.randomUUID(),
+          size: id === "month-calendar" ? "square" : "compact",
+          ...(value ? reference(id, value) : {}),
+        },
+      ],
+    });
+    setSelecting(null);
+  };
+  const beginAdd = (id: WidgetId) => {
+    const options = choices(id);
+    if (options.length > 1) setSelecting(id);
+    else add(id, options[0]?.id);
   };
   const save = async () => {
     if (!editor) return;
-    const saved = await preference.save(
-      {
-        ...editor.layout,
-        widgets: [
-          ...editor.layout.widgets,
-          ...editor.hidden.filter(
-            (hidden) => !editor.layout.widgets.some((widget) => widget.key === hidden.key),
-          ),
-        ],
-      },
-      editor.revision,
-    );
+    const saved = await preference.save(editor.layout, editor.revision);
     if (saved) {
-      setEditor(null);
+      close();
       toast.success(
         scope.kind === "account" ? "Tu inicio se guardó" : "Tu inicio se guardó en esta tablet",
       );
     }
   };
-  const visible = editor?.layout ?? {
-    ...preference.layout,
-    widgets: preference.layout.widgets.filter((widget) => allowed(widget.id)),
-  };
-  const updateDraft = (layout: DashboardLayout) =>
-    setEditor((current) => (current ? { ...current, layout } : null));
+  const widget = visible.widgets.find((entry) => entry.key === configuration);
+  const change = (value: Partial<DashboardWidget>) =>
+    widget &&
+    updateDraft({
+      ...visible,
+      widgets: visible.widgets.map((entry) =>
+        entry.key === widget.key ? { ...entry, ...value } : entry,
+      ),
+    });
   return (
-    <div className="space-y-6 pb-5">
+    <div className={cn("space-y-6 pb-5", editor && "dashboard-editing")}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="mb-1 text-sm text-muted-foreground first-letter:uppercase">
@@ -627,60 +206,49 @@ export function Dashboard({
         )}
       </div>
       {editor && (
-        <section
-          aria-label="Personalizar inicio"
-          className="sticky top-2 z-40 rounded-2xl border bg-card/95 p-3 shadow-card backdrop-blur-md"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold">Personalizar inicio</p>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={preference.saving}
-              onClick={() => setCatalog(true)}
-            >
-              <Plus className="size-4" />
-              Widgets
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={preference.saving}
-              onClick={() => void save()}
-            >
-              {preference.saving ? "Guardando…" : "Guardar inicio"}
-            </Button>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={preference.saving}
-              onClick={() => setEditor(null)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="ml-auto text-muted-foreground"
-              disabled={preference.saving}
-              onClick={() =>
-                updateDraft({
-                  ...defaultDashboardLayout(),
-                  widgets: defaultDashboardLayout().widgets.filter((widget) => allowed(widget.id)),
-                })
-              }
-            >
-              <RotateCcw className="size-3" />
-              Restablecer diseño
-            </Button>
-          </div>
+        <section aria-label="Personalizar inicio" className="widget-edit-rail">
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Widgets"
+            title="Añadir widgets"
+            disabled={preference.saving}
+            onClick={() => {
+              setSelecting(null);
+              setCatalog(true);
+            }}
+          >
+            <Plus />
+          </Button>
+          <Button
+            size="icon"
+            aria-label="Guardar inicio"
+            title="Guardar inicio"
+            disabled={preference.saving}
+            onClick={() => void save()}
+          >
+            <Check />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Restablecer diseño"
+            title="Restablecer diseño"
+            disabled={preference.saving}
+            onClick={() => updateDraft(defaultDashboardLayout())}
+          >
+            <RotateCcw />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Cancelar"
+            title="Cancelar"
+            disabled={preference.saving}
+            onClick={close}
+          >
+            <X />
+          </Button>
         </section>
       )}
       {preference.error && (
@@ -695,7 +263,7 @@ export function Dashboard({
             disabled={preference.saving}
             onClick={() =>
               void preference.reload().then((fresh) => {
-                if (fresh && editor) setEditor(fromSnapshot(fresh));
+                if (fresh && editor) setEditor(fresh);
               })
             }
           >
@@ -724,19 +292,17 @@ export function Dashboard({
             describe={describeWidget}
             onConfigure={setConfiguration}
           >
-            {(widget) => (
-              <WidgetContent
-                configure={() => {
-                  open();
-                  setConfiguration(widget.key);
-                }}
-                widget={widget}
+            {(entry) => (
+              <DashboardWidgetContent
+                widget={entry}
                 s={financialAccess ? s : { ...s, bills: [], contributions: [] }}
                 now={now}
                 user={user}
-                go={go}
+                configure={() => {
+                  open();
+                  setConfiguration(entry.key);
+                }}
                 onCreate={onCreate}
-                onOpenRecord={onOpenRecord ?? ((section) => go(section))}
               />
             )}
           </WidgetGrid>
@@ -758,7 +324,7 @@ export function Dashboard({
         </>
       )}
       <Dialog
-        open={!!configuration && !!editor}
+        open={!!widget && !!editor}
         onOpenChange={(value) => {
           if (!value) setConfiguration(null);
         }}
@@ -770,150 +336,158 @@ export function Dashboard({
           <DialogHeader>
             <DialogTitle>Configurar widget</DialogTitle>
           </DialogHeader>
-          {(() => {
-            const widget = editor?.layout.widgets.find((w) => w.key === configuration);
-            if (!widget || !editor) return null;
-            const change = (value: Partial<DashboardWidget>) =>
-              updateDraft({
-                ...editor.layout,
-                widgets: editor.layout.widgets.map((w) =>
-                  w.key === widget.key ? { ...w, ...value } : w,
-                ),
-              });
-            return (
-              <div className="space-y-5">
-                {widget.id === "member-summary" && (
-                  <label className="block text-sm font-bold">
-                    Miembro
-                    <select
-                      aria-label="Miembro del widget"
-                      className="mt-2 w-full rounded-xl border bg-background p-3"
-                      value={widget.memberId ?? ""}
-                      onChange={(e) => change({ memberId: e.target.value || undefined })}
-                    >
-                      <option value="">Elegir miembro</option>
-                      {MEMBERS.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                {widget.id === "specific-note" && (
-                  <label className="block text-sm font-bold">
-                    Nota
-                    <select
-                      aria-label="Nota del widget"
-                      className="mt-2 w-full rounded-xl border bg-background p-3"
-                      value={widget.noteId ?? ""}
-                      onChange={(e) => change({ noteId: e.target.value || undefined })}
-                    >
-                      <option value="">Elegir nota</option>
-                      {s.notes.map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {n.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <fieldset>
-                  <legend className="mb-3 text-sm font-bold">Tamaño</legend>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[...WIDGET_SIZES]
-                      .sort(
-                        (a, b) =>
-                          widgetDimensions[a][0] - widgetDimensions[b][0] ||
-                          widgetDimensions[a][1] - widgetDimensions[b][1],
-                      )
-                      .map((size) => {
-                        const [columns, rows] = widgetDimensions[size];
-                        return (
-                          <button
-                            key={size}
-                            type="button"
-                            aria-label={`Tamaño ${columns} por ${rows}`}
-                            aria-pressed={widget.size === size}
-                            onClick={() => change({ size })}
-                            className={cn(
-                              "flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border p-2 text-sm",
-                              widget.size === size ? "border-primary bg-accent" : "bg-background",
-                            )}
-                          >
-                            <span
-                              aria-hidden="true"
-                              style={{ width: columns * 13, height: rows * 9 }}
-                              className="rounded border-2 border-current"
-                            />
-                            {columns} × {rows}
-                          </button>
-                        );
-                      })}
-                  </div>
-                </fieldset>
-                <Button className="w-full rounded-full" onClick={() => setConfiguration(null)}>
-                  Listo
-                </Button>
-              </div>
-            );
-          })()}
+          {widget && (
+            <div className="space-y-5">
+              {["member-summary", "member-tasks"].includes(widget.id) && (
+                <ReferenceSelect
+                  label="Miembro"
+                  value={widget.memberId}
+                  choices={MEMBERS}
+                  onChange={(memberId) => change({ memberId })}
+                />
+              )}
+              {widget.id === "specific-note" && (
+                <ReferenceSelect
+                  label="Nota"
+                  value={widget.noteId}
+                  choices={choices(widget.id)}
+                  onChange={(noteId) => change({ noteId })}
+                />
+              )}
+              {widget.id === "shopping" && (
+                <ReferenceSelect
+                  label="Lista"
+                  value={widget.listId}
+                  choices={choices(widget.id)}
+                  onChange={(listId) => change({ listId })}
+                />
+              )}
+              <fieldset>
+                <legend className="mb-3 text-sm font-bold">Tamaño</legend>
+                <div className="grid grid-cols-3 gap-2">
+                  {sortedSizes.map((size) => {
+                    const [columns, rows] = widgetDimensions[size];
+                    return (
+                      <button
+                        type="button"
+                        key={size}
+                        aria-label={`Tamaño ${columns} por ${rows}`}
+                        aria-pressed={widget.size === size}
+                        onClick={() => change({ size })}
+                        className={cn(
+                          "flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border p-2 text-sm",
+                          widget.size === size ? "border-primary bg-accent" : "bg-background",
+                        )}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{ width: columns * 13, height: rows * 9 }}
+                          className="rounded border-2 border-current"
+                        />
+                        {columns} × {rows}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              <Button className="w-full rounded-full" onClick={() => setConfiguration(null)}>
+                Listo
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
-      <Dialog open={catalog && !!editor} onOpenChange={setCatalog}>
+      <Dialog
+        open={catalog && !!editor}
+        onOpenChange={(value) => {
+          setCatalog(value);
+          if (!value) setSelecting(null);
+        }}
+      >
         <DialogContent
           className="max-h-[85dvh] overflow-y-auto rounded-3xl"
           aria-describedby={undefined}
         >
           <DialogHeader>
-            <DialogTitle className="font-display text-2xl font-bold">Añadir widgets</DialogTitle>
+            <DialogTitle className="font-display text-2xl font-bold">
+              {selecting
+                ? selecting === "shopping"
+                  ? "Elegir lista"
+                  : selecting === "specific-note"
+                    ? "Elegir nota"
+                    : "Elegir miembro"
+                : "Añadir widgets"}
+            </DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
-            {WIDGET_IDS.filter(allowed).map((id) => {
-              const { title, Icon, tone } = widgets[id];
-              const added =
-                (editor?.layout.widgets.length ?? 0) + (editor?.hidden.length ?? 0) >= 36;
-              return (
-                <button
+          {selecting ? (
+            <div className="grid gap-2">
+              {choices(selecting).map((choice) => (
+                <Button
                   type="button"
-                  key={id}
-                  disabled={added || preference.saving}
-                  aria-label={`Añadir ${title.toLocaleLowerCase("es")}`}
-                  className={cn(
-                    "flex min-h-32 flex-col items-start justify-between gap-3 rounded-2xl p-4 text-left transition hover:scale-[1.02] disabled:opacity-45 motion-reduce:transform-none",
-                    tone,
-                  )}
-                  onClick={() => {
-                    if (!editor || added) return;
-                    updateDraft({
-                      ...editor.layout,
-                      widgets: [
-                        ...editor.layout.widgets,
-                        {
-                          id,
-                          key: crypto.randomUUID(),
-                          size: id === "month-calendar" ? "square" : "compact",
-                          ...(id === "member-summary" ? { memberId: user.id } : {}),
-                          ...(id === "specific-note" && s.notes[0]
-                            ? { noteId: s.notes[0].id }
-                            : {}),
-                        },
-                      ],
-                    });
-                  }}
+                  variant="outline"
+                  className="min-h-12 justify-start rounded-xl"
+                  key={choice.id}
+                  onClick={() => add(selecting, choice.id)}
                 >
-                  <span className="flex w-full items-center justify-between">
-                    <Icon className="size-6" />
-                    <Plus className="size-4" />
-                  </span>
-                  <span className="text-sm font-bold">{title}</span>
-                </button>
-              );
-            })}
-          </div>
-          <Button className="rounded-full" onClick={() => setCatalog(false)}>
-            Listo
-          </Button>
+                  {choice.name}
+                </Button>
+              ))}
+              <Button variant="ghost" onClick={() => setSelecting(null)}>
+                Volver
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2" aria-label="Tipos de widgets">
+                {["Todos", "Casa", "Agenda", "Finanzas"]
+                  .filter((name) => name !== "Finanzas" || financialAccess)
+                  .map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      aria-pressed={group === name}
+                      onClick={() => setGroup(name)}
+                      className={cn(
+                        "rounded-full px-3 py-2 text-sm",
+                        group === name ? "bg-primary text-primary-foreground" : "bg-secondary",
+                      )}
+                    >
+                      {name}
+                    </button>
+                  ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {WIDGET_IDS.filter(
+                  (id) => allowed(id) && (group === "Todos" || widgetCatalogue[id].group === group),
+                ).map((id) => {
+                  const { title, Icon, tone } = describeWidget(id),
+                    added = editor?.layout.widgets.some((entry) => entry.id === id);
+                  return (
+                    <button
+                      type="button"
+                      key={id}
+                      disabled={added || preference.saving}
+                      aria-label={`Añadir ${title.toLocaleLowerCase("es")}`}
+                      className={cn(
+                        "flex min-h-28 flex-col items-start justify-between gap-3 rounded-2xl p-4 text-left transition hover:scale-[1.02] disabled:opacity-45 motion-reduce:transform-none",
+                        tone,
+                      )}
+                      onClick={() => beginAdd(id)}
+                    >
+                      <span className="flex w-full items-center justify-between">
+                        <Icon className="size-6" />
+                        {added ? <Check className="size-4" /> : <Plus className="size-4" />}
+                      </span>
+                      <span className="text-sm font-bold">{title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <Button className="rounded-full" onClick={() => setCatalog(false)}>
+                Listo
+              </Button>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

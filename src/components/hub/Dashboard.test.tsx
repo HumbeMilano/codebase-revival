@@ -57,6 +57,13 @@ afterEach(() => {
 
 describe("dashboard permissions and editing", () => {
   it("hides financial widgets from children and from tablet adult PINs without an adult grant", () => {
+    const prefs = preference();
+    prefs.layout.widgets.push(
+      { id: "next-bill", key: "next", size: "compact" },
+      { id: "bills", key: "bills", size: "compact" },
+      { id: "member-summary", key: "person", size: "compact", memberId: "ana" },
+    );
+    vi.mocked(useDashboardLayout).mockReturnValue(prefs);
     const props = {
       s: state(),
       compact: true,
@@ -69,6 +76,8 @@ describe("dashboard permissions and editing", () => {
     );
     expect(screen.queryByRole("region", { name: "Fondo común" })).not.toBeInTheDocument();
     expect(screen.queryByText("$42.25")).not.toBeInTheDocument();
+    for (const name of ["Próximo vencimiento", "Facturas", "Resumen de miembro"])
+      expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
     const tablet: DashboardScope = { kind: "device", householdId: "home", memberId: "ana" };
     rerender(<Dashboard {...props} scope={tablet} user={adult} />);
     expect(screen.queryByRole("region", { name: "Fondo común" })).not.toBeInTheDocument();
@@ -105,7 +114,7 @@ describe("dashboard permissions and editing", () => {
 
   it("keeps an empty layout usable and cancelling a reset makes no write", async () => {
     const prefs = preference();
-    prefs.layout = { version: 2, widgets: [] };
+    prefs.layout = { version: 3, widgets: [] };
     prefs.reload.mockResolvedValue({ layout: prefs.layout, revision: 0 });
     vi.mocked(useDashboardLayout).mockReturnValue(prefs);
     render(
@@ -128,4 +137,29 @@ describe("dashboard permissions and editing", () => {
     expect(prefs.save).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "Tu inicio, a tu manera" })).toBeInTheDocument();
   });
+});
+
+it("removes financial surfaces immediately when the tablet grant expires during editing", async () => {
+  const prefs = preference();
+  vi.mocked(useDashboardLayout).mockReturnValue(prefs);
+  const props = {
+    s: state(),
+    compact: true,
+    scope: { kind: "device", householdId: "home", memberId: "ana" } as const,
+    user: adult,
+    now: new Date("2026-10-23T12:00:00"),
+    go: vi.fn(),
+    onCreate: vi.fn(),
+  };
+  const { rerender } = render(<Dashboard {...props} adultAuthorized />);
+  fireEvent.click(screen.getByRole("button", { name: "Personalizar" }));
+  await screen.findByRole("region", { name: "Personalizar inicio" });
+  rerender(<Dashboard {...props} adultAuthorized={false} />);
+  expect(screen.queryByRole("region", { name: "Fondo común" })).not.toBeInTheDocument();
+  expect(screen.queryByText("$42.25")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Guardar inicio" }));
+  await waitFor(() => expect(prefs.save).toHaveBeenCalledOnce());
+  expect(
+    prefs.save.mock.calls[0]![0].widgets.some((widget: { id: string }) => widget.id === "finance"),
+  ).toBe(true);
 });

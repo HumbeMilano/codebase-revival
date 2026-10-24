@@ -17,6 +17,10 @@ export const WIDGET_IDS = [
   "month-calendar",
   "bills",
   "specific-note",
+  "member-tasks",
+  "reminders",
+  "next-bill",
+  "shopping-summary",
 ] as const;
 export type WidgetId = (typeof WIDGET_IDS)[number];
 export const WIDGET_SIZES = [
@@ -62,16 +66,50 @@ export const widgetSchema = z
       .regex(/^[a-zA-Z0-9_-]{1,100}$/)
       .optional(),
     noteId: z.string().uuid().optional(),
+    listId: z.string().uuid().optional(),
   })
   .strict()
   .refine(
-    (w) => (!w.memberId || w.id === "member-summary") && (!w.noteId || w.id === "specific-note"),
+    (w) =>
+      (!w.memberId || ["member-summary", "member-tasks"].includes(w.id)) &&
+      (!w.noteId || w.id === "specific-note") &&
+      (!w.listId || w.id === "shopping"),
   );
 const currentLayout = z
   .object({
-    version: z.literal(2),
+    version: z.literal(3),
     widgets: z
       .array(widgetSchema)
+      .max(WIDGET_IDS.length)
+      .refine(
+        (xs) =>
+          new Set(xs.map((w) => w.key)).size === xs.length &&
+          new Set(xs.map((w) => w.id)).size === xs.length,
+      ),
+  })
+  .strict();
+const previousLayout = z
+  .object({
+    version: z.literal(2),
+    widgets: z
+      .array(
+        z
+          .object({
+            id: z.enum(WIDGET_IDS.slice(0, 16) as [WidgetId, ...WidgetId[]]),
+            key: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+            size: z.enum(WIDGET_SIZES),
+            memberId: z
+              .string()
+              .regex(/^[a-zA-Z0-9_-]{1,100}$/)
+              .optional(),
+            noteId: z.string().uuid().optional(),
+          })
+          .strict()
+          .refine(
+            (w) =>
+              (!w.memberId || w.id === "member-summary") && (!w.noteId || w.id === "specific-note"),
+          ),
+      )
       .max(36)
       .refine((xs) => new Set(xs.map((w) => w.key)).size === xs.length),
   })
@@ -93,11 +131,20 @@ const legacyLayout = z
   })
   .strict();
 export const dashboardLayoutSchema = z
-  .union([currentLayout, legacyLayout])
-  .transform((layout): z.infer<typeof currentLayout> => ({
-    version: 2 as const,
-    widgets: layout.widgets.map((w) => ({ ...w, key: "key" in w ? w.key : w.id })),
-  }));
+  .union([currentLayout, previousLayout, legacyLayout])
+  .transform((layout): z.infer<typeof currentLayout> => {
+    const seen = new Set<string>();
+    return {
+      version: 3,
+      widgets: layout.widgets
+        .filter((widget) => {
+          if (seen.has(widget.id)) return false;
+          seen.add(widget.id);
+          return true;
+        })
+        .map((w) => ({ ...w, key: "key" in w ? w.key : w.id })),
+    };
+  });
 export type DashboardLayout = z.output<typeof dashboardLayoutSchema>;
 export type DashboardWidget = DashboardLayout["widgets"][number];
 export const dashboardSnapshotSchema = z.object({
@@ -109,8 +156,15 @@ export type DashboardScope =
   | { kind: "account"; accountId: string }
   | { kind: "device"; householdId: string; memberId: string };
 export const defaultDashboardLayout = (): DashboardLayout => ({
-  version: 2,
-  widgets: WIDGET_IDS.slice(0, 6).map((id) => ({ id, key: id, size: "compact" })),
+  version: 3,
+  widgets: [
+    { id: "tasks", key: "tasks", size: "tall" },
+    { id: "specific-note", key: "specific-note", size: "column" },
+    { id: "shopping", key: "shopping", size: "tall" },
+    { id: "notes", key: "notes", size: "wide" },
+    { id: "finance", key: "finance", size: "wide" },
+    { id: "calendar", key: "calendar", size: "compact" },
+  ],
 });
 export const initialDashboardSnapshot = (): DashboardSnapshot => ({
   layout: defaultDashboardLayout(),
@@ -119,7 +173,7 @@ export const initialDashboardSnapshot = (): DashboardSnapshot => ({
 export const dashboardScopeKey = (scope: DashboardScope) =>
   scope.kind === "account"
     ? `account:${scope.accountId}`
-    : `homehub-dashboard-device:v2:${scope.householdId}:${scope.memberId}`;
+    : `homehub-dashboard-device:v3:${scope.householdId}:${scope.memberId}`;
 export function moveDashboardWidget(
   layout: DashboardLayout,
   key: string,

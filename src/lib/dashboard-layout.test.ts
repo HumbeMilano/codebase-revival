@@ -10,7 +10,7 @@ describe("dashboard layouts", () => {
   it("accepts a deliberate empty layout and rejects unknown, duplicate or data-bearing widgets", () => {
     expect(dashboardLayoutSchema.parse({ version: 1, widgets: [] }).widgets).toEqual([]);
     const invalid = [
-      { version: 3, widgets: [] },
+      { version: 4, widgets: [] },
       { version: 1, widgets: [{ id: "private-data", size: "wide" }] },
       { version: 1, widgets: [{ id: "tasks", size: "giant" }] },
       {
@@ -29,10 +29,10 @@ describe("dashboard layouts", () => {
   it("reorders without mutating saved preferences and keeps boundary moves unchanged", () => {
     const original = defaultDashboardLayout();
     const moved = moveDashboardWidget(original, "shopping", -1);
-    expect(moved.widgets.slice(0, 2).map((widget) => widget.id)).toEqual(["shopping", "tasks"]);
+    expect(moved.widgets.slice(0, 2).map((widget) => widget.id)).toEqual(["tasks", "shopping"]);
     expect(original.widgets[0]?.id).toBe("tasks");
-    expect(moveDashboardWidget(moved, "shopping", -1)).toBe(moved);
-    expect(moveDashboardWidget({ version: 2, widgets: [] }, "notes", 1).widgets).toEqual([]);
+    expect(moveDashboardWidget(original, "tasks", -1)).toBe(original);
+    expect(moveDashboardWidget({ version: 3, widgets: [] }, "notes", 1).widgets).toEqual([]);
   });
 
   it("separates shared-tablet preferences by household and member", () => {
@@ -53,14 +53,14 @@ describe("configured dashboard instances", () => {
         ],
       }),
     ).toEqual({
-      version: 2,
+      version: 3,
       widgets: [
         { id: "notes", key: "notes", size: "wide" },
         { id: "family", key: "family", size: "compact" },
       ],
     });
   });
-  it("keeps copies independent and refuses stored contents or duplicate instance keys", () => {
+  it("keeps the first legacy choice and refuses duplicate types or private contents", () => {
     const layout = dashboardLayoutSchema.parse({
       version: 2,
       widgets: [
@@ -78,7 +78,9 @@ describe("configured dashboard instances", () => {
         },
       ],
     });
-    expect(moveDashboardWidget(layout, "second", -1).widgets[0]?.key).toBe("second");
+    expect(layout.version).toBe(3);
+    expect(layout.widgets).toHaveLength(1);
+    expect(layout.widgets[0]?.noteId).toBe("10000000-0000-4000-8000-000000000001");
     expect(layout.widgets[0]?.key).toBe("first");
     expect(
       dashboardLayoutSchema.safeParse({

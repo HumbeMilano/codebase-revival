@@ -142,7 +142,7 @@ def run():
     check('dashboard revision advances once', json.loads(save_layout(empty_layout, 1, user=USER_A))['revision'], 2)
     save_layout(layout, 1, user=USER_A, fail='Dashboard changed')
     check('stale dashboard save preserves confirmed layout', json.loads(sql(f"SELECT layout FROM dashboard_preferences WHERE user_id='{USER_A}';", user=USER_A)), empty_layout)
-    for invalid_layout in [None, [], {}, {'version': 3, 'widgets': []}, {'version': 1, 'widgets': None},
+    for invalid_layout in [None, [], {}, {'version': 4, 'widgets': []}, {'version': 1, 'widgets': None},
                            {'version': 1, 'widgets': [{'id': 'unknown', 'size': 'compact'}]},
                            {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'giant'}]},
                            {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'wide'}] * 2},
@@ -179,6 +179,18 @@ def run():
         {'version':2,'widgets':[{'id':'tasks','key':str(i),'size':'small'} for i in range(37)]},
     ]:
         save_layout(bad,4,user=USER_A,fail='Invalid dashboard layout')
+    reviewed = {'version':3,'widgets':[{'id':'shopping','key':'list','size':'column','listId':str(uuid.uuid4())},{'id':'member-tasks','key':'person-tasks','size':'tall','memberId':'m_example'},{'id':'reminders','key':'reminders','size':'compact'},{'id':'next-bill','key':'next','size':'wide'},{'id':'shopping-summary','key':'all-lists','size':'square'}]}
+    check('reviewed widgets retain only private reference IDs',json.loads(save_layout(reviewed,4,user=USER_A))['layout'],reviewed)
+    for bad in [
+        {'version':3,'widgets':[reviewed['widgets'][0],{**reviewed['widgets'][0],'key':'another'}]},
+        {'version':3,'widgets':[{'id':'notes','key':'notes','size':'small','listId':str(uuid.uuid4())}]},
+        {'version':3,'widgets':[{'id':'shopping','key':'shopping','size':'small','listId':'bad-id'}]},
+        {'version':3,'widgets':[{'id':'member-tasks','key':'person','size':'small','amount':100}]},
+        {'version':3,'widgets':[None]}, {'version':3,'widgets':[],'private':42},
+        {'version':3,'widgets':[{'id':'tasks','key':'a','size':'small','memberId':'m_example'}]},
+    ]:
+        save_layout(bad,5,user=USER_A,fail='Invalid dashboard layout')
+    check('reviewed layout still stays private between accounts',sql(f"SELECT count(*) FROM dashboard_preferences WHERE user_id='{USER_A}';",user=USER_B),'0')
     hid = sql("SELECT create_household('Test Home','Adult A','1234');", user=USER_A)
     member_a = sql('SELECT member_key FROM my_context();', user=USER_A)
     invite = sql("SELECT prepare_email_invite('Adult B','admin','b@example.invalid')->>'code';", user=USER_A)
