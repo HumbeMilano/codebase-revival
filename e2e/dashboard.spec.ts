@@ -33,7 +33,7 @@ test("widgets can be hidden, resized, reordered and retained after reload", asyn
   await page.getByRole("button", { name: "Ocultar fondo común", exact: true }).click();
   await page.getByRole("button", { name: "Cambiar tamaño de tareas de hoy", exact: true }).click();
   for (let index = 0; index < 3; index++)
-    await page.getByRole("button", { name: "Subir notas", exact: true }).click();
+    await page.getByRole("button", { name: "Mover notas", exact: true }).press("ArrowUp");
   await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(editor).toHaveCount(0);
   const ids = () =>
@@ -215,25 +215,47 @@ test("informational widgets leave household records unchanged", async ({ page })
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
-test("holding a widget enables direct dragging and corner resizing", async ({ page }, testInfo) => {
+test("only the grip moves a widget and the corner resizes it", async ({ page }, testInfo) => {
   const backend = new HouseholdBackend();
   seedLegacyHome(backend);
   await backend.install(page);
   await signIn(page);
   await expect(page.locator('[data-widget="tasks"]')).toBeVisible();
-  const first = (await page.locator('[data-widget="tasks"]').boundingBox())!;
   const touch =
     testInfo.project.name === "mobile" ? await page.context().newCDPSession(page) : null;
-  const start = { x: first.x + first.width / 2, y: first.y + 85 };
+  // Holding the body must not open editing or initiate a drag.
+  const body = (await page.locator('[data-widget="tasks"]').boundingBox())!;
+  const bodyPoint = { x: body.x + body.width / 2, y: body.y + 85 };
+  if (touch)
+    await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [bodyPoint] });
+  else {
+    await page.mouse.move(bodyPoint.x, bodyPoint.y);
+    await page.mouse.down();
+  }
+  await page.waitForTimeout(600);
+  await expect(page.getByRole("region", { name: "Personalizar inicio", exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".widget-lifted")).toHaveCount(0);
+  if (touch) await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  else await page.mouse.up();
+  await page.getByRole("button", { name: "Personalizar", exact: true }).click();
+  const move = page.getByRole("button", { name: "Mover tareas de hoy", exact: true });
+  await move.scrollIntoViewIfNeeded();
+  const grip = (await move.boundingBox())!,
+    start = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
   if (touch)
     await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [start] });
   else {
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
   }
-  await expect(
-    page.getByRole("region", { name: "Personalizar inicio", exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('[data-widget="tasks"]')).toHaveClass(/widget-lifted/);
+  const lifted = (await page.locator('[data-widget="tasks"] .widget-card').boundingBox())!;
+  const slot = (await page.locator('[data-widget="tasks"]').boundingBox())!;
+  // Lifting must keep the card under the grip, even inside a container query.
+  expect(Math.abs(lifted.x - slot.x)).toBeLessThan(8);
+  expect(Math.abs(lifted.y - slot.y)).toBeLessThan(8);
   const target = (await page.locator('[data-widget="shopping"]').boundingBox())!;
   const end = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
   if (touch) {
@@ -278,7 +300,7 @@ test("holding a widget enables direct dragging and corner resizing", async ({ pa
   await expect(page.locator('[data-widget="clock"]')).toBeVisible();
   expect(backend.unexpectedRequests).toEqual([]);
   await page.screenshot({
-    path: testInfo.outputPath("hold-and-move-dashboard.png"),
+    path: testInfo.outputPath("handle-move-dashboard.png"),
     fullPage: true,
   });
 });

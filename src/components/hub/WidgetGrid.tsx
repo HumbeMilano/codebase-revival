@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Grip, Maximize2, Minus, Settings2 } from "lucide-react";
+import { Grip, Maximize2, Minus, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   moveDashboardWidget,
@@ -23,40 +23,35 @@ type Gesture = {
   lastY: number;
   rect: DOMRect;
   original: DashboardLayout;
-  activated: boolean;
   over: string;
-  timer?: ReturnType<typeof setTimeout>;
+  capture: HTMLElement;
   frame?: number;
 };
 type Props = {
   layout: DashboardLayout;
   editing: boolean;
   disabled: boolean;
-  onEdit: () => void;
   onChange: (layout: DashboardLayout) => void;
   describe: (id: WidgetId) => { title: string; tone: string };
   onConfigure: (key: string) => void;
   children: (widget: DashboardWidget) => React.ReactNode;
 };
 
-/** Native pointer gestures keep the normal page scroll until a deliberate hold.
+/** Only the drag and resize handles capture pointers; the cards scroll natively.
  * Layout preferences contain only IDs and sizes; gestures never mutate records. */
 export function WidgetGrid({
   layout,
   editing,
   disabled,
-  onEdit,
   onChange,
   describe,
   children,
   onConfigure,
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
-  const props = useRef({ layout, editing, disabled, onEdit, onChange });
-  props.current = { layout, editing, disabled, onEdit, onChange };
+  const props = useRef({ layout, editing, disabled, onChange });
+  props.current = { layout, editing, disabled, onChange };
   const gesture = useRef<Gesture | null>(null);
-  const contacts = useRef(new Map<number, { x: number; y: number }>());
-  const pan = useRef<{ y: number } | null>(null);
   const cancelGesture = useRef<() => void>(() => {});
   const suppressClickUntil = useRef(0);
   const resized = useRef(false);
@@ -112,19 +107,19 @@ export function WidgetGrid({
   }, [layout, active]);
 
   useEffect(() => {
-    const activeContacts = contacts.current;
     const card = (id: string) =>
       root.current?.querySelector<HTMLElement>(`[data-widget-card="${id}"]`);
     const finish = (cancel = false) => {
       const g = gesture.current;
       if (!g) return;
-      if (g.timer) clearTimeout(g.timer);
       if (g.frame) cancelAnimationFrame(g.frame);
+      gesture.current = null;
+      if (g.capture.hasPointerCapture?.(g.pointer)) g.capture.releasePointerCapture(g.pointer);
       const node = card(g.id);
       if (node) {
         const from = node.getBoundingClientRect();
         node.removeAttribute("style");
-        if (g.activated && g.kind === "move" && !cancel && node.animate && !reduced()) {
+        if (g.kind === "move" && !cancel && node.animate && !reduced()) {
           const to = node.getBoundingClientRect();
           node.animate(
             [
@@ -137,19 +132,18 @@ export function WidgetGrid({
           );
         }
       }
-      gesture.current = null;
-      if (g.activated && (g.kind === "move" || Math.hypot(g.lastX - g.x, g.lastY - g.y) > 10))
+      if (g.kind === "move" || Math.hypot(g.lastX - g.x, g.lastY - g.y) > 10)
         suppressClickUntil.current = Date.now() + 350;
       resized.current =
         g.kind === "resize" && (cancel || Math.hypot(g.lastX - g.x, g.lastY - g.y) > 10);
       setActive(null);
-      if (cancel && g.activated) props.current.onChange(g.original);
-      if (g.activated) setAnnouncement(cancel ? "Movimiento cancelado" : "Widget colocado");
+      if (cancel) props.current.onChange(g.original);
+      setAnnouncement(cancel ? "Movimiento cancelado" : "Widget colocado");
     };
     cancelGesture.current = () => finish(true);
     const paint = () => {
       const g = gesture.current;
-      if (!g?.activated) return;
+      if (!g) return;
       const node = card(g.id);
       if (g.kind === "move" && node) {
         Object.assign(node.style, {
@@ -209,41 +203,24 @@ export function WidgetGrid({
       g.frame = requestAnimationFrame(paint);
     };
     const move = (event: PointerEvent) => {
-      if (contacts.current.has(event.pointerId)) {
-        contacts.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        if (pan.current) {
-          event.preventDefault();
-          if (contacts.current.size >= 2) {
-            const y =
-              [...contacts.current.values()].reduce((sum, point) => sum + point.y, 0) /
-              contacts.current.size;
-            window.scrollBy(0, pan.current.y - y);
-            pan.current.y = y;
-          }
-          return;
-        }
-      }
       const g = gesture.current;
       if (!g || event.pointerId !== g.pointer) return;
       g.lastX = event.clientX;
       g.lastY = event.clientY;
-      if (!g.activated && Math.hypot(g.lastX - g.x, g.lastY - g.y) > 10) finish();
-      else if (g.activated) {
-        event.preventDefault();
-        if (!g.frame) g.frame = requestAnimationFrame(paint);
-      }
+      event.preventDefault();
+      if (!g.frame) g.frame = requestAnimationFrame(paint);
     };
     const end = (event: PointerEvent) => {
-      contacts.current.delete(event.pointerId);
-      if (pan.current) {
-        suppressClickUntil.current = Date.now() + 600;
-        if (!contacts.current.size) pan.current = null;
-        return;
-      }
-      if (event.pointerId === gesture.current?.pointer) finish(event.type === "pointercancel");
+      if (event.pointerId === gesture.current?.pointer) finish(event.type !== "pointerup");
     };
-    const touch = (event: TouchEvent) => {
-      if (gesture.current?.activated || pan.current) event.preventDefault();
+    // A second touch cancels editing that pointer; it never synthesizes page scrolling.
+    const extraContact = (event: PointerEvent) => {
+      if (
+        event.pointerType === "touch" &&
+        gesture.current &&
+        event.pointerId !== gesture.current.pointer
+      )
+        finish(true);
     };
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape" && gesture.current) {
@@ -251,50 +228,42 @@ export function WidgetGrid({
         finish(true);
       }
     };
-    const blur = () => {
-      finish(true);
-      contacts.current.clear();
-      pan.current = null;
-    };
+    const blur = () => finish(true);
     window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerdown", extraContact, true);
     window.addEventListener("pointerup", end);
     window.addEventListener("pointercancel", end);
-    window.addEventListener("touchmove", touch, { passive: false });
+    window.addEventListener("lostpointercapture", end);
     window.addEventListener("keydown", key);
     window.addEventListener("blur", blur);
     return () => {
       const g = gesture.current;
-      if (g?.timer) clearTimeout(g.timer);
       if (g?.frame) cancelAnimationFrame(g.frame);
-      activeContacts.clear();
-      pan.current = null;
       window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerdown", extraContact, true);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
-      window.removeEventListener("touchmove", touch);
+      window.removeEventListener("lostpointercapture", end);
       window.removeEventListener("keydown", key);
       window.removeEventListener("blur", blur);
     };
   }, [describe]);
 
+  useEffect(() => {
+    if (!editing || disabled) cancelGesture.current();
+  }, [editing, disabled]);
+
   const begin = (
-    event: React.PointerEvent<HTMLElement>,
+    event: React.PointerEvent<HTMLButtonElement>,
     id: string,
-    kind: Gesture["kind"] = "move",
+    kind: Gesture["kind"],
   ) => {
-    if (disabled || pan.current || gesture.current || event.button !== 0 || !event.isPrimary)
-      return;
-    if (!editing && (event.target as HTMLElement).closest("button,input,textarea,a,select")) return;
-    if (
-      editing &&
-      (event.target as HTMLElement).closest("[data-widget-control]") &&
-      !(event.target as HTMLElement).closest("[data-widget-drag]") &&
-      kind !== "resize"
-    )
-      return;
-    const rect = event.currentTarget
-      .closest<HTMLElement>("[data-grid-widget]")!
-      .getBoundingClientRect();
+    if (!editing || disabled || gesture.current || event.button !== 0 || !event.isPrimary) return;
+    event.preventDefault();
+    const source = event.currentTarget;
+    source.focus({ preventScroll: true });
+    const rect = source.closest<HTMLElement>("[data-grid-widget]")!.getBoundingClientRect();
+    const capture = kind === "resize" ? source : root.current!;
     const g: Gesture = {
       id,
       kind,
@@ -305,42 +274,30 @@ export function WidgetGrid({
       lastY: event.clientY,
       rect,
       original: layout,
-      activated: false,
       over: id,
+      capture,
     };
     gesture.current = g;
     resized.current = false;
-    const source = event.currentTarget;
-    const activate = () => {
-      if (gesture.current !== g) return;
-      g.activated = true;
-      if (event.pointerType === "touch")
-        contacts.current.set(g.pointer, { x: g.lastX, y: g.lastY });
-      (g.kind === "resize" ? source : root.current)?.setPointerCapture?.(g.pointer);
-      if (g.kind === "move") {
-        const node = root.current?.querySelector<HTMLElement>(`[data-widget-card="${g.id}"]`);
-        if (node)
-          Object.assign(node.style, {
-            position: "fixed",
-            left: `${g.rect.left}px`,
-            top: `${g.rect.top}px`,
-            width: `${g.rect.width}px`,
-            height: `${g.rect.height}px`,
-            zIndex: "60",
-            pointerEvents: "none",
-            transform: "scale(1.03)",
-          });
-      }
-      props.current.onEdit();
-      setActive(id);
-      setAnnouncement(
-        `${describe(props.current.layout.widgets.find((w) => w.key === id)?.id ?? "notes").title}: arrastra para mover`,
-      );
-    };
-    if (editing) {
-      event.preventDefault();
-      activate();
-    } else g.timer = setTimeout(activate, 480);
+    capture.setPointerCapture?.(g.pointer);
+    if (kind === "move") {
+      const node = root.current?.querySelector<HTMLElement>(`[data-widget-card="${g.id}"]`);
+      if (node)
+        Object.assign(node.style, {
+          position: "fixed",
+          left: `${rect.left}px`,
+          top: `${rect.top}px`,
+          width: `${rect.width}px`,
+          height: `${rect.height}px`,
+          zIndex: "60",
+          pointerEvents: "none",
+          transform: "scale(1.03)",
+        });
+    }
+    setActive(id);
+    setAnnouncement(
+      `${describe(layout.widgets.find((w) => w.key === id)?.id ?? "notes").title}: arrastra para mover`,
+    );
   };
   const cycleSize = (id: string) => {
     const sizes = WIDGET_SIZES;
@@ -361,21 +318,6 @@ export function WidgetGrid({
         ref={root}
         aria-label="Widgets de inicio"
         className={cn("dashboard-grid", editing && "is-editing")}
-        onPointerDownCapture={(event) => {
-          if (!editing || disabled || event.pointerType !== "touch") return;
-          contacts.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-          if (contacts.current.size >= 2 || pan.current) {
-            cancelGesture.current();
-            pan.current = {
-              y:
-                [...contacts.current.values()].reduce((sum, point) => sum + point.y, 0) /
-                contacts.current.size,
-            };
-            for (const id of contacts.current.keys()) root.current?.setPointerCapture?.(id);
-            event.preventDefault();
-            event.stopPropagation();
-          }
-        }}
         onClickCapture={(event) => {
           if (Date.now() < suppressClickUntil.current && event.detail !== 0) {
             event.preventDefault();
@@ -383,7 +325,7 @@ export function WidgetGrid({
           }
         }}
       >
-        {layout.widgets.map((widget, index) => {
+        {layout.widgets.map((widget) => {
           const { title, tone } = describe(widget.id);
           return (
             <section
@@ -402,11 +344,10 @@ export function WidgetGrid({
                 gridColumn: `span ${widgetDimensions[widget.size][0]}`,
                 gridRow: `span ${widgetDimensions[widget.size][1]}`,
               }}
-              onPointerDown={(event) => begin(event, widget.key)}
               onContextMenu={(event) => event.preventDefault()}
               onClickCapture={(event) => {
                 if (
-                  (editing || gesture.current?.activated) &&
+                  (editing || !!gesture.current) &&
                   !(event.target as HTMLElement).closest("[data-widget-control]")
                 ) {
                   event.preventDefault();
@@ -455,6 +396,9 @@ export function WidgetGrid({
                     className="widget-drag-label"
                     disabled={disabled}
                     aria-label={`Mover ${title.toLocaleLowerCase("es")}`}
+                    title="Arrastrar para mover"
+                    aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
+                    onPointerDown={(event) => begin(event, widget.key, "move")}
                     onKeyDown={(event) => {
                       if (["ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"].includes(event.key)) {
                         event.preventDefault();
@@ -470,24 +414,6 @@ export function WidgetGrid({
                   >
                     <Grip className="size-4" />
                   </button>
-                  <div data-widget-control className="widget-order-controls">
-                    <button
-                      type="button"
-                      disabled={disabled || index === 0}
-                      aria-label={`Subir ${title.toLocaleLowerCase("es")}`}
-                      onClick={() => onChange(moveDashboardWidget(layout, widget.key, -1))}
-                    >
-                      <ArrowUp className="size-4" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={disabled || index === layout.widgets.length - 1}
-                      aria-label={`Bajar ${title.toLocaleLowerCase("es")}`}
-                      onClick={() => onChange(moveDashboardWidget(layout, widget.key, 1))}
-                    >
-                      <ArrowDown className="size-4" />
-                    </button>
-                  </div>
                   <button
                     type="button"
                     data-widget-control

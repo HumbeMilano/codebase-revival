@@ -189,7 +189,7 @@ body {
   position: relative;
   min-width: 0;
   grid-row: span 2;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .dashboard-widget.widget-wide {
   grid-column: span 2;
@@ -225,7 +225,7 @@ body {
   flex-shrink: 0;
 }
 .is-editing .dashboard-widget {
-  touch-action: none;
+  touch-action: pan-y pinch-zoom;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -260,7 +260,10 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 26px;
-  cursor: grab;
+  pointer-events: none;
+}
+.widget-controls [data-widget-control] {
+  pointer-events: auto;
 }
 .widget-remove {
   position: absolute;
@@ -290,25 +293,7 @@ body {
   font-size: 11px;
   font-weight: 600;
   cursor: grab;
-}
-.widget-order-controls {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  display: flex;
-  background: var(--card);
-  border-radius: 16px;
-  box-shadow: var(--shadow-card);
-}
-.widget-order-controls button {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 36px;
-  border-radius: 16px;
-}
-.widget-order-controls button:disabled {
-  opacity: 0.25;
+  touch-action: none;
 }
 .widget-resize {
   position: absolute;
@@ -326,8 +311,7 @@ body {
   touch-action: none;
 }
 .widget-drag-label:focus-visible,
-.widget-resize:focus-visible,
-.widget-order-controls button:focus-visible {
+.widget-resize:focus-visible {
   outline: 3px solid var(--ring);
   outline-offset: 3px;
 }
@@ -473,7 +457,7 @@ select.planner-field {
   overflow: hidden;
 }
 .dashboard-grid.is-editing {
-  touch-action: none;
+  touch-action: pan-y pinch-zoom;
 }
 .dashboard-editing {
   padding-left: 46px;
@@ -503,22 +487,19 @@ select.planner-field {
   height: 18px;
 }
 .widget-drag-label {
-  left: 8px;
+  left: 0;
   right: auto;
-  bottom: 8px;
-  min-height: 30px;
-  width: 32px;
-  padding: 4px;
+  bottom: -8px;
+  min-height: 44px;
+  width: 36px;
+  padding: 6px;
+  border: 2px solid var(--background);
+  border-radius: 14px;
 }
-.widget-order-controls {
-  top: auto;
-  bottom: 8px;
-  left: 44px;
-  right: auto;
-}
-.widget-order-controls button {
-  width: 26px;
-  height: 30px;
+@container (min-width: 88px) {
+  .widget-drag-label {
+    width: 44px;
+  }
 }
 .dw-header {
   display: flex;
