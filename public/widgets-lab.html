@@ -1,0 +1,3024 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#f6f4ef" />
+    <title>Widgets · HomeHub</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f6f4ef;
+        --ink: #202120;
+        --muted: #787972;
+        --line: #deded5;
+        --mint: #bee5d7;
+        --lilac: #dfd4f6;
+        --peach: #ffdbac;
+        --blue: #c7e7f2;
+        --row: 128px;
+        --gap: 14px;
+        --rail: 68px;
+        font-family:
+          Inter,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.42;
+      }
+      button:focus-visible,
+      section[tabindex]:focus-visible {
+        outline: 3px solid #478873;
+        outline-offset: 4px;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        -webkit-tap-highlight-color: transparent;
+      }
+      button {
+        touch-action: manipulation;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+        padding: 11px 12px;
+        font-size: 16px;
+      }
+      textarea {
+        resize: vertical;
+        line-height: 1.6;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        outline: 2px solid #8fb6a6;
+        outline-offset: 1px;
+      }
+      svg {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        vertical-align: middle;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      }
+      .rail {
+        position: fixed;
+        z-index: 30;
+        left: max(10px, env(safe-area-inset-left));
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding: 7px;
+        width: 50px;
+        border: 1px solid #fff;
+        border-radius: 22px;
+        background: #fffffff2;
+        box-shadow: 0 6px 30px #3035270c;
+      }
+      .rail button {
+        position: relative;
+        display: grid;
+        place-items: center;
+        border: 0;
+        border-radius: 13px;
+        background: transparent;
+        min-height: 36px;
+        width: 34px;
+      }
+      .rail button:hover {
+        background: var(--paper);
+      }
+      .rail button[aria-pressed="true"] {
+        background: var(--ink);
+        color: #fff;
+      }
+      .rail .brand {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        background: var(--mint);
+        font-weight: 800;
+        margin-bottom: 6px;
+      }
+      .rail .divider {
+        width: 22px;
+        height: 1px;
+        background: var(--line);
+        margin: 4px auto;
+      }
+      .rail .badge {
+        position: absolute;
+        right: -3px;
+        top: -2px;
+        min-width: 16px;
+        padding: 1px 3px;
+        border-radius: 8px;
+        font-size: 9px;
+        font-weight: 800;
+        background: var(--peach);
+        color: var(--ink);
+      }
+      .workspace {
+        padding: 24px 24px 80px calc(var(--rail) + 14px);
+        max-width: 1440px;
+        margin: auto;
+      }
+      .page-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 24px;
+        min-height: 32px;
+      }
+      .heading-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      h1 {
+        font-size: 23px;
+        font-weight: 750;
+        letter-spacing: -1px;
+      }
+      .count {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 3px 7px;
+      }
+      .page-meta {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .example-badge {
+        padding: 5px 8px;
+        border-radius: 8px;
+        background: #ede9e0;
+        white-space: nowrap;
+      }
+      .saved {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+      }
+      .saved::before {
+        content: "";
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #689b83;
+      }
+      .stage {
+        min-height: calc(100dvh - 115px);
+        touch-action: pan-y pinch-zoom;
+      }
+      body.editing .stage {
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .board {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-auto-rows: var(--row);
+        grid-auto-flow: row dense;
+        gap: var(--gap);
+        align-content: start;
+      }
+      .widget {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        border-radius: 26px;
+        container-type: inline-size;
+      }
+      .surface {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        border: 1px solid #00000004;
+        border-radius: inherit;
+        background: var(--tone, #fff);
+        color: var(--text, var(--ink));
+        padding: 20px;
+        box-shadow: 0 6px 12px #242c2310;
+      }
+      .widget[data-rows="1"] .surface {
+        padding: 15px 17px;
+      }
+      .widget[data-id="clock"],
+      .widget[data-id="finance"] {
+        --tone: #242625;
+        --text: #fff;
+      }
+      .widget[data-id="tasks"],
+      .widget[data-id="my-tasks"],
+      .widget[data-id="specific-list"] {
+        --tone: var(--mint);
+      }
+      .widget[data-id="month-calendar"],
+      .widget[data-id="calendar"],
+      .widget[data-id="progress"] {
+        --tone: var(--lilac);
+      }
+      .widget[data-id="shopping"],
+      .widget[data-id="pinned-note"],
+      .widget[data-id="specific-note"] {
+        --tone: var(--peach);
+      }
+      .widget[data-id="family"],
+      .widget[data-id="week"],
+      .widget[data-id="member-summary"] {
+        --tone: var(--blue);
+      }
+      .widget-header {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding-right: 20px;
+        flex-shrink: 0;
+        margin-bottom: 14px;
+        min-height: 21px;
+      }
+      .widget-header h2 {
+        font-size: clamp(12px, 5cqw, 19px);
+        line-height: 1.25;
+        letter-spacing: -0.4px;
+        font-weight: 750;
+        overflow-wrap: anywhere;
+      }
+      .widget-header svg {
+        width: 18px;
+        height: 18px;
+      }
+      .widget-main {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .review-button {
+        position: absolute;
+        right: 12px;
+        top: 12px;
+        z-index: 3;
+        display: grid;
+        place-items: center;
+        width: 27px;
+        height: 27px;
+        border: 0;
+        border-radius: 50%;
+        background: #ffffff50;
+        color: inherit;
+        opacity: 0.72;
+      }
+      .widget[data-id="clock"] .review-button,
+      .widget[data-id="finance"] .review-button {
+        color: #fff;
+      }
+      .review-button svg {
+        width: 14px;
+        height: 14px;
+      }
+      .review-button.has-note {
+        background: var(--ink);
+        color: #fff;
+        opacity: 1;
+      }
+      .edit-controls {
+        display: none;
+      }
+      body.editing .widget {
+        cursor: grab;
+        outline: 1px dashed #9caa9f;
+        outline-offset: 3px;
+      }
+      body.editing .widget.selected {
+        outline: 2px solid #477e6c;
+        outline-offset: 3px;
+      }
+      body.editing .edit-controls {
+        display: contents;
+      }
+      body.editing .widget-main button {
+        pointer-events: none;
+      }
+      .widget-control {
+        position: absolute;
+        z-index: 5;
+        border: 1px solid #e5e7df;
+        background: #fff;
+        color: var(--ink);
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        box-shadow: 0 2px 6px #0000000b;
+      }
+      .remove {
+        left: -8px;
+        top: -8px;
+      }
+      .resize {
+        bottom: -7px;
+        right: -7px;
+        width: 32px;
+        height: 32px;
+        border-radius: 11px;
+        cursor: nwse-resize;
+        touch-action: none;
+      }
+      .resize svg {
+        width: 16px;
+        height: 16px;
+      }
+      .widget.is-dragging .surface {
+        opacity: 0.2;
+      }
+      .widget.is-dragging {
+        outline: 2px dashed #477e6c;
+      }
+      .drag-ghost {
+        position: fixed;
+        z-index: 80;
+        pointer-events: none;
+        margin: 0;
+        opacity: 0.95;
+        filter: drop-shadow(0 16px 18px #00000020);
+        transform-origin: center;
+      }
+      .drag-ghost .review-button,
+      .drag-ghost .edit-controls {
+        display: none;
+      }
+      .stat {
+        font-size: clamp(28px, 17cqw, 58px);
+        font-weight: 780;
+        line-height: 1.05;
+        letter-spacing: -2px;
+        font-variant-numeric: tabular-nums;
+      }
+      .muted {
+        opacity: 0.61;
+      }
+      .label {
+        font-size: 12px;
+        opacity: 0.65;
+        line-height: 1.4;
+      }
+      .stat-line {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        flex-wrap: wrap;
+        margin-bottom: 13px;
+      }
+      .tiny {
+        justify-content: center;
+        gap: 7px;
+        padding-right: 9px;
+      }
+      .tiny .label {
+        font-size: clamp(10px, 5cqw, 13px);
+        font-weight: 650;
+        opacity: 0.7;
+      }
+      .tiny .stat {
+        font-size: clamp(22px, 14cqw, 42px);
+        letter-spacing: -1px;
+        line-height: 1.1;
+        overflow-wrap: anywhere;
+      }
+      .tiny .text-value {
+        font-size: clamp(12px, 7cqw, 22px);
+        line-height: 1.2;
+        letter-spacing: -0.5px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 0;
+        min-width: 0;
+      }
+      .row-text {
+        min-width: 0;
+        flex: 1;
+        font-size: clamp(11px, 5cqw, 14px);
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
+      .row-meta {
+        display: block;
+        opacity: 0.58;
+        font-size: 11px;
+        margin-top: 2px;
+      }
+      .check {
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        width: 19px;
+        height: 19px;
+        border: 1px solid currentColor;
+        opacity: 0.5;
+        border-radius: 7px;
+      }
+      .check.done {
+        background: #294f3c;
+        border-color: #294f3c;
+        opacity: 0.75;
+        color: #fff;
+      }
+      .check svg {
+        width: 12px;
+        height: 12px;
+      }
+      .completed {
+        text-decoration: line-through;
+        opacity: 0.55;
+      }
+      .avatar {
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--avatar, #9ecadf);
+        font-size: 13px;
+        font-weight: 750;
+        color: #263f41;
+      }
+      .avatar.small {
+        width: 25px;
+        height: 25px;
+        font-size: 10px;
+      }
+      .person-line {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+        margin-bottom: 13px;
+      }
+      .person-name {
+        font-size: clamp(14px, 8cqw, 22px);
+        font-weight: 750;
+        letter-spacing: -0.5px;
+      }
+      .metric-list {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        margin-top: auto;
+      }
+      .metric-list div {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 13px;
+      }
+      .metric-list strong {
+        font-size: clamp(13px, 6cqw, 21px);
+        font-variant-numeric: tabular-nums;
+      }
+      .family-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 13px;
+        margin: auto 0;
+      }
+      .family-person {
+        min-width: 0;
+        text-align: center;
+        font-size: 11px;
+      }
+      .family-person .avatar {
+        margin: 0 auto 7px;
+      }
+      .family-person .label {
+        margin-top: 4px;
+        font-size: 10px;
+      }
+      .list-card {
+        padding: 10px 12px;
+        border-radius: 15px;
+        background: #ffffff6b;
+      }
+      .list-card .row {
+        padding: 0;
+      }
+      .progress-track {
+        height: 5px;
+        background: #00000010;
+        border-radius: 8px;
+        margin-top: 11px;
+        overflow: hidden;
+      }
+      .progress-track i {
+        display: block;
+        height: 100%;
+        background: currentColor;
+        border-radius: inherit;
+      }
+      .note-title {
+        font-size: clamp(15px, 8cqw, 28px);
+        font-weight: 750;
+        line-height: 1.3;
+        letter-spacing: -0.7px;
+        margin-bottom: 12px;
+      }
+      .note-body {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-size: clamp(12px, 5cqw, 17px);
+        line-height: 1.75;
+        opacity: 0.78;
+      }
+      .note-date {
+        margin-top: auto;
+        padding-top: 12px;
+        font-size: 11px;
+        opacity: 0.5;
+      }
+      .member-month {
+        text-transform: capitalize;
+        margin-bottom: 15px;
+      }
+      .date-chip {
+        width: 36px;
+        height: 39px;
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: #ffffff70;
+        flex-shrink: 0;
+      }
+      .date-chip strong {
+        font-size: 17px;
+        line-height: 1;
+      }
+      .date-chip span {
+        margin-top: 3px;
+        font-size: 9px;
+        text-transform: uppercase;
+        opacity: 0.6;
+      }
+      .bill-amount {
+        font-size: clamp(12px, 5cqw, 18px);
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #bc914e;
+        flex-shrink: 0;
+      }
+      .ring-wrap {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+        min-height: 0;
+      }
+      .ring {
+        position: relative;
+        width: min(82%, 170px);
+        aspect-ratio: 1;
+        flex-shrink: 1;
+        min-height: 0;
+      }
+      .ring svg {
+        width: 100%;
+        height: 100%;
+        transform: rotate(-90deg);
+        stroke-width: 6;
+      }
+      .ring .ring-number {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-size: clamp(23px, 17cqw, 45px);
+        font-weight: 750;
+        letter-spacing: -2px;
+      }
+      .clock {
+        justify-content: center;
+        gap: 12px;
+      }
+      .clock time {
+        font-size: clamp(27px, 21cqw, 99px);
+        font-weight: 750;
+        letter-spacing: -3px;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+      .clock .weekday {
+        font-size: clamp(13px, 7cqw, 23px);
+        text-transform: capitalize;
+      }
+      .quick-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        flex: 1;
+        min-height: 0;
+      }
+      .quick-button {
+        min-width: 0;
+        border: 0;
+        border-radius: 13px;
+        background: var(--paper);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        font-size: 12px;
+      }
+      .quick-button:hover {
+        background: var(--mint);
+      }
+      .calendar-main {
+        overflow: hidden;
+      }
+      .month-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 3px;
+        flex-shrink: 0;
+        margin-bottom: 12px;
+        min-height: 30px;
+      }
+      .month-heading strong {
+        font-size: clamp(12px, 5cqw, 23px);
+        text-transform: capitalize;
+        letter-spacing: -0.6px;
+      }
+      .month-heading button {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 10px;
+        background: #ffffff65;
+        flex-shrink: 0;
+      }
+      .month-heading button svg {
+        width: 15px;
+        height: 15px;
+      }
+      .weekday-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        flex-shrink: 0;
+        text-align: center;
+        font-size: clamp(9px, 2.8cqw, 14px);
+        opacity: 0.55;
+        margin-bottom: 5px;
+      }
+      .month-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        grid-template-rows: repeat(6, minmax(0, 1fr));
+        gap: 3px;
+        flex: 1;
+        min-height: 0;
+      }
+      .day {
+        display: grid;
+        place-items: center;
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        padding: 1px;
+        border: 0;
+        background: none;
+        border-radius: 10px;
+        font-size: clamp(9px, 3.5cqw, 23px);
+        line-height: 1;
+      }
+      .day:hover {
+        background: #ffffff60;
+      }
+      .day.outside {
+        opacity: 0.25;
+      }
+      .day .date-pill {
+        display: grid;
+        place-items: center;
+        width: min(90%, 2.1em);
+        height: min(90%, 2.1em);
+        border-radius: 10px;
+      }
+      .day.today .date-pill {
+        background: var(--ink);
+        color: #fff;
+      }
+      .day.selected:not(.today) .date-pill {
+        box-shadow: inset 0 0 0 1px currentColor;
+      }
+      .day-markers {
+        position: absolute;
+        bottom: 2px;
+        display: flex;
+        gap: 2px;
+      }
+      .day-markers i {
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: #8161af;
+      }
+      .day-markers i.bill {
+        background: #b38232;
+      }
+      .day-markers i.reminder {
+        background: #397b62;
+      }
+      .focus-strip {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin: 0 0 20px;
+      }
+      .focus-strip button {
+        width: 35px;
+        height: 35px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+      }
+      .focus-strip strong {
+        font-size: 14px;
+        text-align: center;
+        min-width: 0;
+      }
+      body.focus-mode .focus-strip {
+        display: flex;
+      }
+      body.focus-mode .board {
+        max-width: 960px;
+        margin: 0 auto;
+      }
+      .empty {
+        grid-column: 1/-1;
+        grid-row: span 2;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        border-radius: 24px;
+        font-size: 14px;
+      }
+      dialog {
+        padding: 0;
+        border: 1px solid #fff;
+        border-radius: 25px;
+        background: #faf9f6;
+        color: var(--ink);
+        width: min(390px, calc(100vw - 24px));
+        max-height: calc(100dvh - 24px);
+        box-shadow: 0 20px 80px #00000026;
+      }
+      dialog::backdrop {
+        background: #242a2438;
+        backdrop-filter: blur(2px);
+      }
+      .sheet {
+        position: fixed;
+        margin: 0;
+        left: auto;
+        right: 12px;
+        top: 12px;
+        height: calc(100dvh - 24px);
+      }
+      .dialog-layout {
+        display: flex;
+        flex-direction: column;
+        max-height: inherit;
+        height: 100%;
+      }
+      .dialog-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 20px 20px 15px;
+        flex-shrink: 0;
+      }
+      .dialog-header h2 {
+        font-size: 19px;
+        letter-spacing: -0.7px;
+      }
+      .icon-button {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border: 0;
+        border-radius: 50%;
+        background: #eaeae4;
+        flex-shrink: 0;
+      }
+      .dialog-content {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 0 20px 22px;
+        flex: 1;
+        min-height: 0;
+      }
+      .field {
+        display: block;
+        margin-bottom: 19px;
+      }
+      .field-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 750;
+        margin-bottom: 8px;
+      }
+      #widget-adjustments {
+        margin-bottom: 20px;
+      }
+      #widget-adjustments > summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 44px;
+        padding: 11px 13px;
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: #fff;
+        cursor: pointer;
+        list-style: none;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      #widget-adjustments > summary::-webkit-details-marker {
+        display: none;
+      }
+      #widget-adjustments > summary::after {
+        content: "+";
+        font-size: 18px;
+      }
+      #widget-adjustments[open] > summary::after {
+        content: "−";
+      }
+      #widget-adjustments[open] > summary {
+        margin-bottom: 17px;
+      }
+      .size-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+      }
+      .size-button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 64px;
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: transparent;
+        font-size: 11px;
+      }
+      .size-button[aria-pressed="true"] {
+        border-color: var(--ink);
+        background: var(--mint);
+      }
+      .size-shape {
+        display: block;
+        border: 1.5px solid currentColor;
+        border-radius: 3px;
+      }
+      .dialog-footer {
+        display: flex;
+        gap: 8px;
+        padding: 14px 20px;
+        border-top: 1px solid var(--line);
+        background: #faf9f6;
+        flex-shrink: 0;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 11px 14px;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 13px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .button.primary {
+        background: var(--ink);
+        color: #fff;
+        border-color: var(--ink);
+      }
+      .button svg {
+        width: 16px;
+        height: 16px;
+      }
+      .button.grow {
+        flex: 1;
+      }
+      .status-options {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+      }
+      .status-options button {
+        min-height: 40px;
+        border: 1px solid var(--line);
+        background: none;
+        border-radius: 11px;
+        font-size: 11px;
+      }
+      .status-options button[aria-pressed="true"] {
+        background: var(--ink);
+        color: #fff;
+        border-color: var(--ink);
+      }
+      .catalogue {
+        width: min(680px, calc(100vw - 24px));
+      }
+      .catalogue-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 9px;
+        padding-bottom: 4px;
+      }
+      .catalogue-item {
+        min-height: 105px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        text-align: left;
+      }
+      .catalogue-item:disabled {
+        opacity: 0.64;
+      }
+      .catalogue-item span {
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .catalogue-item .catalogue-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .catalogue-item .added {
+        font-size: 9px;
+        color: var(--muted);
+      }
+      .move-buttons {
+        display: flex;
+        gap: 7px;
+        margin-top: 10px;
+      }
+      .move-buttons .button {
+        flex: 1;
+        font-size: 11px;
+        padding: 8px;
+      }
+      .toast {
+        position: fixed;
+        z-index: 100;
+        left: 50%;
+        bottom: 20px;
+        transform: translateX(-50%);
+        max-width: calc(100vw - 32px);
+        padding: 11px 17px;
+        border-radius: 13px;
+        background: var(--ink);
+        color: #fff;
+        box-shadow: 0 5px 30px #0002;
+        font-size: 13px;
+        text-align: center;
+      }
+      .toast[hidden] {
+        display: none;
+      }
+      @container (max-width:170px) {
+        .surface {
+          padding: 14px;
+        }
+        .widget-header {
+          margin-bottom: 10px;
+          gap: 5px;
+        }
+        .widget-header svg {
+          display: none;
+        }
+        .family-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .metric-list {
+          gap: 10px;
+        }
+        .metric-list div {
+          font-size: 11px;
+        }
+        .month-heading button {
+          display: none;
+        }
+        .month-heading {
+          min-height: 18px;
+          margin-bottom: 8px;
+        }
+        .row {
+          gap: 6px;
+        }
+        .review-button {
+          right: 8px;
+          top: 8px;
+          width: 23px;
+          height: 23px;
+        }
+        .bill-amount {
+          white-space: normal;
+        }
+      }
+      @media (max-width: 600px) {
+        :root {
+          --row: 112px;
+          --gap: 10px;
+          --rail: 60px;
+        }
+        .workspace {
+          padding: 17px 13px 60px calc(var(--rail) + 10px);
+        }
+        .page-heading {
+          margin-bottom: 19px;
+          gap: 6px;
+        }
+        h1 {
+          font-size: 20px;
+        }
+        .page-meta {
+          font-size: 9px;
+        }
+        .saved {
+          display: none;
+        }
+        .example-badge {
+          padding: 5px 6px;
+        }
+        .widget {
+          border-radius: 22px;
+        }
+        .surface {
+          padding: 14px;
+        }
+        .widget[data-rows="1"] .surface {
+          padding: 13px;
+        }
+        .stat-line {
+          gap: 4px;
+          margin-bottom: 9px;
+        }
+        .label {
+          font-size: 10px;
+        }
+        .row-meta {
+          font-size: 9px;
+        }
+        .row {
+          padding: 5px 0;
+        }
+        .metric-list div {
+          gap: 4px;
+        }
+        .note-body {
+          line-height: 1.6;
+        }
+        .catalogue-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .dialog-header {
+          padding: 17px;
+        }
+        .dialog-content {
+          padding: 0 17px 18px;
+        }
+        .dialog-footer {
+          padding: 12px 17px;
+        }
+      }
+      @container (max-width: 170px) {
+        .widget-header {
+          padding-right: 12px;
+        }
+        .widget-header h2 {
+          font-size: 10.5px;
+          line-height: 1.3;
+          letter-spacing: -0.25px;
+          overflow-wrap: normal;
+        }
+        .review-button {
+          width: 26px;
+          height: 26px;
+        }
+        .row {
+          gap: 5px;
+        }
+        .check {
+          width: 14px;
+          height: 14px;
+          border-radius: 5px;
+        }
+        .row-text {
+          font-size: 11px;
+          overflow-wrap: normal;
+        }
+        .person-line {
+          gap: 6px;
+          margin-bottom: 9px;
+        }
+        .person-line .avatar {
+          width: 25px;
+          height: 25px;
+          font-size: 11px;
+        }
+        .person-name {
+          font-size: 12px;
+        }
+        .member-month {
+          margin-bottom: 8px;
+          font-size: 10px;
+        }
+        .metric-list {
+          gap: 7px;
+          margin-top: 0;
+        }
+        .metric-list div {
+          font-size: 10px;
+          line-height: 1.2;
+          gap: 3px;
+        }
+        .metric-list strong {
+          font-size: 12px;
+        }
+        .note-title {
+          font-size: 14px;
+        }
+        .note-body {
+          font-size: 11px;
+          line-height: 1.6;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 10;
+          overflow: hidden;
+        }
+        .widget[data-rows="2"] .note-body {
+          -webkit-line-clamp: 4;
+        }
+        .widget[data-id="finance"] .stat {
+          font-size: 19px;
+          letter-spacing: -1px;
+        }
+        .widget[data-id="week"] .row,
+        .widget[data-id="calendar"] .row {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+        .widget[data-id="week"] .date-chip,
+        .widget[data-id="calendar"] .date-chip {
+          width: fit-content;
+          height: auto;
+          flex-direction: row;
+          gap: 4px;
+          padding: 4px 6px;
+        }
+        .widget[data-id="week"] .date-chip strong,
+        .widget[data-id="calendar"] .date-chip strong {
+          font-size: 12px;
+        }
+        .widget[data-id="week"] .date-chip span,
+        .widget[data-id="calendar"] .date-chip span {
+          margin-top: 0;
+        }
+        .widget[data-rows="2"] .rows > .row:nth-child(n + 3) {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="rail" aria-label="Herramientas de widgets">
+      <div class="brand" aria-label="HomeHub">h.</div>
+      <button
+        id="preview-toggle"
+        aria-label="Vista informativa"
+        aria-pressed="true"
+        title="Vista informativa"
+        data-icon="eye"
+      ></button>
+      <button
+        id="edit-toggle"
+        aria-label="Editar widgets"
+        aria-pressed="false"
+        title="Editar: un dedo mueve, dos dedos desplazan"
+        data-icon="edit"
+      ></button>
+      <button
+        id="catalogue-toggle"
+        aria-label="Añadir widgets"
+        title="Añadir widgets"
+        data-icon="plus"
+      ></button>
+      <button
+        id="focus-toggle"
+        aria-label="Revisar uno a uno"
+        aria-pressed="false"
+        title="Revisar uno a uno"
+        data-icon="focus"
+      ></button>
+      <span class="divider" aria-hidden="true"></span>
+      <button
+        id="review-toggle"
+        aria-label="Indicaciones generales"
+        title="Indicaciones"
+        data-icon="message"
+      >
+        <span id="review-count" class="badge" hidden></span>
+      </button>
+      <button
+        id="export-toggle"
+        aria-label="Compartir revisión"
+        title="Compartir revisión"
+        data-icon="share"
+      ></button>
+      <button
+        id="reset-layout"
+        aria-label="Restablecer disposición"
+        title="Restablecer disposición"
+        data-icon="reset"
+      ></button>
+    </nav>
+    <main class="workspace">
+      <header class="page-heading">
+        <div class="heading-left">
+          <h1>Widgets</h1>
+          <span id="widget-count" class="count">17</span>
+        </div>
+        <div class="page-meta">
+          <span id="saved-status" class="saved" aria-live="polite">Guardado</span
+          ><span class="example-badge">Datos de ejemplo</span>
+        </div>
+      </header>
+      <div class="focus-strip" aria-label="Revisar widget por widget">
+        <button id="previous-widget" aria-label="Widget anterior" data-icon="left"></button
+        ><strong id="focus-title"></strong
+        ><button id="next-widget" aria-label="Widget siguiente" data-icon="right"></button>
+      </div>
+      <div id="stage" class="stage">
+        <div id="board" class="board" aria-label="Inicio personalizable"></div>
+      </div>
+    </main>
+    <dialog id="inspector" class="sheet" aria-labelledby="inspector-title">
+      <div class="dialog-layout">
+        <header class="dialog-header">
+          <h2 id="inspector-title">Revisar widget</h2>
+          <button
+            class="icon-button"
+            data-close="inspector"
+            aria-label="Cerrar revisión"
+            data-icon="close"
+          ></button>
+        </header>
+        <div class="dialog-content">
+          <label class="field"
+            ><span class="field-label">Widget</span
+            ><select id="review-widget" aria-label="Widget que estás revisando"></select
+          ></label>
+          <div id="widget-settings">
+            <details id="widget-adjustments">
+              <summary>Tamaño y contenido</summary>
+              <div id="reference-field" class="field" hidden>
+                <label class="field-label" for="widget-reference" id="reference-label"
+                  >Contenido</label
+                ><select id="widget-reference"></select>
+              </div>
+              <fieldset class="field" style="border: 0; padding: 0; margin-inline: 0">
+                <legend class="field-label">Tamaño</legend>
+                <div id="size-grid" class="size-grid"></div>
+                <div class="move-buttons">
+                  <button id="move-earlier" class="button" data-icon="up">Subir</button
+                  ><button id="move-later" class="button" data-icon="down">Bajar</button>
+                </div>
+              </fieldset>
+            </details>
+            <div class="field">
+              <span class="field-label">Revisión</span>
+              <div
+                id="review-state"
+                class="status-options"
+                role="group"
+                aria-label="Estado de revisión"
+              >
+                <button data-status="pending" aria-pressed="true">Pendiente</button
+                ><button data-status="changes" aria-pressed="false">Cambios</button
+                ><button data-status="approved" aria-pressed="false">Me gusta</button>
+              </div>
+            </div>
+          </div>
+          <label class="field"
+            ><span id="instruction-label" class="field-label">Tus indicaciones</span
+            ><textarea
+              id="instructions"
+              aria-labelledby="instruction-label"
+              rows="7"
+              maxlength="12000"
+              placeholder="Qué cambiarías, qué quitarías o cómo quieres que funcione…"
+            ></textarea>
+          </label>
+          <button id="focus-from-review" class="button" style="width: 100%" data-icon="focus">
+            Ver este widget solo
+          </button>
+        </div>
+        <footer class="dialog-footer">
+          <button id="copy-review" class="button primary grow" data-icon="copy">
+            Copiar revisión</button
+          ><button
+            id="download-review"
+            class="button"
+            aria-label="Descargar revisión"
+            data-icon="download"
+          ></button>
+        </footer>
+      </div>
+    </dialog>
+    <dialog id="catalogue" class="catalogue" aria-labelledby="catalogue-title">
+      <div class="dialog-layout">
+        <header class="dialog-header">
+          <h2 id="catalogue-title">Añadir widgets</h2>
+          <button
+            class="icon-button"
+            data-close="catalogue"
+            aria-label="Cerrar catálogo"
+            data-icon="close"
+          ></button>
+        </header>
+        <div class="dialog-content"><div id="catalogue-grid" class="catalogue-grid"></div></div>
+      </div>
+    </dialog>
+    <dialog id="share-dialog" aria-labelledby="share-title">
+      <div class="dialog-layout">
+        <header class="dialog-header">
+          <h2 id="share-title">Tu revisión</h2>
+          <button
+            class="icon-button"
+            data-close="share-dialog"
+            aria-label="Cerrar opciones de revisión"
+            data-icon="close"
+          ></button>
+        </header>
+        <div class="dialog-content">
+          <div style="display: grid; gap: 10px">
+            <button id="share-review" class="button primary" data-icon="share">
+              Compartir indicaciones</button
+            ><button id="copy-all" class="button" data-icon="copy">
+              Copiar para pegar en el chat</button
+            ><button id="export-json" class="button" data-icon="download">Descargar revisión</button
+            ><label class="button" style="cursor: pointer"
+              ><span id="import-icon"></span> Importar revisión<input
+                id="import-review"
+                type="file"
+                accept="application/json,.json"
+                hidden
+            /></label>
+          </div>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="quick-dialog" aria-labelledby="quick-title">
+      <form id="quick-form" class="dialog-layout">
+        <header class="dialog-header">
+          <h2 id="quick-title">Crear ejemplo</h2>
+          <button
+            type="button"
+            class="icon-button"
+            data-close="quick-dialog"
+            aria-label="Cerrar ejemplo"
+            data-icon="close"
+          ></button>
+        </header>
+        <div class="dialog-content">
+          <label class="field"
+            ><span class="field-label">Título</span
+            ><input id="quick-input" required maxlength="150"
+          /></label>
+        </div>
+        <footer class="dialog-footer">
+          <button type="submit" class="button primary grow">Añadir al ejemplo</button>
+        </footer>
+      </form>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <div id="announcement" class="sr-only" aria-live="polite"></div>
+    <script>
+      // Standalone review requested by the owner. Example data never reaches household APIs.
+
+      "use strict";
+      const $ = (selector) => document.querySelector(selector);
+      const ICONS = {
+        eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+        edit: '<path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15v5Z"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        focus: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 3v18"/>',
+        message:
+          '<path d="M20 16a3 3 0 0 1-3 3H8l-5 3V6a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3Z"/><path d="M7 8h9M7 12h6"/>',
+        share: '<path d="M12 16V3m-4 4 4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>',
+        reset: '<path d="M3 10a9 9 0 1 1 1 8M3 4v6h6"/>',
+        close: '<path d="m6 6 12 12M6 18 18 6"/>',
+        left: '<path d="m14 5-7 7 7 7"/>',
+        right: '<path d="m10 5 7 7-7 7"/>',
+        up: '<path d="m5 14 7-7 7 7"/>',
+        down: '<path d="m5 10 7 7 7-7"/>',
+        check: '<path d="m5 12 4 4L19 6"/>',
+        minus: '<path d="M5 12h14"/>',
+        resize: '<path d="M14 4h6v6M4 14v6h6M20 4l-6 6M4 20l6-6"/>',
+        copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/>',
+        download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
+        upload: '<path d="M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5"/>',
+        tasks: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 6-7"/>',
+        shopping: '<path d="m3 5 2 12h14l2-9H6M9 21h.01M18 21h.01"/>',
+        calendar:
+          '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v5M17 3v5M3 11h18M8 15h.01M12 15h.01M16 15h.01"/>',
+        notes: '<path d="M6 3h9l4 4v14H6V3Zm8 0v5h5M9 12h7M9 16h5"/>',
+        family:
+          '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M17 15a5 5 0 0 1 4 5"/>',
+        finance: '<path d="M4 6h15v15H4V6Zm0 0V3h12v3M15 11h6v5h-6v-5Z"/>',
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+        progress:
+          '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+        quick: '<path d="M13 2 4 14h7l-1 8 10-13h-8l1-7Z"/>',
+        pin: '<path d="m8 3 8 1-2 6 3 4-5 1-2 7-1-7-5-3 5-2-1-7Z"/>',
+      };
+      const icon = (name) =>
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.notes) + "</svg>";
+      const escapeText = (value) =>
+        String(value).replace(
+          /[&<>"']/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+        );
+      const CATALOG = [
+        { id: "clock", title: "Reloj y fecha", icon: "clock", cols: 1, rows: 1 },
+        { id: "tasks", title: "Tareas de hoy", icon: "tasks", cols: 1, rows: 1 },
+        { id: "shopping", title: "Listas de compras", icon: "shopping", cols: 1, rows: 1 },
+        { id: "month-calendar", title: "Calendario", icon: "calendar", cols: 2, rows: 3 },
+        { id: "specific-note", title: "Nota específica", icon: "notes", cols: 1, rows: 3 },
+        { id: "member-summary", title: "Resumen de miembro", icon: "family", cols: 1, rows: 2 },
+        { id: "bills", title: "Facturas", icon: "finance", cols: 2, rows: 2 },
+        { id: "specific-list", title: "Lista específica", icon: "shopping", cols: 1, rows: 3 },
+        { id: "family", title: "La familia hoy", icon: "family", cols: 2, rows: 2 },
+        { id: "calendar", title: "Próximos eventos", icon: "calendar", cols: 2, rows: 2 },
+        { id: "my-tasks", title: "Mis tareas", icon: "tasks", cols: 1, rows: 2 },
+        { id: "week", title: "Esta semana", icon: "calendar", cols: 1, rows: 2 },
+        { id: "notes", title: "Notas", icon: "notes", cols: 2, rows: 2 },
+        { id: "pinned-note", title: "Nota fijada", icon: "pin", cols: 1, rows: 2 },
+        { id: "progress", title: "Progreso del hogar", icon: "progress", cols: 1, rows: 2 },
+        { id: "quick-add", title: "Crear algo", icon: "quick", cols: 2, rows: 2 },
+        { id: "finance", title: "Fondo común", icon: "finance", cols: 2, rows: 2 },
+      ];
+      const knownIds = new Set(CATALOG.map((w) => w.id));
+      const describe = (id) => CATALOG.find((w) => w.id === id);
+      const STORAGE_KEY = "skendal-widget-review:v1";
+      const people = [
+        {
+          id: "ana",
+          name: "Ana",
+          color: "#91c5df",
+          assigned: 195,
+          contributed: 150,
+          done: 3,
+          total: 4,
+        },
+        {
+          id: "luis",
+          name: "Luis",
+          color: "#b3d7b8",
+          assigned: 195,
+          contributed: 200,
+          done: 2,
+          total: 3,
+        },
+        {
+          id: "nico",
+          name: "Nico",
+          color: "#f2c296",
+          assigned: 0,
+          contributed: 0,
+          done: 1,
+          total: 2,
+        },
+        {
+          id: "lia",
+          name: "Lia",
+          color: "#b7a8db",
+          assigned: 0,
+          contributed: 0,
+          done: 2,
+          total: 3,
+        },
+      ];
+      const demoNotes = [
+        {
+          id: "weekend",
+          title: "Para el fin de semana",
+          body: "Llevar los libros a la biblioteca.\nPreparar la mochila para el paseo.\nNo olvidar la cámara.",
+          pinned: true,
+        },
+        {
+          id: "school",
+          title: "Excursión del colegio",
+          body: "Llevar agua, gorra y una merienda.\nLa salida es a las 8:30.",
+          pinned: false,
+        },
+        {
+          id: "home",
+          title: "Para la casa",
+          body: "Medir la ventana del salón.\nElegir juntos las plantas nuevas.",
+          pinned: false,
+        },
+      ];
+      const demoLists = [
+        {
+          id: "groceries",
+          name: "Supermercado",
+          items: [
+            ["Leche", false],
+            ["Pan integral", true],
+            ["Manzanas", false],
+            ["Huevos", false],
+            ["Café", true],
+          ],
+        },
+        {
+          id: "school",
+          name: "Escuela",
+          items: [
+            ["Cuadernos", false],
+            ["Lápices de colores", false],
+            ["Pegamento", true],
+            ["Carpeta", false],
+          ],
+        },
+        {
+          id: "trip",
+          name: "Viaje",
+          items: [
+            ["Protector solar", false],
+            ["Botellas de agua", true],
+            ["Pilas", false],
+          ],
+        },
+      ];
+      const demoTasks = [
+        { title: "Preparar mochilas", member: "ana", done: false },
+        { title: "Regar las plantas", member: "luis", done: false },
+        { title: "Poner la mesa", member: "nico", done: true },
+        { title: "Recoger los juguetes", member: "lia", done: true },
+      ];
+      const now = new Date();
+      const localKey = (d) =>
+        [
+          d.getFullYear(),
+          String(d.getMonth() + 1).padStart(2, "0"),
+          String(d.getDate()).padStart(2, "0"),
+        ].join("-");
+      const plusDays = (n) => {
+        const d = new Date(now);
+        d.setDate(d.getDate() + n);
+        return d;
+      };
+      const demoEvents = [
+        { title: "Paseo en familia", date: plusDays(1), time: "10:00", kind: "event" },
+        { title: "Recoger los libros", date: plusDays(2), time: "16:30", kind: "reminder" },
+        { title: "Cumpleaños de Carlos", date: plusDays(4), time: "18:00", kind: "event" },
+      ];
+      const demoBills = [
+        { title: "Internet", amount: 65, day: Math.min(now.getDate() + 1, 28), paid: false },
+        { title: "Electricidad", amount: 92.4, day: Math.min(now.getDate() + 3, 28), paid: false },
+        { title: "Agua", amount: 47.6, day: Math.min(now.getDate() + 5, 28), paid: true },
+      ];
+      const money = (n) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+      const freshState = () => ({
+        version: 1,
+        layout: CATALOG.map(({ id, cols, rows }) => ({ id, cols, rows })),
+        refs: { "member-summary": "ana", "specific-note": "weekend", "specific-list": "school" },
+        reviews: Object.fromEntries(CATALOG.map((w) => [w.id, { comment: "", status: "pending" }])),
+        general: "",
+      });
+      function validateState(value) {
+        if (
+          !value ||
+          value.version !== 1 ||
+          !Array.isArray(value.layout) ||
+          value.layout.length > CATALOG.length
+        )
+          throw new Error("Formato de revisión no válido");
+        const next = freshState(),
+          seen = new Set();
+        next.layout = value.layout.map((w) => {
+          if (
+            !w ||
+            !knownIds.has(w.id) ||
+            seen.has(w.id) ||
+            !Number.isInteger(w.cols) ||
+            w.cols < 1 ||
+            w.cols > 3 ||
+            !Number.isInteger(w.rows) ||
+            w.rows < 1 ||
+            w.rows > 4
+          )
+            throw new Error("Disposición no válida");
+          seen.add(w.id);
+          return { id: w.id, cols: w.cols, rows: w.rows };
+        });
+        for (const w of CATALOG) {
+          const r = value.reviews?.[w.id];
+          if (
+            r &&
+            typeof r.comment === "string" &&
+            r.comment.length <= 12000 &&
+            ["pending", "changes", "approved"].includes(r.status)
+          )
+            next.reviews[w.id] = { comment: r.comment, status: r.status };
+        }
+        for (const [id, options] of [
+          ["member-summary", people],
+          ["specific-note", demoNotes],
+          ["specific-list", demoLists],
+        ]) {
+          if (options.some((v) => v.id === value.refs?.[id])) next.refs[id] = value.refs[id];
+        }
+        if (typeof value.general === "string" && value.general.length <= 12000)
+          next.general = value.general;
+        return next;
+      }
+      let state = freshState();
+      let storageAvailable = true;
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) state = validateState(JSON.parse(saved));
+      } catch {
+        storageAvailable = false;
+      }
+      let editing = false,
+        focusMode = false,
+        focusId = "month-calendar",
+        selectedId = null,
+        reviewId = "__general__",
+        quickKind = "tasks";
+      let displayedMonth = new Date(now.getFullYear(), now.getMonth(), 1),
+        selectedDay = localKey(now);
+      const board = $("#board"),
+        stage = $("#stage");
+      let toastTimer;
+      function toast(message) {
+        $("#toast").textContent = message;
+        $("#toast").hidden = false;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => ($("#toast").hidden = true), 3000);
+      }
+      function persist() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          storageAvailable = true;
+          $("#saved-status").textContent = "Guardado";
+        } catch {
+          storageAvailable = false;
+          $("#saved-status").textContent = "Sin guardar";
+        }
+        updateReviewCount();
+      }
+      function updateReviewCount() {
+        const count =
+          Object.values(state.reviews).filter((r) => r.comment.trim() || r.status !== "pending")
+            .length + (state.general.trim() ? 1 : 0);
+        $("#review-count").textContent = String(count);
+        $("#review-count").hidden = !count;
+        for (const btn of board.querySelectorAll(".review-button"))
+          btn.classList.toggle("has-note", !!state.reviews[btn.dataset.id]?.comment.trim());
+      }
+      const avatar = (p, small = false) =>
+        '<span class="avatar ' +
+        (small ? "small" : "") +
+        '" style="--avatar:' +
+        p.color +
+        '">' +
+        escapeText(p.name.slice(0, 1)) +
+        "</span>";
+      const check = (done) =>
+        '<span class="check ' +
+        (done ? "done" : "") +
+        '" aria-hidden="true">' +
+        (done ? icon("check") : "") +
+        "</span>";
+      const header = (id) =>
+        '<header class="widget-header">' +
+        icon(describe(id).icon) +
+        "<h2>" +
+        escapeText(describe(id).title) +
+        "</h2></header>";
+      function selectedNote(id = "specific-note") {
+        return demoNotes.find((n) => n.id === state.refs[id]) || demoNotes[0];
+      }
+      function selectedList() {
+        return demoLists.find((n) => n.id === state.refs["specific-list"]) || demoLists[0];
+      }
+      function selectedPerson() {
+        return people.find((p) => p.id === state.refs["member-summary"]) || people[0];
+      }
+      function tinyContent(w) {
+        let label = describe(w.id).title,
+          value = "",
+          text = false;
+        switch (w.id) {
+          case "clock":
+            label = now.toLocaleDateString("es", { weekday: "short", day: "numeric" });
+            value =
+              "<time data-live-clock>" +
+              new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }) +
+              "</time>";
+            break;
+          case "tasks":
+            value = String(demoTasks.filter((t) => !t.done).length);
+            break;
+          case "my-tasks":
+            value = String(demoTasks.filter((t) => t.member === "ana" && !t.done).length);
+            break;
+          case "shopping":
+            label = "Compras";
+            value = String(demoLists.reduce((n, l) => n + l.items.filter((i) => !i[1]).length, 0));
+            break;
+          case "specific-list":
+            label = selectedList().name;
+            value = String(selectedList().items.filter((i) => !i[1]).length);
+            break;
+          case "month-calendar":
+            label = now.toLocaleDateString("es", { month: "long" });
+            value = String(now.getDate());
+            break;
+          case "calendar":
+          case "week":
+            value = demoEvents[0].title;
+            text = true;
+            break;
+          case "notes":
+            label = "Notas";
+            value = String(demoNotes.length);
+            break;
+          case "pinned-note":
+          case "specific-note":
+            value = selectedNote(w.id).title;
+            text = true;
+            break;
+          case "family":
+            label = "Familia";
+            value = String(people.length);
+            break;
+          case "finance":
+            value = money(222.4);
+            break;
+          case "member-summary":
+            label = selectedPerson().name;
+            value = money(selectedPerson().contributed);
+            break;
+          case "bills":
+            value = String(demoBills.filter((b) => !b.paid).length);
+            break;
+          case "progress":
+            value = "67%";
+            break;
+          case "quick-add":
+            value =
+              '<button type="button" class="quick-button" data-action="quick" data-kind="tasks" aria-label="Crear un ejemplo" style="background:none;align-items:start;font-size:30px">+</button>';
+            break;
+        }
+        return (
+          '<div class="widget-main tiny"><h2 class="label">' +
+          escapeText(label) +
+          '</h2><div class="stat ' +
+          (text ? "text-value" : "") +
+          '">' +
+          (w.id === "clock" || w.id === "quick-add" ? value : escapeText(value)) +
+          "</div></div>"
+        );
+      }
+      function calendarContent() {
+        const offset = (displayedMonth.getDay() + 6) % 7;
+        const start = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth(), 1 - offset);
+        let cells = "";
+        for (let i = 0; i < 42; i++) {
+          const date = new Date(start);
+          date.setDate(start.getDate() + i);
+          const key = localKey(date),
+            isCurrent = date.getMonth() === displayedMonth.getMonth();
+          const kinds = new Set(
+            demoEvents.filter((e) => localKey(e.date) === key).map((e) => e.kind),
+          );
+          if (isCurrent && demoBills.some((b) => b.day === date.getDate())) kinds.add("bill");
+          cells +=
+            '<button type="button" class="day ' +
+            (!isCurrent ? "outside " : "") +
+            (key === localKey(now) ? "today " : "") +
+            (key === selectedDay ? "selected" : "") +
+            '" data-action="day" data-date="' +
+            key +
+            '" aria-label="' +
+            escapeText(
+              date.toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" }),
+            ) +
+            '" ' +
+            (key === localKey(now) ? 'aria-current="date"' : "") +
+            '><span class="date-pill">' +
+            date.getDate() +
+            '</span><span class="day-markers" aria-hidden="true">' +
+            [...kinds].map((k) => '<i class="' + k + '"></i>').join("") +
+            "</span></button>";
+        }
+        return (
+          header("month-calendar") +
+          '<div class="widget-main calendar-main"><div class="month-heading"><button type="button" data-action="month" data-delta="-1" aria-label="Mes anterior">' +
+          icon("left") +
+          "</button><strong>" +
+          escapeText(displayedMonth.toLocaleDateString("es", { month: "long", year: "numeric" })) +
+          '</strong><button type="button" data-action="month" data-delta="1" aria-label="Mes siguiente">' +
+          icon("right") +
+          '</button></div><div class="weekday-grid" aria-hidden="true">' +
+          ["L", "M", "X", "J", "V", "S", "D"].map((d) => "<span>" + d + "</span>").join("") +
+          '</div><div class="month-grid">' +
+          cells +
+          "</div></div>"
+        );
+      }
+      function renderContent(w) {
+        if (w.rows === 1) return tinyContent(w);
+        if (w.id === "month-calendar") return calendarContent();
+        let content = "";
+        switch (w.id) {
+          case "tasks":
+          case "my-tasks": {
+            const tasks = demoTasks.filter((t) => w.id !== "my-tasks" || t.member === "ana");
+            content =
+              '<div class="stat-line"><strong class="stat">' +
+              tasks.filter((t) => !t.done).length +
+              '</strong><span class="label">pendientes</span></div><div class="rows">' +
+              tasks
+                .map(
+                  (t) =>
+                    '<div class="row">' +
+                    check(t.done) +
+                    '<div class="row-text ' +
+                    (t.done ? "completed" : "") +
+                    '">' +
+                    escapeText(t.title) +
+                    '<span class="row-meta">' +
+                    escapeText(people.find((p) => p.id === t.member).name) +
+                    "</span></div></div>",
+                )
+                .join("") +
+              "</div>";
+            break;
+          }
+          case "shopping":
+            content =
+              '<div class="rows">' +
+              demoLists
+                .map(
+                  (l) =>
+                    '<div class="list-card"><div class="row"><div class="row-text"><strong>' +
+                    escapeText(l.name) +
+                    '</strong><span class="row-meta">' +
+                    l.items.filter((i) => !i[1]).length +
+                    " pendientes</span></div>" +
+                    icon("shopping") +
+                    "</div></div>",
+                )
+                .join("") +
+              "</div>";
+            break;
+          case "specific-list": {
+            const list = selectedList();
+            content =
+              '<h3 class="note-title">' +
+              escapeText(list.name) +
+              '</h3><div class="rows">' +
+              list.items
+                .map(
+                  (i) =>
+                    '<div class="row">' +
+                    check(i[1]) +
+                    '<span class="row-text ' +
+                    (i[1] ? "completed" : "") +
+                    '">' +
+                    escapeText(i[0]) +
+                    "</span></div>",
+                )
+                .join("") +
+              '</div><div class="progress-track" aria-label="' +
+              list.items.filter((i) => i[1]).length +
+              " de " +
+              list.items.length +
+              ' completados"><i style="width:' +
+              (list.items.filter((i) => i[1]).length / list.items.length) * 100 +
+              '%"></i></div>';
+            break;
+          }
+          case "clock":
+            content =
+              '<div class="widget-main clock"><time data-live-clock>' +
+              new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }) +
+              '</time><div class="weekday">' +
+              escapeText(now.toLocaleDateString("es", { weekday: "long" })) +
+              '</div><div class="label">' +
+              escapeText(
+                now.toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" }),
+              ) +
+              "</div></div>";
+            return header(w.id) + content;
+          case "specific-note":
+          case "pinned-note": {
+            const note = selectedNote(w.id);
+            content =
+              '<h3 class="note-title">' +
+              escapeText(note.title) +
+              '</h3><p class="note-body">' +
+              escapeText(note.body) +
+              '</p><p class="note-date">' +
+              escapeText(now.toLocaleDateString("es", { day: "numeric", month: "short" })) +
+              "</p>";
+            break;
+          }
+          case "notes":
+            content =
+              '<div class="rows">' +
+              demoNotes
+                .map(
+                  (n) =>
+                    '<div class="list-card"><strong class="row-text">' +
+                    escapeText(n.title) +
+                    '</strong><p class="row-meta">' +
+                    escapeText(n.body.split("\n")[0]) +
+                    "</p></div>",
+                )
+                .join("") +
+              "</div>";
+            break;
+          case "member-summary": {
+            const p = selectedPerson();
+            content =
+              '<div class="person-line">' +
+              avatar(p) +
+              '<h3 class="person-name">' +
+              escapeText(p.name) +
+              '</h3></div><p class="label member-month">' +
+              escapeText(now.toLocaleDateString("es", { month: "long" })) +
+              '</p><div class="metric-list">' +
+              [
+                ["Asignado", p.assigned],
+                ["Aportado", p.contributed],
+                ["Por aportar", Math.max(0, p.assigned - p.contributed)],
+              ]
+                .map(
+                  ([label, value]) =>
+                    '<div><span class="muted">' +
+                    label +
+                    "</span><strong>" +
+                    money(value) +
+                    "</strong></div>",
+                )
+                .join("") +
+              "</div>";
+            break;
+          }
+          case "family":
+            content =
+              '<div class="family-grid">' +
+              people
+                .map(
+                  (p) =>
+                    '<div class="family-person">' +
+                    avatar(p) +
+                    "<strong>" +
+                    p.name +
+                    '</strong><div class="label">' +
+                    p.done +
+                    "/" +
+                    p.total +
+                    ' tareas</div><div class="progress-track"><i style="width:' +
+                    (p.done / p.total) * 100 +
+                    '%"></i></div></div>',
+                )
+                .join("") +
+              "</div>";
+            break;
+          case "calendar":
+          case "week":
+            content =
+              '<div class="rows">' +
+              demoEvents
+                .map(
+                  (e) =>
+                    '<div class="row"><div class="date-chip"><strong>' +
+                    e.date.getDate() +
+                    "</strong><span>" +
+                    escapeText(e.date.toLocaleDateString("es", { month: "short" })) +
+                    '</span></div><div class="row-text"><strong>' +
+                    escapeText(e.title) +
+                    '</strong><span class="row-meta">' +
+                    escapeText(e.time) +
+                    " · " +
+                    (e.kind === "reminder" ? "Recordatorio" : "Evento") +
+                    "</span></div></div>",
+                )
+                .join("") +
+              "</div>";
+            break;
+          case "bills":
+            content =
+              '<div class="rows">' +
+              demoBills
+                .map(
+                  (b) =>
+                    '<div class="row"><span class="dot" style="background:' +
+                    (b.paid ? "#72a38b" : "#c99752") +
+                    '"></span><div class="row-text"><strong>' +
+                    escapeText(b.title) +
+                    '</strong><span class="row-meta">' +
+                    (b.paid ? "Pagada" : "Día " + b.day) +
+                    '</span></div><span class="bill-amount">' +
+                    money(b.amount) +
+                    "</span></div>",
+                )
+                .join("") +
+              "</div>";
+            break;
+          case "finance":
+            content =
+              '<p class="label">Disponible</p><strong class="stat" style="margin:9px 0 22px">' +
+              money(222.4) +
+              '</strong><div class="metric-list"><div><span class="muted">Aportado</span><strong>' +
+              money(400) +
+              '</strong></div><div><span class="muted">Pagado</span><strong>' +
+              money(177.6) +
+              "</strong></div></div>";
+            break;
+          case "progress":
+            content =
+              '<div class="ring-wrap"><div class="ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="43" stroke="#00000012"/><circle cx="50" cy="50" r="43" stroke="#776197" stroke-dasharray="181 270" stroke-linecap="round"/></svg><span class="ring-number">67%</span></div><p class="label">8 de 12 tareas</p></div>';
+            break;
+          case "quick-add":
+            content =
+              '<div class="quick-grid">' +
+              [
+                ["tasks", "Tarea", "tasks"],
+                ["shopping", "Producto", "shopping"],
+                ["calendar", "Evento", "calendar"],
+                ["notes", "Nota", "notes"],
+              ]
+                .map(
+                  ([kind, label, img]) =>
+                    '<button type="button" class="quick-button" data-action="quick" data-kind="' +
+                    kind +
+                    '">' +
+                    icon(img) +
+                    "<span>" +
+                    label +
+                    "</span></button>",
+                )
+                .join("") +
+              "</div>";
+            break;
+        }
+        return header(w.id) + '<div class="widget-main">' + content + "</div>";
+      }
+      function widgetMarkup(w) {
+        const title = describe(w.id).title;
+        return (
+          '<section class="widget ' +
+          (selectedId === w.id ? "selected" : "") +
+          '" data-id="' +
+          w.id +
+          '" data-cols="' +
+          w.cols +
+          '" data-rows="' +
+          w.rows +
+          '" aria-label="' +
+          title +
+          '" tabindex="0" style="grid-column:span ' +
+          w.cols +
+          ";grid-row:span " +
+          w.rows +
+          '"><div class="surface">' +
+          renderContent(w) +
+          '</div><button type="button" class="review-button ' +
+          (state.reviews[w.id].comment.trim() ? "has-note" : "") +
+          '" data-action="review" data-id="' +
+          w.id +
+          '" aria-label="Revisar ' +
+          title.toLocaleLowerCase("es") +
+          '" title="Indicaciones">' +
+          icon("message") +
+          '</button><div class="edit-controls"><button type="button" class="widget-control remove" data-action="remove" data-id="' +
+          w.id +
+          '" aria-label="Quitar ' +
+          title.toLocaleLowerCase("es") +
+          '">' +
+          icon("minus") +
+          '</button><button type="button" class="widget-control resize" data-action="resize" data-id="' +
+          w.id +
+          '" aria-label="Cambiar tamaño de ' +
+          title.toLocaleLowerCase("es") +
+          '">' +
+          icon("resize") +
+          "</button></div></section>"
+        );
+      }
+      function renderBoard(animate = true) {
+        const old = new Map(
+          [...board.children].map((node) => [node.dataset.id, node.getBoundingClientRect()]),
+        );
+        for (const a of board.getAnimations({ subtree: true })) a.cancel();
+        const widgets = focusMode ? state.layout.filter((w) => w.id === focusId) : state.layout;
+        board.innerHTML = widgets.length
+          ? widgets.map(widgetMarkup).join("")
+          : '<div class="empty">Elige un widget con +</div>';
+        $("#widget-count").textContent = String(state.layout.length);
+        $("#focus-title").textContent = describe(focusId)?.title || "Widgets";
+        if (animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          for (const node of board.children) {
+            const before = old.get(node.dataset.id);
+            if (!before || (node.dataset.id === gesture?.id && gesture?.kind === "move")) continue;
+            const after = node.getBoundingClientRect();
+            const x = before.left - after.left,
+              y = before.top - after.top;
+            if (
+              Math.abs(x) +
+                Math.abs(y) +
+                Math.abs(before.width - after.width) +
+                Math.abs(before.height - after.height) >
+              1
+            )
+              node.animate(
+                [
+                  {
+                    transformOrigin: "top left",
+                    transform:
+                      "translate(" +
+                      x +
+                      "px," +
+                      y +
+                      "px) scale(" +
+                      before.width / after.width +
+                      "," +
+                      before.height / after.height +
+                      ")",
+                  },
+                  { transformOrigin: "top left", transform: "none" },
+                ],
+                { duration: 230, easing: "cubic-bezier(.2,.8,.2,1)" },
+              );
+          }
+        }
+        if (gesture?.active && gesture.kind === "move")
+          board.querySelector('[data-id="' + gesture.id + '"]')?.classList.add("is-dragging");
+      }
+
+      function paintIcons(root = document) {
+        for (const button of root.querySelectorAll("[data-icon]")) {
+          if (button.querySelector("svg")) continue;
+          button.insertAdjacentHTML("afterbegin", icon(button.dataset.icon));
+        }
+      }
+      function setEditing(value) {
+        stopInteractions();
+        editing = value;
+        document.body.classList.toggle("editing", editing);
+        $("#edit-toggle").setAttribute("aria-pressed", String(editing));
+        $("#preview-toggle").setAttribute("aria-pressed", String(!editing));
+        renderBoard(false);
+        $("#announcement").textContent = editing
+          ? "Edición: un dedo mueve, dos dedos desplazan."
+          : "Vista informativa";
+      }
+      function setFocus(value, id = focusId) {
+        stopInteractions();
+        focusMode = value;
+        focusId = id;
+        document.body.classList.toggle("focus-mode", value);
+        $("#focus-toggle").setAttribute("aria-pressed", String(value));
+        renderBoard(false);
+        window.scrollTo({ top: 0, behavior: "instant" });
+      }
+      function cycleFocus(delta) {
+        const index = state.layout.findIndex((w) => w.id === focusId);
+        if (!state.layout.length) return;
+        focusId = state.layout[(index + delta + state.layout.length) % state.layout.length].id;
+        renderBoard(false);
+      }
+      function openDialog(id) {
+        const dialog = $("#" + id);
+        if (!dialog.open) dialog.showModal();
+      }
+      function fillInspector(id) {
+        reviewId = id;
+        $("#review-widget").value = id;
+        const general = id === "__general__";
+        const widget = state.layout.find((w) => w.id === id);
+        $("#widget-settings").hidden = general;
+        $("#focus-from-review").hidden = general;
+        $("#focus-from-review").disabled = !widget;
+        $("#instruction-label").textContent = general
+          ? "Indicaciones generales"
+          : "Tus indicaciones";
+        $("#instructions").value = general ? state.general : state.reviews[id].comment;
+        $("#inspector-title").textContent = general ? "Indicaciones" : "Revisar widget";
+        const grid = $("#size-grid");
+        grid.innerHTML = "";
+        for (let cols = 1; cols <= 3; cols++)
+          for (let rows = 1; rows <= 4; rows++) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "size-button";
+            button.dataset.cols = String(cols);
+            button.dataset.rows = String(rows);
+            button.setAttribute("aria-label", "Tamaño " + cols + " por " + rows);
+            button.setAttribute(
+              "aria-pressed",
+              String(widget?.cols === cols && widget?.rows === rows),
+            );
+            button.disabled = !widget;
+            button.innerHTML =
+              '<span class="size-shape" style="width:' +
+              cols * 12 +
+              "px;height:" +
+              rows * 7 +
+              'px" aria-hidden="true"></span><span>' +
+              cols +
+              " × " +
+              rows +
+              "</span>";
+            grid.append(button);
+          }
+        for (const button of $("#review-state").querySelectorAll("button"))
+          button.setAttribute(
+            "aria-pressed",
+            String(!general && state.reviews[id].status === button.dataset.status),
+          );
+        const reference = $("#reference-field"),
+          select = $("#widget-reference");
+        const sources = {
+          "specific-list": { label: "Lista", items: demoLists },
+          "specific-note": { label: "Nota", items: demoNotes },
+          "member-summary": { label: "Miembro", items: people },
+        };
+        const source = sources[id];
+        reference.hidden = !source;
+        if (source) {
+          $("#reference-label").textContent = source.label;
+          select.replaceChildren(
+            ...source.items.map((item) => {
+              const option = document.createElement("option");
+              option.value = item.id;
+              option.textContent = item.name || item.title;
+              return option;
+            }),
+          );
+          select.value = state.refs[id];
+        }
+        const index = state.layout.findIndex((w) => w.id === id);
+        $("#move-earlier").disabled = index <= 0;
+        $("#move-later").disabled = index < 0 || index >= state.layout.length - 1;
+      }
+      function openReview(id, showSettings = false) {
+        if (!knownIds.has(id) && id !== "__general__") return;
+        selectedId = id === "__general__" ? null : id;
+        renderBoard(false);
+        fillInspector(id);
+        $("#widget-adjustments").open = showSettings;
+        openDialog("inspector");
+      }
+      function renderCatalogue() {
+        $("#catalogue-grid").innerHTML = CATALOG.map((w) => {
+          const added = state.layout.some((x) => x.id === w.id);
+          return (
+            '<button type="button" class="catalogue-item" data-add="' +
+            w.id +
+            '" aria-label="Añadir ' +
+            w.title.toLocaleLowerCase("es") +
+            '" ' +
+            (added ? "disabled" : "") +
+            '><div class="catalogue-top">' +
+            icon(w.icon) +
+            (added ? '<span class="added">Añadido ' + icon("check") + "</span>" : icon("plus")) +
+            "</div><span>" +
+            escapeText(w.title) +
+            "</span></button>"
+          );
+        }).join("");
+      }
+      function addWidget(id) {
+        if (!knownIds.has(id) || state.layout.some((w) => w.id === id)) return;
+        const { cols, rows } = describe(id);
+        state.layout.push({ id, cols, rows });
+        selectedId = id;
+        if (focusMode) focusId = id;
+        persist();
+        renderBoard();
+        renderCatalogue();
+      }
+      function removeWidget(id) {
+        if (!knownIds.has(id)) return;
+        cancelGesture(true);
+        state.layout = state.layout.filter((w) => w.id !== id);
+        if (focusId === id) focusId = state.layout[0]?.id || "month-calendar";
+        if (selectedId === id) selectedId = null;
+        persist();
+        renderBoard();
+        $("#announcement").textContent = describe(id).title + " quitado del inicio";
+      }
+      function changeSize(id, cols, rows) {
+        const widget = state.layout.find((w) => w.id === id);
+        if (!widget) return;
+        widget.cols = cols;
+        widget.rows = rows;
+        persist();
+        renderBoard();
+        if ($("#inspector").open) {
+          for (const b of $("#size-grid").querySelectorAll("button"))
+            b.setAttribute(
+              "aria-pressed",
+              String(Number(b.dataset.cols) === cols && Number(b.dataset.rows) === rows),
+            );
+        }
+      }
+      function placeWidget(id, target) {
+        const from = state.layout.findIndex((w) => w.id === id),
+          to = state.layout.findIndex((w) => w.id === target);
+        if (from < 0 || to < 0 || from === to) return false;
+        const [item] = state.layout.splice(from, 1);
+        state.layout.splice(to, 0, item);
+        renderBoard();
+        return true;
+      }
+      function moveWidget(id, delta) {
+        const index = state.layout.findIndex((w) => w.id === id),
+          next = index + delta;
+        if (index < 0 || next < 0 || next >= state.layout.length) return;
+        placeWidget(id, state.layout[next].id);
+        persist();
+        $("#announcement").textContent = describe(id).title + ", posición " + (next + 1);
+        if ($("#inspector").open) fillInspector(reviewId);
+      }
+      function reviewText() {
+        const lines = ["HOMEHUB · REVISIÓN DE WIDGETS", new Date().toLocaleDateString("es"), ""];
+        if (state.general.trim()) lines.push("INDICACIONES GENERALES", state.general.trim(), "");
+        lines.push("DISPOSICIÓN");
+        state.layout.forEach((w, i) => {
+          let ref = "";
+          if (w.id === "specific-list") ref = " · " + selectedList().name;
+          if (w.id === "specific-note") ref = " · " + selectedNote().title;
+          if (w.id === "member-summary") ref = " · " + selectedPerson().name;
+          lines.push(i + 1 + ". " + describe(w.id).title + " · " + w.cols + " × " + w.rows + ref);
+        });
+        lines.push("", "INDICACIONES POR WIDGET");
+        const statuses = { pending: "Pendiente", changes: "Quiero cambios", approved: "Me gusta" };
+        for (const w of CATALOG) {
+          const review = state.reviews[w.id];
+          if (!review.comment.trim() && review.status === "pending") continue;
+          lines.push(
+            "",
+            "[" + w.title + "] " + statuses[review.status],
+            review.comment.trim() || "Sin comentario.",
+          );
+        }
+        return lines.join("\n");
+      }
+      async function copyReview() {
+        const text = reviewText();
+        try {
+          if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+          await navigator.clipboard.writeText(text);
+          toast("Revisión copiada");
+          return;
+        } catch {
+          const target = document.createElement("textarea");
+          target.value = text;
+          target.readOnly = true;
+          target.setAttribute("aria-label", "Revisión para copiar");
+          const host =
+            [...document.querySelectorAll("dialog")].find((d) => d.open) || document.body;
+          Object.assign(target.style, {
+            position: "fixed",
+            left: "0",
+            top: "0",
+            width: "1px",
+            height: "1px",
+            opacity: "0",
+          });
+          host.append(target);
+          target.focus();
+          target.select();
+          let copied = false;
+          try {
+            copied = document.execCommand("copy");
+          } catch {}
+          target.remove();
+          if (copied) {
+            toast("Revisión copiada");
+            return;
+          }
+          openDialog("share-dialog");
+          let fallback = $("#copy-fallback");
+          if (!fallback) {
+            fallback = document.createElement("textarea");
+            fallback.id = "copy-fallback";
+            fallback.rows = 8;
+            fallback.readOnly = true;
+            fallback.setAttribute("aria-label", "Selecciona y copia tu revisión");
+            $("#share-dialog .dialog-content").append(fallback);
+          }
+          fallback.value = text;
+          fallback.focus();
+          fallback.select();
+          toast("Selecciona y copia tu revisión");
+        }
+      }
+      function downloadReview() {
+        const data = { ...state, exportedAt: new Date().toISOString() };
+        const url = URL.createObjectURL(
+          new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+        );
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "homehub-widgets-" + localKey(new Date()) + ".json";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+      $("#preview-toggle").addEventListener("click", () => setEditing(false));
+      $("#edit-toggle").addEventListener("click", () => setEditing(!editing));
+      $("#focus-toggle").addEventListener("click", () => setFocus(!focusMode));
+      $("#previous-widget").addEventListener("click", () => cycleFocus(-1));
+      $("#next-widget").addEventListener("click", () => cycleFocus(1));
+      $("#review-toggle").addEventListener("click", () => openReview("__general__"));
+      $("#catalogue-toggle").addEventListener("click", () => {
+        renderCatalogue();
+        openDialog("catalogue");
+      });
+      $("#export-toggle").addEventListener("click", () => openDialog("share-dialog"));
+      $("#reset-layout").addEventListener("click", () => {
+        cancelGesture(true);
+        state.layout = freshState().layout;
+        selectedId = null;
+        persist();
+        renderBoard();
+        toast("Disposición restablecida");
+      });
+      $("#catalogue-grid").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-add]");
+        if (button && !button.disabled) addWidget(button.dataset.add);
+      });
+      $("#review-widget").replaceChildren(
+        ...[{ id: "__general__", title: "Indicaciones generales" }, ...CATALOG].map((w) => {
+          const option = document.createElement("option");
+          option.value = w.id;
+          option.textContent = w.title;
+          return option;
+        }),
+      );
+      $("#review-widget").addEventListener("change", (event) => fillInspector(event.target.value));
+      $("#instructions").addEventListener("input", (event) => {
+        if (reviewId === "__general__") state.general = event.target.value;
+        else state.reviews[reviewId].comment = event.target.value;
+        persist();
+      });
+      $("#review-state").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-status]");
+        if (!button || !knownIds.has(reviewId)) return;
+        state.reviews[reviewId].status = button.dataset.status;
+        for (const b of $("#review-state").querySelectorAll("button"))
+          b.setAttribute("aria-pressed", String(b === button));
+        persist();
+      });
+      $("#size-grid").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-cols]");
+        if (button && !button.disabled)
+          changeSize(reviewId, Number(button.dataset.cols), Number(button.dataset.rows));
+      });
+      $("#widget-reference").addEventListener("change", (event) => {
+        if (!["specific-list", "specific-note", "member-summary"].includes(reviewId)) return;
+        state.refs[reviewId] = event.target.value;
+        persist();
+        renderBoard();
+      });
+      $("#move-earlier").addEventListener("click", () => moveWidget(reviewId, -1));
+      $("#move-later").addEventListener("click", () => moveWidget(reviewId, 1));
+      $("#focus-from-review").addEventListener("click", () => {
+        $("#inspector").close();
+        setFocus(true, reviewId);
+      });
+      $("#copy-review").addEventListener("click", copyReview);
+      $("#copy-all").addEventListener("click", copyReview);
+      $("#download-review").addEventListener("click", downloadReview);
+      $("#export-json").addEventListener("click", downloadReview);
+      $("#share-review").addEventListener("click", async () => {
+        if (!navigator.share) {
+          await copyReview();
+          return;
+        }
+        try {
+          await navigator.share({ title: "HomeHub · Mis indicaciones", text: reviewText() });
+        } catch (error) {
+          if (error.name !== "AbortError") await copyReview();
+        }
+      });
+      let importSequence = 0;
+      $("#import-review").addEventListener("change", async (event) => {
+        const file = event.target.files[0],
+          version = ++importSequence;
+        if (!file) return;
+        try {
+          if (file.size > 1024 * 1024) throw new Error("Archivo demasiado grande");
+          const loaded = validateState(JSON.parse(await file.text()));
+          if (version !== importSequence) return;
+          cancelGesture(true);
+          state = loaded;
+          selectedId = null;
+          persist();
+          renderBoard(false);
+          $("#share-dialog").close();
+          toast("Revisión importada");
+        } catch {
+          toast("No se pudo importar esa revisión");
+        } finally {
+          event.target.value = "";
+        }
+      });
+      for (const button of document.querySelectorAll("[data-close]"))
+        button.addEventListener("click", () => $("#" + button.dataset.close).close());
+      for (const dialog of document.querySelectorAll("dialog"))
+        dialog.addEventListener("click", (event) => {
+          if (event.target !== dialog) return;
+          const r = dialog.getBoundingClientRect();
+          if (
+            event.clientX < r.left ||
+            event.clientX > r.right ||
+            event.clientY < r.top ||
+            event.clientY > r.bottom
+          )
+            dialog.close();
+        });
+      board.addEventListener("click", (event) => {
+        if (performance.now() < suppressClickUntil) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        const button = event.target.closest("[data-action]");
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === "review") {
+          openReview(button.dataset.id);
+          return;
+        }
+        if (action === "remove") {
+          removeWidget(button.dataset.id);
+          return;
+        }
+        if (action === "resize") {
+          openReview(button.dataset.id, true);
+          return;
+        }
+        if (editing) return;
+        if (action === "month") {
+          displayedMonth = new Date(
+            displayedMonth.getFullYear(),
+            displayedMonth.getMonth() + Number(button.dataset.delta),
+            1,
+          );
+          renderBoard(false);
+        }
+        if (action === "day") {
+          selectedDay = button.dataset.date;
+          renderBoard(false);
+        }
+        if (action === "quick") {
+          quickKind = button.dataset.kind;
+          $("#quick-title").textContent = {
+            tasks: "Tarea de ejemplo",
+            shopping: "Producto de ejemplo",
+            calendar: "Evento de ejemplo",
+            notes: "Nota de ejemplo",
+          }[quickKind];
+          $("#quick-input").value = "";
+          openDialog("quick-dialog");
+          $("#quick-input").focus();
+        }
+      });
+      $("#quick-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const title = $("#quick-input").value.trim();
+        if (!title) return;
+        if (quickKind === "tasks") demoTasks.push({ title, member: "ana", done: false });
+        if (quickKind === "shopping") demoLists[0].items.push([title, false]);
+        if (quickKind === "calendar")
+          demoEvents.push({ title, date: plusDays(1), time: "12:00", kind: "event" });
+        if (quickKind === "notes")
+          demoNotes.push({ id: "example-" + Date.now(), title, body: "", pinned: false });
+        $("#quick-dialog").close();
+        renderBoard();
+        toast("Añadido al ejemplo");
+      });
+      board.addEventListener("keydown", (event) => {
+        const card = event.target.closest(".widget");
+        if (!editing || !card || event.target !== card) return;
+        if (event.key === "Enter") {
+          event.preventDefault();
+          openReview(card.dataset.id);
+        }
+        if (["ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"].includes(event.key)) {
+          event.preventDefault();
+          const id = card.dataset.id;
+          moveWidget(id, ["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1);
+          board.querySelector('[data-id="' + id + '"]')?.focus({ preventScroll: true });
+        }
+      });
+
+      let gesture = null,
+        pan = null,
+        suppressClickUntil = 0,
+        frame = 0;
+      const pointers = new Map();
+      const cloneLayout = () => state.layout.map((w) => ({ ...w }));
+      const centroid = () => {
+        const values = [...pointers.values()];
+        return {
+          x: values.reduce((a, p) => a + p.x, 0) / values.length,
+          y: values.reduce((a, p) => a + p.y, 0) / values.length,
+        };
+      };
+      function cancelGesture(revert = true) {
+        const g = gesture;
+        if (!g) return;
+        clearTimeout(g.timer);
+        cancelAnimationFrame(frame);
+        frame = 0;
+        gesture = null;
+        g.ghost?.remove();
+        if (revert && g.active) {
+          state.layout = g.original;
+          persist();
+        }
+        renderBoard(false);
+      }
+      function stopInteractions() {
+        cancelGesture(true);
+        pan = null;
+        for (const id of pointers.keys())
+          try {
+            stage.releasePointerCapture(id);
+          } catch {}
+        pointers.clear();
+      }
+      function activateGesture() {
+        const g = gesture;
+        if (!g || g.active || pan) return;
+        const card = board.querySelector('[data-id="' + g.id + '"]');
+        if (!card) return;
+        try {
+          stage.setPointerCapture(g.pointer);
+        } catch {}
+        g.active = true;
+        selectedId = g.id;
+        for (const node of board.querySelectorAll(".widget"))
+          node.classList.toggle("selected", node === card);
+        if (g.kind === "move") {
+          const ghost = card.cloneNode(true);
+          ghost.classList.add("drag-ghost");
+          ghost.classList.remove("selected");
+          ghost.setAttribute("aria-hidden", "true");
+          ghost.setAttribute("inert", "");
+          ghost.tabIndex = -1;
+          Object.assign(ghost.style, {
+            left: g.rect.left + "px",
+            top: g.rect.top + "px",
+            width: g.rect.width + "px",
+            height: g.rect.height + "px",
+          });
+          document.body.append(ghost);
+          g.ghost = ghost;
+          card.classList.add("is-dragging");
+        }
+        $("#announcement").textContent =
+          (g.kind === "move" ? "Moviendo " : "Cambiando tamaño de ") + describe(g.id).title;
+        schedulePaint();
+      }
+      function schedulePaint() {
+        if (!frame) frame = requestAnimationFrame(paintGesture);
+      }
+      function paintGesture() {
+        frame = 0;
+        const g = gesture;
+        if (!g?.active || pan) return;
+        const dx = g.lastX - g.x,
+          dy = g.lastY - g.y;
+        if (g.kind === "move") {
+          g.ghost.style.transform = "translate(" + dx + "px," + dy + "px) scale(1.025)";
+          const target = document.elementFromPoint(g.lastX, g.lastY)?.closest(".widget");
+          const id = target?.dataset.id;
+          if (
+            id &&
+            id !== g.id &&
+            board.contains(target) &&
+            Math.hypot(g.lastX - g.lastSwapX, g.lastY - g.lastSwapY) > 14
+          ) {
+            if (placeWidget(g.id, id)) {
+              g.lastSwapX = g.lastX;
+              g.lastSwapY = g.lastY;
+            }
+          }
+          const amount = g.lastY < 65 ? -8 : g.lastY > innerHeight - 65 ? 8 : 0;
+          if (amount) {
+            window.scrollBy(0, amount);
+            schedulePaint();
+          }
+        } else {
+          const cols = Math.max(
+            1,
+            Math.min(3, Math.round((g.rect.width + dx + g.columnGap) / (g.unit + g.columnGap))),
+          );
+          const rows = Math.max(
+            1,
+            Math.min(4, Math.round((g.rect.height + dy + g.rowGap) / (g.rowUnit + g.rowGap))),
+          );
+          const current = state.layout.find((w) => w.id === g.id);
+          if (current && (current.cols !== cols || current.rows !== rows))
+            changeSize(g.id, cols, rows);
+        }
+      }
+      function finishGesture() {
+        const g = gesture;
+        if (!g) return;
+        clearTimeout(g.timer);
+        cancelAnimationFrame(frame);
+        frame = 0;
+        gesture = null;
+        if (g.active) {
+          suppressClickUntil = performance.now() + 600;
+          persist();
+          const card = board.querySelector('[data-id="' + g.id + '"]');
+          card?.classList.remove("is-dragging");
+          if (g.ghost) {
+            const ghost = g.ghost;
+            if (!matchMedia("(prefers-reduced-motion: reduce)").matches && ghost.animate) {
+              const r = card?.getBoundingClientRect();
+              const destination = r
+                ? "translate(" +
+                  (r.left - g.rect.left) +
+                  "px," +
+                  (r.top - g.rect.top) +
+                  "px) scale(1)"
+                : "none";
+              const a = ghost.animate(
+                [
+                  { transform: ghost.style.transform, opacity: 0.95 },
+                  { transform: destination, opacity: 0 },
+                ],
+                { duration: 160, easing: "ease-out" },
+              );
+              a.finished.catch(() => {}).then(() => ghost.remove());
+            } else ghost.remove();
+          }
+          $("#announcement").textContent = describe(g.id).title + " colocado";
+        } else g.ghost?.remove();
+      }
+      stage.addEventListener("pointerdown", (event) => {
+        if (!editing || (event.pointerType !== "touch" && event.button !== 0)) return;
+        if (event.pointerType === "touch")
+          pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pointers.size >= 2) {
+          cancelGesture(true);
+          pan = { lastY: centroid().y };
+          suppressClickUntil = performance.now() + 1000;
+          for (const id of pointers.keys())
+            try {
+              stage.setPointerCapture(id);
+            } catch {}
+          event.preventDefault();
+          return;
+        }
+        if (pan) return;
+        const card = event.target.closest(".widget");
+        if (!card) return;
+        const control = event.target.closest("button");
+        if (control && control.dataset.action !== "resize") return;
+        if (gesture) cancelGesture(true);
+        const styles = getComputedStyle(board),
+          columnGap = parseFloat(styles.columnGap) || 0,
+          rowGap = parseFloat(styles.rowGap) || 0;
+        gesture = {
+          id: card.dataset.id,
+          pointer: event.pointerId,
+          kind: control?.dataset.action === "resize" ? "resize" : "move",
+          x: event.clientX,
+          y: event.clientY,
+          lastX: event.clientX,
+          lastY: event.clientY,
+          lastSwapX: event.clientX,
+          lastSwapY: event.clientY,
+          rect: card.getBoundingClientRect(),
+          original: cloneLayout(),
+          active: false,
+          unit: (board.clientWidth - 2 * columnGap) / 3,
+          columnGap,
+          rowGap,
+          rowUnit: parseFloat(styles.gridAutoRows) || 128,
+        };
+        gesture.timer = setTimeout(activateGesture, 240);
+      });
+      window.addEventListener(
+        "pointermove",
+        (event) => {
+          if (pointers.has(event.pointerId))
+            pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          if (pan) {
+            if (pointers.size >= 2) {
+              const y = centroid().y;
+              window.scrollBy(0, pan.lastY - y);
+              pan.lastY = y;
+            }
+            if (event.cancelable) event.preventDefault();
+            return;
+          }
+          const g = gesture;
+          if (!g || g.pointer !== event.pointerId) return;
+          g.lastX = event.clientX;
+          g.lastY = event.clientY;
+          if (!g.active && Math.hypot(g.lastX - g.x, g.lastY - g.y) > 7) activateGesture();
+          if (g.active) {
+            if (event.cancelable) event.preventDefault();
+            schedulePaint();
+          }
+        },
+        { passive: false },
+      );
+      window.addEventListener("pointerup", (event) => {
+        pointers.delete(event.pointerId);
+        if (pan) {
+          suppressClickUntil = performance.now() + 600;
+          if (!pointers.size) pan = null;
+          return;
+        }
+        if (gesture?.pointer === event.pointerId) finishGesture();
+      });
+      window.addEventListener("pointercancel", () => {
+        stopInteractions();
+        suppressClickUntil = performance.now() + 600;
+      });
+      window.addEventListener("blur", stopInteractions);
+      window.addEventListener("resize", stopInteractions);
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) stopInteractions();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && (gesture || pan)) {
+          event.preventDefault();
+          stopInteractions();
+        }
+      });
+      document.addEventListener(
+        "click",
+        (event) => {
+          if (performance.now() < suppressClickUntil && stage.contains(event.target)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        },
+        true,
+      );
+      paintIcons();
+      $("#import-icon").innerHTML = icon("upload");
+      renderBoard(false);
+      updateReviewCount();
+      if (!storageAvailable) $("#saved-status").textContent = "Sin guardar";
+      setInterval(() => {
+        const text = new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+        for (const clock of document.querySelectorAll("[data-live-clock]"))
+          clock.textContent = text;
+      }, 15000);
+    </script>
+  </body>
+</html>
