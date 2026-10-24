@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HOME_ID, HouseholdBackend, enterPin, section, signIn } from "./backend";
+import { HOME_ID, HouseholdBackend, openTabletPin, enterPin, section, signIn } from "./backend";
 
 test("a real viewport can create household records and reload confirmed data", async ({
   page,
@@ -159,7 +159,7 @@ test("paired tablet requires an adult grant and revokes it when locked", async (
   ];
   await backend.install(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Entrar con PIN", exact: true }).click();
+  await openTabletPin(page);
   await enterPin(page, "5678");
   await expect(page.getByRole("heading", { name: "Hola, Nico", exact: true })).toBeVisible();
   expect(backend.financialReadsWithoutGrant).toBe(0);
@@ -171,9 +171,11 @@ test("paired tablet requires an adult grant and revokes it when locked", async (
   expect(backend.financeActive).toBe(true);
   expect(backend.financialReadsWithoutGrant).toBe(0);
   await page.getByRole("button", { name: "Bloquear tablet", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Entrar con PIN", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Mostrar información", exact: true }),
+  ).toBeVisible();
   expect(backend.financeActive).toBe(false);
-  await page.getByRole("button", { name: "Entrar con PIN", exact: true }).click();
+  await openTabletPin(page);
   await enterPin(page, "5678");
   await expect(page.getByRole("heading", { name: "Hola, Nico", exact: true })).toBeVisible();
   await expect(page.getByText("Cuenta privada", { exact: true })).toHaveCount(0);

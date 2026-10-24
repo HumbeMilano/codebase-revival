@@ -1,4 +1,5 @@
 import { billing } from "./billing";
+import { weatherResponse } from "./weather";
 export type WorkerEnv = Cloudflare.Env;
 const json = (value: unknown, status = 200) =>
   Response.json(value, {
@@ -151,8 +152,9 @@ export async function sendInvitation(request: Request, env: WorkerEnv): Promise<
   }
 }
 export default {
-  fetch(request: Request, env: WorkerEnv): Promise<Response> {
+  fetch(request: Request, env: WorkerEnv, context?: ExecutionContext): Promise<Response> {
     const path = new URL(request.url).pathname;
+    if (path === "/api/weather") return weatherResponse(request, env, context);
     if (path === "/api/invitations") return sendInvitation(request, env);
     if (path === "/api/tablet-pairing") return createTabletPairing(request, env);
     if (path.startsWith("/api/billing/")) return billing(request, env);

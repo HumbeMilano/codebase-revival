@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { sendInvitation, type WorkerEnv } from "../../workers/app";
 
 const env: WorkerEnv = {
+  WEATHER_RATE: { limit: vi.fn().mockResolvedValue({ success: true }) },
   ASSETS: {} as WorkerEnv["ASSETS"],
   SecreteStripe: "sk_test_fixture",
   BILLING_GATEWAY_KEY: "fixture",

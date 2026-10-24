@@ -146,6 +146,7 @@ test("tablet pairing leaves no adult session and its photo lock screen fills the
     innerWidth: 1024,
     innerHeight: 768,
   });
+  await page.getByRole("button", { name: "Mostrar información", exact: true }).click();
   await page.getByRole("button", { name: "Mostrar foto 2", exact: true }).click();
   await expect(page.getByRole("button", { name: "Mostrar foto 2", exact: true })).toHaveAttribute(
     "aria-pressed",
