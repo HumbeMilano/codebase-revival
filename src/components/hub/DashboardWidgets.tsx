@@ -22,6 +22,7 @@ import { calendarBills, upcomingCalendarItems } from "@/lib/calendar";
 import { monthSummary } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { dateKey, eventWhen, parseDate } from "./planner-data";
+import type { FamilyNote } from "./planner-data";
 import { MEMBERS, type Member } from "./data";
 import { Avatar } from "./Kiosk";
 import { describeWidget } from "./widget-catalogue";
@@ -35,18 +36,57 @@ type Props = {
   user: Member;
   configure: () => void;
   onCreate: (section: Section) => void;
+  onBrowseNotes: () => void;
+  onOpenNote: (id: string) => void;
 };
 const money = (amount: number) =>
   amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const percentage = (done: number, total: number) => (total ? (done / total) * 100 : 0);
 
-function Header({ widget }: { widget: DashboardWidget }) {
+function Header({ widget, onBrowseNotes }: Pick<Props, "widget" | "onBrowseNotes">) {
   const { title, Icon } = describeWidget(widget.id);
   return (
     <header className="dw-header">
       <Icon aria-hidden="true" />
-      <h3>{title}</h3>
+      <h3>
+        {widget.id === "notes" ? (
+          <button type="button" aria-label="Ver todas las notas" onClick={onBrowseNotes}>
+            {title}
+          </button>
+        ) : (
+          title
+        )}
+      </h3>
     </header>
+  );
+}
+function OpenNote({
+  note,
+  onOpen,
+  compact = false,
+  preview = false,
+}: {
+  note: FamilyNote;
+  onOpen: Props["onOpenNote"];
+  compact?: boolean;
+  preview?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn("dw-note-open", preview && "dw-list-card")}
+      aria-label={`Abrir nota ${note.title}`}
+      onClick={() => onOpen(note.id)}
+    >
+      {compact ? (
+        note.title
+      ) : (
+        <>
+          <strong className="dw-note-title">{note.title}</strong>
+          <span className="dw-note-body">{note.body}</span>
+        </>
+      )}
+    </button>
   );
 }
 function Empty({ children }: { children: ReactNode }) {
@@ -175,7 +215,7 @@ function MonthCalendar({ s, now }: Pick<Props, "s" | "now">) {
   );
 }
 
-function TinyWidget({ widget, s, now, user, onCreate }: Props) {
+function TinyWidget({ widget, s, now, user, onCreate, onBrowseNotes, onOpenNote }: Props) {
   const chores = dashboardChores(s, now).filter(
     (c) => widget.id !== "my-tasks" || c.memberId === user.id,
   );
@@ -234,11 +274,26 @@ function TinyWidget({ widget, s, now, user, onCreate }: Props) {
       value = s.events.filter((e) => e.kind === "reminder" && !e.completed).length;
       break;
     case "notes":
-      value = s.notes.length;
+      value = (
+        <button
+          type="button"
+          className="dw-note-open"
+          aria-label="Ver todas las notas"
+          onClick={onBrowseNotes}
+        >
+          {s.notes.length}
+        </button>
+      );
       break;
     case "specific-note":
     case "pinned-note":
-      value = note?.title ?? "Sin nota fijada";
+      value = note ? (
+        <OpenNote note={note} onOpen={onOpenNote} compact />
+      ) : (
+        <button type="button" className="dw-note-open" onClick={onBrowseNotes}>
+          Sin nota fijada
+        </button>
+      );
       break;
     case "family":
       value = MEMBERS.length;
@@ -296,7 +351,7 @@ function TinyWidget({ widget, s, now, user, onCreate }: Props) {
 }
 
 export function DashboardWidgetContent(props: Props) {
-  const { widget, s, now, user, configure, onCreate } = props;
+  const { widget, s, now, user, configure, onCreate, onBrowseNotes, onOpenNote } = props;
   const list = dashboardList(s, widget);
   const note =
     widget.id === "specific-note"
@@ -306,25 +361,25 @@ export function DashboardWidgetContent(props: Props) {
   if (widget.id === "shopping" && !list)
     return (
       <>
-        <Header widget={widget} />
+        <Header widget={widget} onBrowseNotes={onBrowseNotes} />
         <Choose label="Elegir lista" onClick={configure} />
       </>
     );
   if (widget.id === "specific-note" && !note)
     return (
       <>
-        <Header widget={widget} />
+        <Header widget={widget} onBrowseNotes={onBrowseNotes} />
         {s.notes.length ? (
           <Choose label="Elegir nota" onClick={configure} />
         ) : (
-          <Empty>Sin notas</Empty>
+          <Choose label="Crear nota" onClick={() => onCreate("notes")} />
         )}
       </>
     );
   if (["member-summary", "member-tasks"].includes(widget.id) && !person)
     return (
       <>
-        <Header widget={widget} />
+        <Header widget={widget} onBrowseNotes={onBrowseNotes} />
         <Choose label="Elegir miembro" onClick={configure} />
       </>
     );
@@ -443,12 +498,15 @@ export function DashboardWidgetContent(props: Props) {
     case "specific-note":
     case "pinned-note":
       content = note ? (
-        <>
-          <h4 className="dw-note-title">{note.title}</h4>
-          <p className="dw-note-body">{note.body}</p>
-        </>
+        <OpenNote note={note} onOpen={onOpenNote} />
       ) : (
-        <Empty>Sin nota fijada</Empty>
+        <>
+          <Empty>Sin nota fijada</Empty>
+          <Choose
+            label={s.notes.length ? "Ver notas" : "Crear nota"}
+            onClick={() => (s.notes.length ? onBrowseNotes() : onCreate("notes"))}
+          />
+        </>
       );
       break;
     case "notes":
@@ -457,14 +515,11 @@ export function DashboardWidgetContent(props: Props) {
           {[...s.notes]
             .sort((a, b) => Number(b.pinned) - Number(a.pinned))
             .map((note) => (
-              <div className="dw-list-card" key={note.id}>
-                <strong>{note.title}</strong>
-                <p>{note.body}</p>
-              </div>
+              <OpenNote key={note.id} note={note} onOpen={onOpenNote} preview />
             ))}
         </div>
       ) : (
-        <Empty>Sin notas</Empty>
+        <Choose label="Crear nota" onClick={() => onCreate("notes")} />
       );
       break;
     case "member-summary": {
@@ -661,7 +716,7 @@ export function DashboardWidgetContent(props: Props) {
   }
   return (
     <>
-      <Header widget={widget} />
+      <Header widget={widget} onBrowseNotes={onBrowseNotes} />
       <div className="dw-body">{content}</div>
     </>
   );

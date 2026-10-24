@@ -667,6 +667,30 @@ select.planner-field {
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
+.dw-note-open {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  text-align: left;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.dw-note-open:focus-visible,
+.dw-header h3 button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+.dw-note-open > strong,
+.dw-note-open > .dw-note-body {
+  display: block;
+}
+.dw-note-open > .dw-note-body {
+  margin-top: 6px;
+}
 .dw-note-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -684,7 +708,8 @@ select.planner-field {
   display: block;
   font-size: 13px;
 }
-.dw-list-card p {
+.dw-list-card p,
+.dw-list-card .dw-note-body {
   font-size: 12px;
   opacity: 0.7;
   display: -webkit-box;
