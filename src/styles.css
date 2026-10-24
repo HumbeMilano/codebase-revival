@@ -464,3 +464,578 @@ select.planner-field {
   background: var(--card);
   padding-bottom: 2px;
 }
+
+/* Informational home widgets share the review prototype's flexible card layout. */
+.dashboard-widget {
+  container-type: inline-size;
+}
+.widget-content {
+  overflow: hidden;
+}
+.dashboard-grid.is-editing {
+  touch-action: none;
+}
+.dashboard-editing {
+  padding-left: 46px;
+}
+.widget-edit-rail {
+  position: fixed;
+  left: max(5px, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 24px;
+  box-shadow: var(--shadow-card);
+}
+.widget-edit-rail button {
+  width: 34px;
+  height: 38px;
+  border-radius: 18px;
+}
+.widget-edit-rail svg {
+  width: 18px;
+  height: 18px;
+}
+.widget-drag-label {
+  left: 8px;
+  right: auto;
+  bottom: 8px;
+  min-height: 30px;
+  width: 32px;
+  padding: 4px;
+}
+.widget-order-controls {
+  top: auto;
+  bottom: 8px;
+  left: 44px;
+  right: auto;
+}
+.widget-order-controls button {
+  width: 26px;
+  height: 30px;
+}
+.dw-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-shrink: 0;
+}
+.dw-header > svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.dw-header h3 {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.dw-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.dw-empty {
+  margin: auto;
+  font-size: 13px;
+  opacity: 0.7;
+  text-align: center;
+}
+.dw-stat {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(30px, 13cqi, 66px);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.dw-stat-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dw-stat-line > span,
+.dw-subtitle,
+.dw-month-name {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.dw-month-name,
+.dw-clock strong {
+  text-transform: capitalize;
+}
+.dw-money {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(22px, 9cqi, 50px);
+}
+.dw-rows {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  gap: 10px;
+}
+.dw-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.dw-row-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.dw-row-text > strong {
+  font-weight: 600;
+}
+.dw-row-text > span {
+  display: block;
+  font-size: 10px;
+  opacity: 0.7;
+  margin-top: 3px;
+}
+.dw-check {
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid currentColor;
+  opacity: 0.65;
+  border-radius: 5px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+.dw-check svg {
+  width: 13px;
+  height: 13px;
+}
+.dw-completed {
+  text-decoration: line-through;
+  opacity: 0.45;
+}
+.dw-progress {
+  flex-shrink: 0;
+  height: 6px;
+  width: 100%;
+  border-radius: 8px;
+  background: color-mix(in oklch, currentColor, transparent 85%);
+  overflow: hidden;
+}
+.dw-progress > i {
+  height: 100%;
+  display: block;
+  background: currentColor;
+  border-radius: inherit;
+  transition: width 0.25s ease;
+}
+.dw-person {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+.dw-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  margin-top: auto;
+}
+.dw-stats > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  justify-content: space-between;
+}
+.dw-stats dt {
+  opacity: 0.75;
+}
+.dw-stats dd {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.dw-funded {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.dw-note-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.dw-note-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow: hidden;
+}
+.dw-list-card {
+  border-bottom: 1px solid color-mix(in oklch, currentColor, transparent 88%);
+  padding-bottom: 8px;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+}
+.dw-list-card strong {
+  display: block;
+  font-size: 13px;
+}
+.dw-list-card p {
+  font-size: 12px;
+  opacity: 0.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dw-list-card > span {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.dw-clock {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+.dw-clock time {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 19cqi, 80px);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+}
+.dw-clock > span {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.dw-calendar {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dw-month-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.dw-month-heading strong {
+  font-size: 12px;
+  text-transform: capitalize;
+  text-align: center;
+}
+.dw-month-heading button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.dw-month-heading svg {
+  width: 16px;
+  height: 16px;
+}
+.dw-month-heading button:hover {
+  background: color-mix(in oklch, currentColor, transparent 90%);
+}
+.dw-weekdays,
+.dw-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  text-align: center;
+}
+.dw-weekdays {
+  flex-shrink: 0;
+  font-size: 10px;
+  opacity: 0.65;
+}
+.dw-month-grid {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+}
+.dw-day {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  gap: 3px;
+  font-size: 12px;
+}
+.dw-day[aria-current="date"] {
+  background: var(--foreground);
+  color: var(--background);
+  font-weight: 800;
+}
+.dw-day[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.dw-outside {
+  opacity: 0.35;
+}
+.dw-day-dots {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+}
+.dw-day-dots b {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.dw-day-dots .dw-dot-bill {
+  background: #a35119;
+}
+.dw-day-dots .dw-dot-reminder {
+  background: #5440a5;
+}
+.dw-date-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 30px;
+  padding: 4px;
+  border-radius: 10px;
+  background: color-mix(in oklch, currentColor, transparent 92%);
+}
+.dw-date-chip strong {
+  font-size: 19px;
+  line-height: 1.1;
+}
+.dw-date-chip > span {
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.dw-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a35119;
+  flex-shrink: 0;
+}
+.dw-paid {
+  background: #347c48;
+}
+.dw-bill-amount {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dw-overdue {
+  font-size: 11px;
+  font-weight: 700;
+}
+.dw-family {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  overflow: hidden;
+}
+.dw-family > div {
+  display: flex;
+  flex: 1 0 70px;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  max-width: 130px;
+  font-size: 13px;
+}
+.dw-family > div > span {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.dw-ring-wrap {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+.dw-ring {
+  position: relative;
+  width: min(100%, 150px);
+  aspect-ratio: 1;
+}
+.dw-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.dw-ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 7;
+}
+.dw-ring-track {
+  opacity: 0.12;
+}
+.dw-ring-value {
+  stroke-linecap: round;
+}
+.dw-ring strong {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 11cqi, 40px);
+}
+.dw-quick-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 0;
+}
+.dw-quick-grid button {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 14px;
+  background: var(--secondary);
+  font-size: 12px;
+}
+.dw-quick-grid svg {
+  width: 20px;
+  height: 20px;
+}
+.dw-tiny {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+.dw-tiny h3 {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.75;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dw-tiny-value {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 14cqi, 40px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.dw-tiny-value.dw-money {
+  font-size: clamp(18px, 10cqi, 32px);
+}
+.dw-quick-tiny {
+  width: 100%;
+  text-align: left;
+}
+@container (max-width: 155px) {
+  .dw-header {
+    gap: 5px;
+    margin-bottom: 10px;
+  }
+  .dw-header h3 {
+    font-size: 12px;
+  }
+  .dw-header > svg {
+    width: 15px;
+    height: 15px;
+  }
+  .dw-row-text,
+  .dw-stats {
+    font-size: 11px;
+  }
+  .dw-body {
+    gap: 8px;
+  }
+  .dw-note-title {
+    font-size: 15px;
+  }
+  .dw-month-heading strong {
+    font-size: 9px;
+  }
+  .dw-month-heading button {
+    width: 18px;
+  }
+  .dw-weekdays,
+  .dw-day {
+    font-size: 9px;
+  }
+  .dw-month-grid {
+    gap: 1px;
+  }
+  .dw-day {
+    border-radius: 5px;
+  }
+  .dw-bill-amount {
+    font-size: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dw-progress > i {
+    transition: none;
+  }
+}
+.dw-funded {
+  flex-shrink: 0;
+}
+.dashboard-widget[data-size="compact"] .dw-month-name {
+  display: none;
+}
+.dashboard-widget[data-size="compact"] .dw-stats {
+  gap: 4px;
+}
+.dashboard-widget[data-size="compact"] .dw-body {
+  gap: 6px;
+}
+@container (max-width: 155px) {
+  .dw-header > svg {
+    display: none;
+  }
+  .dw-header h3 {
+    overflow-wrap: normal;
+  }
+}

@@ -1,0 +1,130 @@
+import {
+  Bell,
+  CalendarDays,
+  CheckSquare,
+  Clock,
+  LayoutList,
+  Pin,
+  Receipt,
+  ShoppingBasket,
+  StickyNote,
+  Target,
+  Users,
+  Wallet,
+  Zap,
+} from "lucide-react";
+import type { WidgetId } from "@/lib/dashboard-layout";
+
+export const widgetCatalogue = {
+  tasks: {
+    title: "Tareas de hoy",
+    Icon: CheckSquare,
+    tone: "bg-success text-success-foreground",
+    group: "Casa",
+  },
+  shopping: {
+    title: "Lista de compras",
+    Icon: ShoppingBasket,
+    tone: "bg-accent text-accent-foreground",
+    group: "Casa",
+  },
+  calendar: {
+    title: "Próximos eventos",
+    Icon: CalendarDays,
+    tone: "bg-lilac text-foreground",
+    group: "Agenda",
+  },
+  notes: { title: "Notas", Icon: StickyNote, tone: "bg-card text-card-foreground", group: "Casa" },
+  family: { title: "La familia hoy", Icon: Users, tone: "bg-sky text-foreground", group: "Casa" },
+  finance: {
+    title: "Fondo común",
+    Icon: Wallet,
+    tone: "bg-primary text-primary-foreground",
+    group: "Finanzas",
+  },
+  clock: {
+    title: "Reloj y fecha",
+    Icon: Clock,
+    tone: "bg-primary text-primary-foreground",
+    group: "Agenda",
+  },
+  "my-tasks": {
+    title: "Mis tareas",
+    Icon: CheckSquare,
+    tone: "bg-success text-success-foreground",
+    group: "Casa",
+  },
+  week: {
+    title: "Esta semana",
+    Icon: CalendarDays,
+    tone: "bg-sky text-foreground",
+    group: "Agenda",
+  },
+  "pinned-note": {
+    title: "Nota fijada",
+    Icon: Pin,
+    tone: "bg-accent text-accent-foreground",
+    group: "Casa",
+  },
+  progress: {
+    title: "Progreso del hogar",
+    Icon: Target,
+    tone: "bg-lilac text-foreground",
+    group: "Casa",
+  },
+  "quick-add": {
+    title: "Crear algo",
+    Icon: Zap,
+    tone: "bg-card text-card-foreground",
+    group: "Casa",
+  },
+  "member-summary": {
+    title: "Resumen de miembro",
+    Icon: Users,
+    tone: "bg-sky text-foreground",
+    group: "Finanzas",
+  },
+  "month-calendar": {
+    title: "Calendario",
+    Icon: CalendarDays,
+    tone: "bg-lilac text-foreground",
+    group: "Agenda",
+  },
+  bills: {
+    title: "Facturas",
+    Icon: Receipt,
+    tone: "bg-card text-card-foreground",
+    group: "Finanzas",
+  },
+  "specific-note": {
+    title: "Nota específica",
+    Icon: StickyNote,
+    tone: "bg-accent text-accent-foreground",
+    group: "Casa",
+  },
+  "member-tasks": {
+    title: "Tareas de miembro",
+    Icon: Users,
+    tone: "bg-success text-success-foreground",
+    group: "Casa",
+  },
+  reminders: {
+    title: "Recordatorios",
+    Icon: Bell,
+    tone: "bg-lilac text-foreground",
+    group: "Agenda",
+  },
+  "next-bill": {
+    title: "Próximo vencimiento",
+    Icon: Receipt,
+    tone: "bg-accent text-accent-foreground",
+    group: "Finanzas",
+  },
+  "shopping-summary": {
+    title: "Resumen de compras",
+    Icon: LayoutList,
+    tone: "bg-sky text-foreground",
+    group: "Casa",
+  },
+} as const;
+export const describeWidget = (id: WidgetId) => widgetCatalogue[id];

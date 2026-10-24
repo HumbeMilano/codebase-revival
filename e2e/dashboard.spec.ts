@@ -1,10 +1,29 @@
 import { expect, test } from "@playwright/test";
 import { HOME_ID, HouseholdBackend, enterPin, section, signIn } from "./backend";
 
+function seedLegacyHome(backend: HouseholdBackend) {
+  backend.dashboardPreference = {
+    user_id: "20000000-0000-4000-8000-000000000001",
+    revision: 1,
+    layout: {
+      version: 1,
+      widgets: [
+        { id: "tasks", size: "compact" },
+        { id: "shopping", size: "compact" },
+        { id: "calendar", size: "compact" },
+        { id: "notes", size: "wide" },
+        { id: "family", size: "wide" },
+        { id: "finance", size: "compact" },
+      ],
+    },
+  };
+}
+
 test("widgets can be hidden, resized, reordered and retained after reload", async ({
   page,
 }, testInfo) => {
   const backend = new HouseholdBackend();
+  seedLegacyHome(backend);
   await backend.install(page);
   await signIn(page);
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
@@ -26,7 +45,8 @@ test("widgets can be hidden, resized, reordered and retained after reload", asyn
   await page.reload();
   await expect(page.getByRole("button", { name: "Personalizar", exact: true })).toBeEnabled();
   expect(await ids()).toEqual(["notes", "tasks", "shopping", "calendar"]);
-  await page.getByRole("button", { name: "Escribir nota", exact: true }).click();
+  await section(page, "Notas");
+  await page.getByRole("button", { name: "Nueva nota", exact: true }).click();
   const note = page.getByRole("dialog", { name: "Nueva nota", exact: true });
   await note.getByLabel("Título", { exact: true }).fill("Recordatorio familiar");
   await note.getByLabel("Contenido", { exact: true }).fill("Llevar las llaves de repuesto");
@@ -68,7 +88,7 @@ test("a lost dashboard response retries once and stale editors cannot overwrite 
     revision: 2,
     layout: { version: 1, widgets: [{ id: "notes", size: "wide" }] },
   };
-  await page.getByRole("button", { name: "Ocultar listas de compras", exact: true }).click();
+  await page.getByRole("button", { name: "Ocultar lista de compras", exact: true }).click();
   await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("otra ventana o dispositivo");
   expect(backend.dashboardPreference["revision"]).toBe(2);
@@ -101,11 +121,11 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   await expect(page.getByRole("button", { name: "Añadir fondo común", exact: true })).toHaveCount(
     0,
   );
-  await page.getByRole("button", { name: "Ocultar listas de compras", exact: true }).click();
+  await page.getByRole("button", { name: "Ocultar lista de compras", exact: true }).click();
   await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.locator('[data-widget="shopping"]')).toHaveCount(0);
-  const key = `homehub-dashboard-device:v2:${HOME_ID}:m_nico`;
+  const key = `homehub-dashboard-device:v3:${HOME_ID}:m_nico`;
   expect(await page.evaluate((key) => localStorage.getItem(key), key)).not.toBeNull();
   await page.getByRole("button", { name: "Bloquear tablet", exact: true }).click();
   await unlock("1234");
@@ -122,9 +142,7 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
-test("widget actions update real records and open the selected note or future event", async ({
-  page,
-}) => {
+test("informational widgets leave household records unchanged", async ({ page }) => {
   const backend = new HouseholdBackend();
   const now = new Date();
   const date = (value: Date) =>
@@ -180,54 +198,26 @@ test("widget actions update real records and open the selected note or future ev
   await signIn(page);
   await page
     .locator('[data-widget="tasks"]')
-    .getByRole("button", { name: "Preparar la cena", exact: true })
+    .getByText("Preparar la cena", { exact: false })
     .click();
-  await expect.poll(() => backend.rows["chores"]?.[0]?.["done"]).toBe(true);
-  await page
-    .locator('[data-widget="shopping"]')
-    .getByRole("button", { name: "Marcar Tomates como comprado", exact: true })
-    .click();
-  await expect.poll(() => backend.rows["shopping_items"]?.[0]?.["done"]).toBe(true);
+  await page.locator('[data-widget="shopping"]').getByText("Tomates", { exact: true }).click();
   await page.locator('[data-widget="notes"]').getByText("Llaves", { exact: true }).click();
-  let editor = page.getByRole("dialog", { name: "Editar nota", exact: true });
-  await expect(editor.getByLabel("Contenido", { exact: true })).toHaveValue("En el cajón");
-  await editor.getByLabel("Contenido", { exact: true }).fill("En la entrada");
-  await page.getByRole("button", { name: "Guardar", exact: true }).click();
-  await expect(editor).toHaveCount(0);
-  await section(page, "Inicio");
   await page
     .locator('[data-widget="calendar"]')
     .getByText("Visita familiar", { exact: true })
     .click();
-  editor = page.getByRole("dialog", { name: "Editar evento", exact: true });
-  await expect(editor.getByLabel("Título", { exact: true })).toHaveValue("Visita familiar");
-  await expect(editor.getByLabel("Fecha", { exact: true })).toHaveValue(date(future));
-  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
-  await expect(
-    page.getByRole("heading", {
-      name: future.toLocaleDateString("es", { month: "long", year: "numeric" }),
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(backend.rows["chores"]?.[0]?.["done"]).toBe(false);
+  expect(backend.rows["shopping_items"]?.[0]?.["done"]).toBe(false);
   await page.reload();
-  await expect(
-    page
-      .locator('[data-widget="tasks"]')
-      .getByRole("button", { name: "Preparar la cena", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    page
-      .locator('[data-widget="shopping"]')
-      .getByRole("button", { name: "Marcar Tomates como comprado", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.locator('[data-widget="notes"]').getByText("En la entrada", { exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('[data-widget="shopping"]')).toContainText("Tomates");
+  await expect(page.locator('[data-widget="notes"]')).toContainText("En el cajón");
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
 test("holding a widget enables direct dragging and corner resizing", async ({ page }, testInfo) => {
   const backend = new HouseholdBackend();
+  seedLegacyHome(backend);
   await backend.install(page);
   await signIn(page);
   await expect(page.locator('[data-widget="tasks"]')).toBeVisible();

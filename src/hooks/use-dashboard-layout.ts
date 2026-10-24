@@ -25,7 +25,10 @@ const readDevice = (key: string): DashboardSnapshot => {
   const text =
     localStorage.getItem(key) ??
     localStorage.getItem(
-      key.replace("homehub-dashboard-device:v2:", "homehub-dashboard-device:v1:"),
+      key.replace("homehub-dashboard-device:v3:", "homehub-dashboard-device:v2:"),
+    ) ??
+    localStorage.getItem(
+      key.replace("homehub-dashboard-device:v3:", "homehub-dashboard-device:v1:"),
     );
   let value: unknown;
   try {
@@ -140,8 +143,11 @@ export function useDashboardLayout(scope: DashboardScope, client: SupabaseClient
         !accountId &&
         (event.key === key ||
           (!localStorage.getItem(key) &&
-            event.key ===
-              key.replace("homehub-dashboard-device:v2:", "homehub-dashboard-device:v1:")))
+            ["v1", "v2"].some(
+              (version) =>
+                event.key ===
+                key.replace("homehub-dashboard-device:v3:", `homehub-dashboard-device:${version}:`),
+            )))
       )
         reload();
     };
