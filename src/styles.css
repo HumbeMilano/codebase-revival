@@ -1039,3 +1039,151 @@ select.planner-field {
     overflow-wrap: normal;
   }
 }
+
+/* The main menu uses the side of larger screens, freeing the dashboard's height. */
+.hub-shell {
+  --hub-sidebar-space: 0px;
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+.hub-sidebar {
+  display: none;
+}
+.hub-main-area {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  margin-left: var(--hub-sidebar-space);
+}
+.hub-main {
+  padding-bottom: calc(7rem + env(safe-area-inset-bottom));
+}
+.hub-section-title {
+  display: none;
+}
+@media (min-width: 768px) {
+  .hub-shell {
+    --hub-sidebar-space: calc(76px + env(safe-area-inset-left));
+  }
+  .hub-mobile-header,
+  .hub-mobile-dock {
+    display: none;
+  }
+  .hub-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 35;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: var(--hub-sidebar-space);
+    height: 100dvh;
+    gap: 12px;
+    padding: max(14px, env(safe-area-inset-top)) 6px max(12px, env(safe-area-inset-bottom))
+      calc(6px + env(safe-area-inset-left));
+    border-right: 1px solid var(--border);
+    background: var(--card);
+  }
+  .hub-sidebar-brand {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    margin: 0 auto;
+    place-items: center;
+    border-radius: 15px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .hub-sidebar-brand svg {
+    width: 21px;
+    height: 21px;
+  }
+  .hub-sidebar-nav {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 3px;
+    align-items: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+  }
+  .hub-sidebar-link {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-height: 52px;
+    height: auto;
+    border-radius: 16px;
+    padding: 7px 2px;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--muted-foreground);
+  }
+  .hub-sidebar-link[aria-current="page"] {
+    background: var(--secondary);
+    color: var(--foreground);
+    font-weight: 700;
+  }
+  .hub-sidebar-link[aria-current="page"] svg {
+    stroke-width: 2.3;
+  }
+  .hub-sidebar-gate {
+    position: absolute;
+    right: -6px;
+    bottom: -3px;
+    width: 11px;
+    height: 11px;
+    background: var(--card);
+    border-radius: 4px;
+  }
+  .hub-sidebar-add {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    margin: 2px 0 9px;
+    border-radius: 50%;
+  }
+  .hub-sidebar-footer {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+  }
+  .hub-sidebar-clock {
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  .hub-sidebar-account {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .hub-sidebar-account button {
+    width: 32px;
+    height: 36px;
+    border-radius: 12px;
+  }
+  .hub-sidebar-account button svg {
+    width: 17px;
+    height: 17px;
+  }
+  .hub-main {
+    padding-top: 20px;
+    padding-bottom: 24px;
+  }
+  .hub-section-title {
+    display: block;
+  }
+  .hub-shell .widget-edit-rail {
+    left: calc(var(--hub-sidebar-space) + 6px);
+  }
+}
