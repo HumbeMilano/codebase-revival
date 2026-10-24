@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDashboardLayout } from "@/hooks/use-dashboard-layout";
 import { defaultDashboardLayout, type DashboardScope } from "@/lib/dashboard-layout";
@@ -191,4 +191,93 @@ it("does not substitute an ordinary note when no note is pinned", () => {
   );
   expect(screen.getByRole("region", { name: "Nota fijada" })).toHaveTextContent("Sin nota fijada");
   expect(screen.queryByText("Nota sin fijar")).not.toBeInTheDocument();
+});
+
+it.each(["small", "wide", "full"] as const)(
+  "opens the correct dashboard notes at %s size and can browse all notes",
+  (size) => {
+    const prefs = preference();
+    const s = state();
+    s.notes = [
+      { id: "first", title: "Llaves", body: "En la entrada", memberId: "ana", pinned: true },
+      { id: "second", title: "Escuela", body: "Llevar libros", memberId: "ana", pinned: false },
+    ];
+    prefs.layout = {
+      version: 3,
+      widgets: [
+        { id: "notes", key: "notes", size },
+        { id: "pinned-note", key: "pinned", size },
+        { id: "specific-note", key: "specific", noteId: "second", size },
+      ],
+    };
+    vi.mocked(useDashboardLayout).mockReturnValue(prefs);
+    const go = vi.fn(),
+      onOpenRecord = vi.fn();
+    render(
+      <Dashboard
+        s={s}
+        compact
+        scope={scope}
+        user={adult}
+        now={null}
+        go={go}
+        onCreate={vi.fn()}
+        onOpenRecord={onOpenRecord}
+      />,
+    );
+    const notes = within(screen.getByRole("region", { name: "Notas" }));
+    fireEvent.click(notes.getByRole("button", { name: "Ver todas las notas" }));
+    expect(go).toHaveBeenLastCalledWith("notes");
+    if (size !== "small") {
+      fireEvent.click(notes.getByRole("button", { name: "Abrir nota Escuela" }));
+      expect(onOpenRecord).toHaveBeenLastCalledWith("notes", "second");
+    }
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Nota fijada" })).getByRole("button", {
+        name: "Abrir nota Llaves",
+      }),
+    );
+    expect(onOpenRecord).toHaveBeenLastCalledWith("notes", "first");
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Nota específica" })).getByRole("button", {
+        name: "Abrir nota Escuela",
+      }),
+    );
+    expect(onOpenRecord).toHaveBeenLastCalledWith("notes", "second");
+    expect(s.setNotes).not.toHaveBeenCalled();
+  },
+);
+
+it("starts a real new note from empty note widgets without changing layout preferences", () => {
+  const prefs = preference();
+  prefs.layout = {
+    version: 3,
+    widgets: [
+      { id: "notes", key: "notes", size: "wide" },
+      { id: "specific-note", key: "specific", size: "compact" },
+      { id: "pinned-note", key: "pinned", size: "compact" },
+    ],
+  };
+  vi.mocked(useDashboardLayout).mockReturnValue(prefs);
+  const onCreate = vi.fn();
+  render(
+    <Dashboard
+      s={state()}
+      compact
+      scope={scope}
+      user={adult}
+      now={null}
+      go={vi.fn()}
+      onCreate={onCreate}
+    />,
+  );
+  for (const name of ["Notas", "Nota específica", "Nota fijada"]) {
+    fireEvent.click(
+      within(screen.getByRole("region", { name })).getByRole("button", {
+        name: "Crear nota",
+      }),
+    );
+    expect(onCreate).toHaveBeenLastCalledWith("notes");
+  }
+  expect(prefs.save).not.toHaveBeenCalled();
 });

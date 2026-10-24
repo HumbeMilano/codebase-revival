@@ -71,7 +71,9 @@ export function Dashboard({
   s,
   user,
   scope,
+  go,
   onCreate,
+  onOpenRecord,
   now: clock,
   adultAuthorized = false,
 }: {
@@ -302,6 +304,11 @@ export function Dashboard({
                   setConfiguration(entry.key);
                 }}
                 onCreate={onCreate}
+                onBrowseNotes={() => go("notes")}
+                onOpenNote={(id) => {
+                  if (onOpenRecord) onOpenRecord("notes", id);
+                  else go("notes");
+                }}
               />
             )}
           </WidgetGrid>

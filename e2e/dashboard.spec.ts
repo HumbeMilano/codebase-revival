@@ -142,7 +142,9 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
-test("informational widgets leave household records unchanged", async ({ page }) => {
+test("widgets leave household records unchanged until an explicit edit is saved", async ({
+  page,
+}) => {
   const backend = new HouseholdBackend();
   const now = new Date();
   const date = (value: Date) =>
@@ -202,6 +204,9 @@ test("informational widgets leave household records unchanged", async ({ page })
     .click();
   await page.locator('[data-widget="shopping"]').getByText("Tomates", { exact: true }).click();
   await page.locator('[data-widget="notes"]').getByText("Llaves", { exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Editar nota", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await section(page, "Inicio");
   await page
     .locator('[data-widget="calendar"]')
     .getByText("Visita familiar", { exact: true })
