@@ -304,6 +304,7 @@ export function Dashboard({
                   setConfiguration(entry.key);
                 }}
                 onCreate={onCreate}
+                onBrowseShopping={() => go("shopping")}
                 onBrowseNotes={() => go("notes")}
                 onOpenNote={(id) => {
                   if (onOpenRecord) onOpenRecord("notes", id);

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { widgetDimensions, type DashboardWidget } from "@/lib/dashboard-layout";
 import {
   dashboardChores,
+  dashboardHousehold,
   dashboardList,
   dashboardListItems,
   dashboardLists,
@@ -21,6 +22,7 @@ import {
 import { calendarBills, upcomingCalendarItems } from "@/lib/calendar";
 import { monthSummary } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
+import { shoppingListId } from "@/lib/offline-shopping";
 import { dateKey, eventWhen, parseDate } from "./planner-data";
 import type { FamilyNote } from "./planner-data";
 import { MEMBERS, type Member } from "./data";
@@ -36,6 +38,7 @@ type Props = {
   user: Member;
   configure: () => void;
   onCreate: (section: Section) => void;
+  onBrowseShopping: () => void;
   onBrowseNotes: () => void;
   onOpenNote: (id: string) => void;
 };
@@ -351,7 +354,8 @@ function TinyWidget({ widget, s, now, user, onCreate, onBrowseNotes, onOpenNote 
 }
 
 export function DashboardWidgetContent(props: Props) {
-  const { widget, s, now, user, configure, onCreate, onBrowseNotes, onOpenNote } = props;
+  const { widget, s, now, user, configure, onCreate, onBrowseShopping, onBrowseNotes, onOpenNote } =
+    props;
   const list = dashboardList(s, widget);
   const note =
     widget.id === "specific-note"
@@ -459,15 +463,42 @@ export function DashboardWidgetContent(props: Props) {
     case "shopping": {
       const items = dashboardListItems(s, list!.id);
       const done = items.filter((i) => i.done).length;
+      const issue =
+        s.shoppingSync?.error ||
+        (s.shoppingSync?.conflict ? "La lista cambió en otro dispositivo." : "");
       content = (
         <>
           <h4 className="dw-note-title">{list!.name}</h4>
-          <div className="dw-rows">
+          {issue && (
+            <div role="alert" className="dw-shopping-error">
+              <p>{issue}</p>
+              <button type="button" className="underline" onClick={onBrowseShopping}>
+                Revisar compras
+              </button>
+            </div>
+          )}
+          <div className="dw-rows dw-shopping-items">
             {items.map((item) => (
-              <div className="dw-row" key={item.id}>
+              <button
+                type="button"
+                role="checkbox"
+                aria-label={item.name}
+                aria-checked={item.done}
+                className="dw-row dw-shopping-toggle"
+                key={item.id}
+                onClick={() =>
+                  void s.setItems((rows) =>
+                    rows.map((row) =>
+                      row.id === item.id && shoppingListId(row, dashboardHousehold(s)) === list!.id
+                        ? { ...row, done: !row.done }
+                        : row,
+                    ),
+                  )
+                }
+              >
                 <CheckMark done={item.done} />
                 <span className={cn("dw-row-text", item.done && "dw-completed")}>{item.name}</span>
-              </div>
+              </button>
             ))}
           </div>
           {items.length ? (

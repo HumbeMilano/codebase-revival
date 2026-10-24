@@ -583,6 +583,28 @@ select.planner-field {
   font-size: 13px;
   line-height: 1.35;
 }
+.dw-shopping-items {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.dw-shopping-toggle {
+  width: 100%;
+  min-height: 44px;
+  padding-block: 4px;
+  border-radius: 6px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.dw-shopping-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+.dw-shopping-error {
+  flex-shrink: 0;
+  font-size: 11px;
+}
 .dw-row-text > strong {
   font-weight: 600;
 }
