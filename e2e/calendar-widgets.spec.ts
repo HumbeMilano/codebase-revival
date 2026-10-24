@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HouseholdBackend, HOME_ID, signIn, section, enterPin } from "./backend";
+import { HouseholdBackend, openTabletPin, HOME_ID, signIn, section, enterPin } from "./backend";
 const noteA = "10000000-0000-4000-8000-000000000021",
   noteB = "10000000-0000-4000-8000-000000000022",
   billId = "10000000-0000-4000-8000-000000000023";
@@ -175,7 +175,7 @@ test("a child calendar and widget catalogue expose no household financial detail
   );
   await backend.install(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Entrar con PIN", exact: true }).click();
+  await openTabletPin(page);
   await enterPin(page, "5678");
   await expect(page.getByRole("button", { name: "Personalizar", exact: true })).toBeEnabled();
   await section(page, "Calendario");

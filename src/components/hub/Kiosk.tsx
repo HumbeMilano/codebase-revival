@@ -1,6 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, Delete, Lock, Pause, Play } from "lucide-react";
-import photo from "@/assets/kiosk-photo.jpg";
+import {
+  CalendarDays,
+  Delete,
+  Lock,
+  Pause,
+  Play,
+  LoaderCircle,
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  CloudMoon,
+  Moon,
+  Sun,
+} from "lucide-react";
 import { HOUSEHOLD, MEMBERS, memberBg, type Chore, type Member } from "./data";
 import { db, isDeviceMode, setFinanceToken } from "@/lib/db";
 import { cn } from "@/lib/utils";
@@ -8,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { dateKey, eventWhen, upcomingEvents, type FamilyEvent } from "./planner-data";
 import { useHouseholdPhotos } from "@/lib/household-photos";
+import { useKioskWeather } from "@/hooks/use-kiosk-weather";
+import { weatherDescription } from "@/lib/weather";
 
 export function useClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -268,6 +285,68 @@ export function PinPad({
   );
 }
 
+function LockWeather() {
+  const { weather, error } = useKioskWeather();
+  if (!weather)
+    return (
+      <span className="kiosk-weather-pending">
+        {error ? "Clima no disponible" : "Cargando clima…"}
+      </span>
+    );
+  const { label, kind, night } = weatherDescription(weather.symbol);
+  const Icon =
+    kind === "clear"
+      ? night
+        ? Moon
+        : Sun
+      : kind === "partly-cloudy"
+        ? night
+          ? CloudMoon
+          : CloudSun
+        : kind === "rain"
+          ? CloudRain
+          : kind === "snow"
+            ? CloudSnow
+            : kind === "storm"
+              ? CloudLightning
+              : kind === "fog"
+                ? CloudFog
+                : Cloud;
+  return (
+    <section
+      className="kiosk-weather"
+      aria-label={weather.location ? `Clima cerca de ${weather.location}` : "Clima local"}
+    >
+      <div>
+        <Icon aria-hidden="true" />
+        <strong>{Math.round(weather.temperature)}°C</strong>
+        <span>{label}</span>
+      </div>
+      {weather.location && <span className="kiosk-weather-location">{weather.location}</span>}
+      <span className="kiosk-weather-credit">
+        <a
+          href="https://www.met.no/en/free-meteorological-data"
+          target="_blank"
+          rel="noreferrer"
+          className="pointer-events-auto"
+          title="Pronóstico de MET Norway, temperatura redondeada y descripción traducida"
+        >
+          MET Norway
+        </a>{" "}
+        ·{" "}
+        <a
+          href="https://creativecommons.org/licenses/by/4.0/"
+          target="_blank"
+          rel="noreferrer"
+          className="pointer-events-auto"
+        >
+          CC BY 4.0
+        </a>
+      </span>
+    </section>
+  );
+}
+
 export function Kiosk({
   compact,
   onUnlock,
@@ -282,15 +361,17 @@ export function Kiosk({
   timeFormat?: "12" | "24";
 }) {
   const now = useClock();
-  const [entering, setEntering] = useState(false);
-  const { photos } = useHouseholdPhotos();
+  const [stage, setStage] = useState<"photos" | "info" | "pin">("photos");
+  const [interaction, setInteraction] = useState(0);
+  const { photos, loading, error, refresh } = useHouseholdPhotos();
   const [photoIndex, setPhotoIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const shownPhoto = photos.length ? photos[photoIndex % photos.length] : null;
+  const shown = photos.length ? photos[photoIndex % photos.length] : null;
   useEffect(() => {
     if (
       photos.length < 2 ||
       paused ||
+      stage === "pin" ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     )
       return;
@@ -299,117 +380,165 @@ export function Kiosk({
         setPhotoIndex((index) => (index + 1) % photos.length);
     }, 20_000);
     return () => clearInterval(timer);
-  }, [photos.length, paused]);
+  }, [photos.length, paused, stage]);
+  useEffect(() => {
+    if (stage !== "info") return;
+    const timer = setTimeout(() => setStage("photos"), 10_000);
+    return () => clearTimeout(timer);
+  }, [stage, interaction]);
+  useEffect(() => {
+    const hidden = () => {
+      if (document.visibilityState === "hidden")
+        setStage((current) => (current === "info" ? "photos" : current));
+    };
+    document.addEventListener("visibilitychange", hidden);
+    return () => document.removeEventListener("visibilitychange", hidden);
+  }, []);
   const next = now ? upcomingEvents(events, now) : [];
   const pending = now
     ? chores.filter((chore) => !chore.done && chore.dueDate === dateKey(now)).length
     : 0;
+  const parts = now
+    ? new Intl.DateTimeFormat("es", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: timeFormat === "12",
+      }).formatToParts(now)
+    : [];
+  const clock =
+    parts
+      .filter((part) => part.type !== "dayPeriod")
+      .map((part) => part.value)
+      .join("")
+      .trim() || "--:--";
+  const period = parts.find((part) => part.type === "dayPeriod")?.value;
   return (
     <div
-      className="relative min-h-dvh w-full overflow-hidden bg-black text-primary-foreground"
+      className={cn("kiosk-screen", compact && "kiosk-compact")}
       data-testid="tablet-lock-screen"
+      data-stage={stage}
     >
-      <img
-        key={shownPhoto?.id ?? "default"}
-        src={shownPhoto?.url ?? photo}
-        alt=""
-        aria-hidden="true"
-        width={1600}
-        height={1008}
-        className="absolute inset-0 h-full w-full object-cover motion-safe:animate-in motion-safe:fade-in"
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/25 to-black/80" />
-      <div
-        className={cn(
-          "relative flex min-h-dvh flex-col justify-between gap-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]",
-          compact ? "px-6" : "px-12",
-        )}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="rounded-full bg-white/15 px-4 py-2 font-display font-bold backdrop-blur-xl">
-            {HOUSEHOLD.name}
-          </span>
-          <span className="flex items-center gap-2 text-sm text-white/80">
-            <Lock className="size-4" /> Tablet del hogar
-            {photos.length > 1 && (
-              <button
-                type="button"
-                className="ml-2 rounded-full bg-black/30 p-2"
-                aria-label={paused ? "Reanudar fotos" : "Pausar fotos"}
-                onClick={() => setPaused((value) => !value)}
-              >
-                {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-              </button>
-            )}
-          </span>
-        </div>
-        <div>
-          <p
-            className={cn(
-              "font-display font-extrabold leading-none tracking-[-0.06em] tabular drop-shadow-lg",
-              compact ? "text-7xl" : "text-[clamp(6rem,15vw,12rem)]",
-            )}
+      <div className="kiosk-photo-layers" aria-hidden="true">
+        {shown && (
+          <div
+            key={shown.id}
+            className="kiosk-photo-frame motion-safe:animate-in motion-safe:fade-in"
+            data-photo-id={shown.id}
           >
-            {now?.toLocaleTimeString("es", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: timeFormat === "12",
-            }) ?? "--:--"}
-          </p>
-          <p className="mt-3 text-xl capitalize opacity-90">
-            {now?.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" }) ??
-              ""}
-          </p>
+            <img
+              src={shown.url}
+              alt=""
+              className="kiosk-photo-backdrop"
+              data-testid="lock-photo-backdrop"
+              draggable={false}
+            />
+            <img
+              src={shown.url}
+              alt=""
+              className="kiosk-photo-full"
+              data-testid="lock-photo"
+              draggable={false}
+            />
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        className="kiosk-surface"
+        aria-label={stage === "photos" ? "Mostrar información" : "Entrar con PIN"}
+        onClick={() => setStage(stage === "photos" ? "info" : "pin")}
+        tabIndex={stage === "pin" ? -1 : 0}
+      />
+      {loading && !shown && (
+        <LoaderCircle
+          aria-label="Cargando fotos"
+          role="status"
+          className="kiosk-photo-loading animate-spin motion-reduce:animate-none"
+        />
+      )}
+      <div
+        className="kiosk-info"
+        hidden={stage === "photos"}
+        aria-hidden={stage === "photos" || undefined}
+      >
+        <div className="kiosk-info-top">
+          <span className="kiosk-household">{HOUSEHOLD.name}</span>
+          {photos.length > 1 && (
+            <button
+              type="button"
+              className="kiosk-photo-control"
+              aria-label={paused ? "Reanudar fotos" : "Pausar fotos"}
+              onClick={() => {
+                setPaused((value) => !value);
+                setInteraction((value) => value + 1);
+              }}
+            >
+              {paused ? <Play /> : <Pause />}
+            </button>
+          )}
         </div>
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <section aria-label="Próximos eventos" className="min-w-0 flex-1 space-y-3">
-            <p className="flex items-center gap-2 text-sm font-semibold">
-              <CalendarDays className="size-4" /> Próximos eventos
-              {pending > 0 && (
-                <span className="font-normal opacity-75">· {pending} tareas hoy</span>
-              )}
+        <div className="kiosk-info-middle">
+          <div>
+            <p className="kiosk-time">
+              <span>{clock}</span>
+              {period && <small>{period}</small>}
             </p>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <p className="kiosk-date">
+              {now?.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" })}
+            </p>
+          </div>
+          <LockWeather />
+        </div>
+        <div className="kiosk-info-bottom">
+          <section aria-label="Próximos eventos" className="kiosk-agenda">
+            <p className="kiosk-agenda-title">
+              <CalendarDays /> Próximos eventos{pending > 0 && <span> · {pending} tareas hoy</span>}
+            </p>
+            <div className="kiosk-agenda-items">
               {next.map((event) => (
-                <div
-                  key={event.id}
-                  className="min-w-0 rounded-2xl bg-white/15 px-4 py-3 backdrop-blur-xl"
-                >
-                  <p className="truncate font-semibold">{event.title}</p>
-                  <p className="mt-1 text-xs opacity-80">{eventWhen(event)}</p>
+                <div key={event.id}>
+                  <strong>{event.title}</strong>
+                  <span>{eventWhen(event)}</span>
                 </div>
               ))}
             </div>
             {!next.length && <p className="text-sm text-white/70">No hay eventos próximos.</p>}
           </section>
-          <Button
-            onClick={() => setEntering(true)}
-            size="lg"
-            className="h-14 rounded-full bg-card px-6 text-foreground hover:bg-card/90"
-          >
-            <Lock className="mr-2 size-5" />
+          <span className="kiosk-pin-cue">
+            <Lock />
             Entrar con PIN
-          </Button>
+          </span>
         </div>
         {photos.length > 1 && (
-          <div className="flex justify-center gap-2" aria-label="Fotos del hogar">
+          <div className="kiosk-photo-dots" aria-label="Fotos del hogar">
             {photos.map((item, index) => (
               <button
                 type="button"
                 key={item.id}
                 aria-label={`Mostrar foto ${index + 1}`}
-                aria-pressed={shownPhoto?.id === item.id}
-                className={cn(
-                  "size-3 rounded-full border border-white/80",
-                  shownPhoto?.id === item.id ? "bg-white" : "bg-white/20",
-                )}
-                onClick={() => setPhotoIndex(index)}
+                aria-pressed={shown?.id === item.id}
+                onClick={() => {
+                  setPhotoIndex(index);
+                  setInteraction((value) => value + 1);
+                }}
               />
             ))}
           </div>
         )}
       </div>
-      {entering && <PinPad onCancel={() => setEntering(false)} onSuccess={onUnlock} />}
+      {error && (
+        <button
+          type="button"
+          className="kiosk-photo-error"
+          onClick={() => {
+            refresh();
+            setInteraction((value) => value + 1);
+          }}
+        >
+          Reintentar fotos
+        </button>
+      )}
+      {stage === "pin" && <PinPad onCancel={() => setStage("photos")} onSuccess={onUnlock} />}
     </div>
   );
 }

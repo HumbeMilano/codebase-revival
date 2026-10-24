@@ -1,83 +1,238 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { db } from "@/lib/db";
 import { HOUSEHOLD } from "@/components/hub/data";
 
 export type HouseholdPhoto = { id: string; path: string; position: number; url: string };
-const imageCache = new Map<string, string>();
+type PhotoRow = Omit<HouseholdPhoto, "url">;
+type Snapshot = { photos: HouseholdPhoto[]; loading: boolean; error: string };
+const stores = new Set<PhotoStore>();
 let cleanupInstalled = false;
-export function useHouseholdPhotos() {
-  const householdId = HOUSEHOLD.id;
-  const [photos, setPhotos] = useState<HouseholdPhoto[]>([]);
-  const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
+const unavailable = "No se pudieron actualizar las fotos. Comprueba la conexión y reintenta.";
+function accessDenied(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+  const error = value as { code?: string; status?: number; context?: Response };
+  return (
+    ["42501", "PGRST301", "PGRST302"].includes(error.code ?? "") ||
+    [401, 403].includes(error.status ?? 0) ||
+    [401, 403].includes(error.context?.status ?? 0)
+  );
+}
+
+class PhotoStore {
+  snapshot: Snapshot = { photos: [], loading: true, error: "" };
+  private listeners = new Set<() => void>();
+  private images = new Map<string, string>();
+  private rows: PhotoRow[] = [];
+  private metadataKnown = false;
+  private controller: AbortController | null = null;
+  private running: Promise<void> | null = null;
+  private dirty = false;
+  private timer: ReturnType<typeof setInterval> | undefined;
+  constructor(
+    readonly client: ReturnType<typeof db>,
+    readonly householdId: string,
+  ) {}
+  getSnapshot = () => this.snapshot;
+  private publish(error = "", finished = false) {
+    const photos = this.rows
+      .filter((row) => this.images.has(row.path))
+      .map((row) => ({ ...row, url: this.images.get(row.path)! }));
+    this.snapshot = { photos, loading: !finished && !photos.length, error };
+    this.listeners.forEach((notify) => notify());
+  }
+  clear = () => {
+    this.controller?.abort();
+    for (const url of this.images.values()) URL.revokeObjectURL(url);
+    this.images.clear();
+    this.rows = [];
+    this.metadataKnown = false;
+    this.snapshot = { photos: [], loading: true, error: "" };
+    this.listeners.forEach((notify) => notify());
+  };
+  private valid(controller: AbortController) {
+    return (
+      !controller.signal.aborted &&
+      this.controller === controller &&
+      this.client === db() &&
+      this.householdId === HOUSEHOLD.id
+    );
+  }
+  private load = () => {
+    if (
+      this.running ||
+      document.visibilityState === "hidden" ||
+      this.client !== db() ||
+      this.householdId !== HOUSEHOLD.id
+    )
+      return;
+    const controller = new AbortController();
+    this.controller = controller;
+    this.running = (async () => {
+      try {
+        let signedPhotos: HouseholdPhoto[] | null = null;
+        let metadata: PhotoRow[];
+        if (!this.metadataKnown) {
+          // This endpoint already authorizes and lists the household; avoid a cold-start round trip.
+          const signed = await this.client.functions.invoke<{ photos: HouseholdPhoto[] }>(
+            "household-photos",
+            { body: {} },
+          );
+          if (signed.error || !signed.data) throw signed.error ?? new Error("Photos unavailable");
+          signedPhotos = signed.data.photos;
+          metadata = signedPhotos.map(({ id, path, position }) => ({ id, path, position }));
+        } else {
+          const result = await this.client
+            .rpc("list_household_photos")
+            .abortSignal(controller.signal);
+          if (result.error) throw result.error;
+          metadata = result.data ?? [];
+        }
+        if (!this.valid(controller)) return;
+        const rows = [...metadata].sort((a, b) => a.position - b.position);
+        if (rows.length > 12 || rows.some((row) => !row.path.startsWith(this.householdId + "/")))
+          throw new Error("Invalid photo scope");
+        this.rows = rows;
+        this.metadataKnown = true;
+        const allowed = new Set(rows.map((row) => row.path));
+        for (const [path, url] of this.images)
+          if (!allowed.has(path)) {
+            URL.revokeObjectURL(url);
+            this.images.delete(path);
+          }
+        this.publish("", !rows.length);
+        const missing = rows.filter((row) => !this.images.has(row.path));
+        if (missing.length) {
+          if (!signedPhotos) {
+            const signed = await this.client.functions.invoke<{ photos: HouseholdPhoto[] }>(
+              "household-photos",
+              { body: {} },
+            );
+            if (signed.error || !signed.data) throw signed.error ?? new Error("Photos unavailable");
+            signedPhotos = signed.data.photos;
+          }
+          if (!this.valid(controller)) return;
+          const urls = new Map(
+            signedPhotos
+              .filter((photo) => allowed.has(photo.path))
+              .map((photo) => [photo.path, photo.url]),
+          );
+          const download = async (row: PhotoRow) => {
+            if (!this.valid(controller)) return;
+            const source = urls.get(row.path);
+            if (!source) throw new Error("Missing photo URL");
+            const response = await fetch(source, { cache: "no-store", signal: controller.signal });
+            if (!response.ok) throw new Error("Photo unavailable");
+            const blob = await response.blob();
+            if (!/^image\/(jpeg|png|webp)$/.test(blob.type) || blob.size > 2097152)
+              throw new Error("Invalid photo");
+            if (!this.valid(controller)) return;
+            const url = URL.createObjectURL(blob);
+            try {
+              const image = new Image();
+              image.src = url;
+              if (image.decode) await image.decode();
+              else
+                await new Promise<void>((resolve, reject) => {
+                  image.onload = () => resolve();
+                  image.onerror = () => reject(new Error("Invalid image"));
+                });
+              if (!this.valid(controller)) {
+                URL.revokeObjectURL(url);
+                return;
+              }
+              const old = this.images.get(row.path);
+              if (old) URL.revokeObjectURL(old);
+              this.images.set(row.path, url);
+              this.publish();
+            } catch (error) {
+              URL.revokeObjectURL(url);
+              throw error;
+            }
+          };
+          // The first frame never waits for the remaining carousel downloads.
+          let failed = false;
+          try {
+            await download(missing[0]!);
+          } catch {
+            failed = true;
+          }
+          const rest = await Promise.allSettled(missing.slice(1).map(download));
+          failed ||= rest.some((result) => result.status === "rejected");
+          if (this.valid(controller)) this.publish(failed ? unavailable : "", true);
+        } else this.publish("", true);
+      } catch (error) {
+        if (this.valid(controller)) {
+          if (accessDenied(error)) this.clear();
+          this.publish(unavailable, true);
+        }
+      }
+    })().finally(() => {
+      this.running = null;
+      if (this.dirty && this.listeners.size) {
+        this.dirty = false;
+        this.load();
+      }
+    });
+  };
+  refresh = () => {
+    if (this.running) this.dirty = true;
+    else this.load();
+  };
+  subscribe = (notify: () => void) => {
+    if (this.client !== db() || this.householdId !== HOUSEHOLD.id) return () => {};
     if (!cleanupInstalled) {
       cleanupInstalled = true;
       window.addEventListener("homehub-db-invalidated", () => {
-        for (const url of imageCache.values()) URL.revokeObjectURL(url);
-        imageCache.clear();
+        for (const store of stores) store.clear();
       });
     }
-    let active = true;
-    const client = db();
-    const load = async () => {
-      if (document.visibilityState === "hidden") return;
-      try {
-        const { data: metadata, error: metadataError } = await client.rpc("list_household_photos");
-        if (metadataError) throw metadataError;
-        const rows = metadata ?? [];
-        const missing = rows.some((photo) => !imageCache.has(photo.path));
-        if (missing) {
-          const { data, error: signedError } = await client.functions.invoke<{
-            photos: HouseholdPhoto[];
-          }>("household-photos", { body: {} });
-          if (signedError || !data) throw signedError ?? new Error("Photos unavailable");
-          const allowed = new Set(rows.map((photo) => photo.path));
-          await Promise.all(
-            data.photos
-              .filter((photo) => allowed.has(photo.path) && !imageCache.has(photo.path))
-              .map(async (photo) => {
-                const response = await fetch(photo.url, { cache: "no-store" });
-                if (!response.ok) throw new Error("Photo unavailable");
-                const blob = await response.blob();
-                if (!/^image\/(jpeg|png|webp)$/.test(blob.type) || blob.size > 2097152)
-                  throw new Error("Invalid photo");
-                if (active && HOUSEHOLD.id === householdId)
-                  imageCache.set(photo.path, URL.createObjectURL(blob));
-              }),
-          );
-        }
-        if (!active || HOUSEHOLD.id !== householdId) return;
-        const paths = new Set(rows.map((photo) => photo.path));
-        for (const [path, url] of imageCache)
-          if (!path.startsWith(householdId + "/") || !paths.has(path)) {
-            URL.revokeObjectURL(url);
-            imageCache.delete(path);
-          }
-        setPhotos(
-          rows
-            .filter((photo) => imageCache.has(photo.path))
-            .map((photo) => ({ ...photo, url: imageCache.get(photo.path)! })),
-        );
-        setError("");
-      } catch {
-        if (active)
-          setError("No se pudieron actualizar las fotos. Comprueba la conexión y reintenta.");
+    for (const store of stores)
+      if (
+        store !== this &&
+        (store.client !== this.client || store.householdId !== this.householdId)
+      ) {
+        store.clear();
+        if (!store.listeners.size) stores.delete(store);
+      }
+    this.listeners.add(notify);
+    if (this.listeners.size === 1) {
+      this.refresh();
+      this.timer = setInterval(this.refresh, 60_000);
+      window.addEventListener("homehub-photos-changed", this.refresh);
+      window.addEventListener("online", this.refresh);
+      document.addEventListener("visibilitychange", this.refresh);
+    }
+    return () => {
+      this.listeners.delete(notify);
+      if (!this.listeners.size) {
+        this.controller?.abort();
+        clearInterval(this.timer);
+        window.removeEventListener("homehub-photos-changed", this.refresh);
+        window.removeEventListener("online", this.refresh);
+        document.removeEventListener("visibilitychange", this.refresh);
       }
     };
-    void load();
-    const timer = setInterval(() => void load(), 60_000);
-    const changed = () => void load();
-    window.addEventListener("homehub-photos-changed", changed);
-    window.addEventListener("online", changed);
-    return () => {
-      active = false;
-      clearInterval(timer);
-      window.removeEventListener("homehub-photos-changed", changed);
-      window.removeEventListener("online", changed);
-    };
-  }, [householdId, retry]);
-  return { photos, error, refresh: useCallback(() => setRetry((value) => value + 1), []) };
+  };
+}
+const noSubscription = () => () => {};
+export function useHouseholdPhotos(enabled = true) {
+  const client = db(),
+    householdId = HOUSEHOLD.id;
+  const store = useMemo(() => {
+    const old = [...stores].find(
+      (item) => item.client === client && item.householdId === householdId,
+    );
+    if (old) return old;
+    const next = new PhotoStore(client, householdId);
+    stores.add(next);
+    return next;
+  }, [client, householdId]);
+  const snapshot = useSyncExternalStore(
+    enabled ? store.subscribe : noSubscription,
+    store.getSnapshot,
+    store.getSnapshot,
+  );
+  return { ...snapshot, refresh: store.refresh };
 }
 
 export async function prepareHouseholdPhoto(file: File): Promise<Blob> {

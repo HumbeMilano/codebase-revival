@@ -111,6 +111,16 @@ export class HouseholdBackend {
   >();
 
   async install(page: Page) {
+    await page.route("**/api/weather", (route) =>
+      route.fulfill({
+        json: {
+          temperature: 24.4,
+          symbol: "partlycloudy_day",
+          location: "Ciudad de prueba",
+          updatedAt: new Date().toISOString(),
+        },
+      }),
+    );
     await page.route("**/api/billing/status", (route) =>
       route.fulfill({
         json: {
@@ -734,6 +744,13 @@ export async function mockTabletPasskey(page: Page) {
       },
     });
   });
+}
+
+export async function openTabletPin(page: Page) {
+  await expect(page.getByTestId("tablet-lock-screen")).toBeVisible({ timeout: 30000 });
+  const reveal = page.getByRole("button", { name: "Mostrar información", exact: true });
+  if (await reveal.isVisible()) await reveal.click();
+  await page.getByRole("button", { name: "Entrar con PIN", exact: true }).click();
 }
 
 export async function section(page: Page, label: string) {

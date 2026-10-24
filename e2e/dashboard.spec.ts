@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HOME_ID, HouseholdBackend, enterPin, section, signIn } from "./backend";
+import { HOME_ID, HouseholdBackend, openTabletPin, enterPin, section, signIn } from "./backend";
 
 function seedLegacyHome(backend: HouseholdBackend) {
   backend.dashboardPreference = {
@@ -110,7 +110,7 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   await backend.install(page);
   await page.goto("/");
   const unlock = async (pin: string) => {
-    await page.getByRole("button", { name: "Entrar con PIN", exact: true }).click();
+    await openTabletPin(page);
     await enterPin(page, pin);
     await expect(page.getByRole("button", { name: "Personalizar", exact: true })).toBeEnabled();
   };

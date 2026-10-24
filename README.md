@@ -33,7 +33,7 @@ Guarda la configuración del proyecto en `.env.local`. Las variables `VITE_*` se
 - Las invitaciones se envían por correo y abren el registro. Solo las puede aceptar la dirección confirmada que las recibió.
 - Las tareas realizadas permanecen en Actuales durante 72 horas y después aparecen en Archivadas.
 - Los aportes tienen fecha (hoy por defecto); el mes corresponde a la fecha elegida.
-- Los adultos gestionan hasta 12 fotos privadas para el carrusel de la pantalla de bloqueo, que ocupa todo el viewport.
+- Los adultos gestionan hasta 12 fotos privadas para el bloqueo: imagen completa sobre su copia difuminada, adaptada a retrato y paisaje. Arranca solo con fotos; un toque muestra hora, fecha, clima y agenda, otro abre el PIN. Tras 10 segundos sin interacción se vuelve a las fotos. El clima usa la zona aproximada de la conexión y datos de MET Norway (CC BY 4.0), sin ubicación precisa.
 - Se retiraron el dictado, el micrófono y las dependencias de procesamiento de audio.
 
 No existen credenciales universales de demostración. Las invitaciones, PIN y tokens revocables de tablet pertenecen a cada hogar.

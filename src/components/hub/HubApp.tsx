@@ -51,6 +51,7 @@ import {
   type ShoppingContext,
 } from "@/lib/offline-shopping";
 import { OfflineShopping } from "./OfflineShopping";
+import { useHouseholdPhotos } from "@/lib/household-photos";
 
 const Dashboard = lazy(() => import("./Dashboard").then((m) => ({ default: m.Dashboard })));
 const Finance = lazy(() => import("./Finance").then((m) => ({ default: m.Finance })));
@@ -448,6 +449,7 @@ function HubShell({
   const [create, setCreate] = useState<{ tab: Tab; id: number } | null>(null);
   const [record, setRecord] = useState<{ tab: "calendar" | "notes"; id: string } | null>(null);
   const now = useClock();
+  useHouseholdPhotos(mode === "device");
   useEffect(() => {
     setUser((previous) =>
       mode === "account"

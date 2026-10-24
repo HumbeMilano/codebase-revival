@@ -4,6 +4,7 @@ import { createTabletPairing, type WorkerEnv } from "../../workers/app";
 
 const rate = vi.fn(async () => ({ success: true }));
 const env: WorkerEnv = {
+  WEATHER_RATE: { limit: vi.fn().mockResolvedValue({ success: true }) },
   ASSETS: {} as WorkerEnv["ASSETS"],
   SecreteStripe: "sk_test_fixture",
   BILLING_GATEWAY_KEY: "fixture",
