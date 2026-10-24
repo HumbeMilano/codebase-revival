@@ -517,27 +517,74 @@ function HubShell({
           />
         </div>
       ) : (
-        <div className="flex min-h-dvh flex-col">
-          <header className="sticky top-0 z-30 border-b bg-background/95 px-4 py-3 backdrop-blur-sm sm:px-6">
-            <div className="mx-auto flex max-w-7xl items-center gap-3">
+        <div className="hub-shell">
+          <aside className="hub-sidebar" aria-label="Menú principal">
+            <div className="hub-sidebar-brand" title={HOUSEHOLD.name}>
+              <Home aria-hidden="true" />
+              <span className="sr-only">{HOUSEHOLD.name}</span>
+            </div>
+            <nav aria-label="Secciones del hogar" className="hub-sidebar-nav">
+              <Button
+                size="icon"
+                className="hub-sidebar-add"
+                aria-label="Añadir"
+                title="Añadir"
+                onClick={() => setQuick(true)}
+              >
+                <Plus />
+              </Button>
+              {visibleTabs.map(({ id, label, icon: Icon }) => (
+                <Button
+                  key={id}
+                  variant="ghost"
+                  className="hub-sidebar-link"
+                  aria-label={label}
+                  aria-current={id === tab ? "page" : undefined}
+                  onClick={() => go(id)}
+                >
+                  <span className="relative">
+                    <Icon className="size-5" aria-hidden="true" />
+                    {id === "finance" && !financialAccess && (
+                      <ShieldCheck className="hub-sidebar-gate" aria-hidden="true" />
+                    )}
+                  </span>
+                  <span>{label}</span>
+                </Button>
+              ))}
+            </nav>
+            <div className="hub-sidebar-footer">
+              <span className="hub-sidebar-clock">
+                {now?.toLocaleTimeString("es", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: timeFormat === "12",
+                })}
+              </span>
+              <div className="hub-sidebar-account">
+                <span title={user.name}>
+                  <Avatar m={user} size="sm" />
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => void logout()}
+                  title={mode === "device" ? "Bloquear tablet" : "Cerrar sesión"}
+                  aria-label={mode === "device" ? "Bloquear tablet" : "Cerrar sesión"}
+                >
+                  <LogOut />
+                </Button>
+              </div>
+            </div>
+          </aside>
+          <header className="hub-mobile-header sticky top-0 z-30 border-b bg-background/95 px-4 py-3 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
               <Avatar m={user} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs text-muted-foreground">{HOUSEHOLD.name}</p>
                 <p className="truncate font-display text-lg font-bold">
-                  {compact || tab === "home"
-                    ? TABS.find((t) => t.id === tab)?.label
-                    : `Hola, ${user.name}`}
+                  {TABS.find((t) => t.id === tab)?.label}
                 </p>
               </div>
-              {!compact && (
-                <span className="text-sm tabular-nums text-muted-foreground">
-                  {now?.toLocaleTimeString("es", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    hour12: timeFormat === "12",
-                  })}
-                </span>
-              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -547,179 +594,159 @@ function HubShell({
                 <LogOut />
               </Button>
             </div>
-            {!compact && (
-              <nav
-                aria-label="Secciones del hogar"
-                className="mx-auto mt-3 flex max-w-7xl flex-wrap gap-1"
-              >
-                {visibleTabs.map(({ id, label, icon: Icon }) => (
-                  <Button
-                    key={id}
-                    variant={id === tab ? "default" : "ghost"}
-                    className="rounded-full"
-                    aria-current={id === tab ? "page" : undefined}
-                    onClick={() => go(id)}
-                  >
-                    <Icon className="size-4" />
-                    {label}
-                    {id === "finance" && !financialAccess && <ShieldCheck className="size-3" />}
-                  </Button>
-                ))}
-              </nav>
-            )}
           </header>
-          <main
-            id="main-content"
-            className={cn("mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6", compact && "pb-28")}
-          >
-            {tab !== "home" && !compact && (
-              <h1 className="mb-6 font-display text-4xl font-bold">
-                {TABS.find((t) => t.id === tab)?.label}
-              </h1>
-            )}
-            {s.error && (
-              <div
-                role="alert"
-                className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-destructive/10 p-4 text-sm"
+          <div className="hub-main-area">
+            <main
+              id="main-content"
+              className="hub-main mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6"
+            >
+              {tab !== "home" && (
+                <h1 className="hub-section-title mb-6 font-display text-4xl font-bold">
+                  {TABS.find((t) => t.id === tab)?.label}
+                </h1>
+              )}
+              {s.error && (
+                <div
+                  role="alert"
+                  className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-destructive/10 p-4 text-sm"
+                >
+                  <p>{s.error}</p>
+                  <Button variant="outline" size="sm" onClick={() => void s.refresh()}>
+                    Reintentar
+                  </Button>
+                </div>
+              )}
+              {s.loading ? (
+                <p role="status" className="py-16 text-center text-muted-foreground">
+                  Cargando datos del hogar…
+                </p>
+              ) : (
+                <Suspense fallback={<p role="status">Abriendo sección…</p>}>
+                  {tab === "home" && (
+                    <Dashboard
+                      s={s}
+                      user={user}
+                      compact={compact}
+                      key={mode === "account" ? shoppingContext?.accountId : user.id}
+                      scope={
+                        mode === "account" && shoppingContext
+                          ? { kind: "account", accountId: shoppingContext.accountId }
+                          : { kind: "device", householdId: HOUSEHOLD.id, memberId: user.id }
+                      }
+                      now={now}
+                      go={go}
+                      onCreate={quickAdd}
+                      onOpenRecord={(next, id) => {
+                        go(next);
+                        setRecord({ tab: next, id });
+                      }}
+                      adultAuthorized={financialAccess}
+                    />
+                  )}
+                  {tab === "chores" && (
+                    <Chores
+                      s={s}
+                      compact={compact}
+                      createRequest={create?.tab === "chores" ? create.id : 0}
+                    />
+                  )}
+                  {tab === "shopping" && (
+                    <Shopping
+                      s={s}
+                      compact={compact}
+                      createRequest={create?.tab === "shopping" ? create.id : 0}
+                    />
+                  )}
+                  {tab === "finance" && financialAccess && (
+                    <Finance
+                      f={s}
+                      compact={compact}
+                      createRequest={create?.tab === "finance" ? create.id : 0}
+                    />
+                  )}
+                  {tab === "calendar" && (
+                    <FamilyCalendar
+                      events={s.events}
+                      setEvents={s.setEvents}
+                      bills={financialAccess ? s.bills : []}
+                      setBills={s.setBills}
+                      financialAccess={financialAccess}
+                      user={user}
+                      compact={compact}
+                      createRequest={create?.tab === "calendar" ? create.id : 0}
+                      initialEventId={record?.tab === "calendar" ? record.id : undefined}
+                    />
+                  )}
+                  {tab === "notes" && (
+                    <FamilyNotes
+                      notes={s.notes}
+                      setNotes={s.setNotes}
+                      user={user}
+                      compact={compact}
+                      createRequest={create?.tab === "notes" ? create.id : 0}
+                      initialNoteId={record?.tab === "notes" ? record.id : undefined}
+                    />
+                  )}
+                  {tab === "household" && canManage && (
+                    <HouseholdSettings onMembersChanged={onContextRefresh} />
+                  )}
+                  {tab === "profile" && mode === "account" && (
+                    <PersonalProfile onSaved={onProfileSaved} onHouseholdLeft={onReload} />
+                  )}
+                </Suspense>
+              )}
+              <p
+                role="status"
+                aria-live="polite"
+                className="mt-6 text-right text-xs text-muted-foreground"
               >
-                <p>{s.error}</p>
-                <Button variant="outline" size="sm" onClick={() => void s.refresh()}>
-                  Reintentar
-                </Button>
-              </div>
-            )}
-            {s.loading ? (
-              <p role="status" className="py-16 text-center text-muted-foreground">
-                Cargando datos del hogar…
+                {s.saving
+                  ? "Guardando cambios…"
+                  : s.error
+                    ? "Hay cambios que no se guardaron"
+                    : s.lastSavedAt
+                      ? "Cambios guardados"
+                      : ""}
               </p>
-            ) : (
-              <Suspense fallback={<p role="status">Abriendo sección…</p>}>
-                {tab === "home" && (
-                  <Dashboard
-                    s={s}
-                    user={user}
-                    compact={compact}
-                    key={mode === "account" ? shoppingContext?.accountId : user.id}
-                    scope={
-                      mode === "account" && shoppingContext
-                        ? { kind: "account", accountId: shoppingContext.accountId }
-                        : { kind: "device", householdId: HOUSEHOLD.id, memberId: user.id }
-                    }
-                    now={now}
-                    go={go}
-                    onCreate={quickAdd}
-                    onOpenRecord={(next, id) => {
-                      go(next);
-                      setRecord({ tab: next, id });
-                    }}
-                    adultAuthorized={financialAccess}
-                  />
-                )}
-                {tab === "chores" && (
-                  <Chores
-                    s={s}
-                    compact={compact}
-                    createRequest={create?.tab === "chores" ? create.id : 0}
-                  />
-                )}
-                {tab === "shopping" && (
-                  <Shopping
-                    s={s}
-                    compact={compact}
-                    createRequest={create?.tab === "shopping" ? create.id : 0}
-                  />
-                )}
-                {tab === "finance" && financialAccess && (
-                  <Finance
-                    f={s}
-                    compact={compact}
-                    createRequest={create?.tab === "finance" ? create.id : 0}
-                  />
-                )}
-                {tab === "calendar" && (
-                  <FamilyCalendar
-                    events={s.events}
-                    setEvents={s.setEvents}
-                    bills={financialAccess ? s.bills : []}
-                    setBills={s.setBills}
-                    financialAccess={financialAccess}
-                    user={user}
-                    compact={compact}
-                    createRequest={create?.tab === "calendar" ? create.id : 0}
-                    initialEventId={record?.tab === "calendar" ? record.id : undefined}
-                  />
-                )}
-                {tab === "notes" && (
-                  <FamilyNotes
-                    notes={s.notes}
-                    setNotes={s.setNotes}
-                    user={user}
-                    compact={compact}
-                    createRequest={create?.tab === "notes" ? create.id : 0}
-                    initialNoteId={record?.tab === "notes" ? record.id : undefined}
-                  />
-                )}
-                {tab === "household" && canManage && (
-                  <HouseholdSettings onMembersChanged={onContextRefresh} />
-                )}
-                {tab === "profile" && mode === "account" && (
-                  <PersonalProfile onSaved={onProfileSaved} onHouseholdLeft={onReload} />
-                )}
-              </Suspense>
-            )}
-            <p
-              role="status"
-              aria-live="polite"
-              className="mt-6 text-right text-xs text-muted-foreground"
+            </main>
+          </div>
+          <nav
+            aria-label="Navegación principal"
+            className="hub-mobile-dock fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t bg-card px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2"
+          >
+            <DockBtn
+              active={tab === "home"}
+              label="Inicio"
+              Icon={Home}
+              onClick={() => go("home")}
+            />
+            <DockBtn
+              active={tab === "chores"}
+              label="Tareas"
+              Icon={CheckSquare}
+              onClick={() => go("chores")}
+            />
+            <Button
+              size="icon"
+              className="size-12 rounded-full"
+              onClick={() => setQuick(true)}
+              aria-label="Añadir"
             >
-              {s.saving
-                ? "Guardando cambios…"
-                : s.error
-                  ? "Hay cambios que no se guardaron"
-                  : s.lastSavedAt
-                    ? "Cambios guardados"
-                    : ""}
-            </p>
-          </main>
-          {compact && (
-            <nav
-              aria-label="Navegación principal"
-              className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t bg-card px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2"
-            >
-              <DockBtn
-                active={tab === "home"}
-                label="Inicio"
-                Icon={Home}
-                onClick={() => go("home")}
-              />
-              <DockBtn
-                active={tab === "chores"}
-                label="Tareas"
-                Icon={CheckSquare}
-                onClick={() => go("chores")}
-              />
-              <Button
-                size="icon"
-                className="size-12 rounded-full"
-                onClick={() => setQuick(true)}
-                aria-label="Añadir"
-              >
-                <Plus />
-              </Button>
-              <DockBtn
-                active={tab === "shopping"}
-                label="Compras"
-                Icon={ShoppingCart}
-                onClick={() => go("shopping")}
-              />
-              <DockBtn
-                active={["calendar", "notes", "finance", "household", "profile"].includes(tab)}
-                label="Más"
-                Icon={MoreHorizontal}
-                onClick={() => setMore(true)}
-              />
-            </nav>
-          )}
+              <Plus />
+            </Button>
+            <DockBtn
+              active={tab === "shopping"}
+              label="Compras"
+              Icon={ShoppingCart}
+              onClick={() => go("shopping")}
+            />
+            <DockBtn
+              active={["calendar", "notes", "finance", "household", "profile"].includes(tab)}
+              label="Más"
+              Icon={MoreHorizontal}
+              onClick={() => setMore(true)}
+            />
+          </nav>
         </div>
       )}
       <Dialog open={quick} onOpenChange={setQuick}>
