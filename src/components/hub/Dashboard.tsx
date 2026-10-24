@@ -287,7 +287,6 @@ export function Dashboard({
             layout={visible}
             editing={!!editor}
             disabled={preference.saving || !!preference.error}
-            onEdit={open}
             onChange={updateDraft}
             describe={describeWidget}
             onConfigure={setConfiguration}

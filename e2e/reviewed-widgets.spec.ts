@@ -155,10 +155,10 @@ test("choosing a shopping list, financial progress and expanded catalogue persis
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
-test("two fingers scroll across editable cards and cancel the single-finger drag", async ({
+test("one finger scrolls the widget bodies naturally before and during editing", async ({
   page,
 }, testInfo) => {
-  test.skip(testInfo.project.name !== "mobile", "Native multitouch needs the touch project");
+  test.skip(testInfo.project.name !== "mobile", "Uses native touch scrolling");
   const backend = new HouseholdBackend();
   backend.dashboardPreference = {
     user_id: account,
@@ -174,37 +174,69 @@ test("two fingers scroll across editable cards and cancel the single-finger drag
   };
   await backend.install(page);
   await signIn(page);
-  await page.getByRole("button", { name: "Personalizar", exact: true }).click();
   const touch = await page.context().newCDPSession(page),
     grid = page.locator(".dashboard-grid");
-  const before = await grid
+  const original = await grid
     .locator("[data-widget]")
-    .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-widget")));
-  const box = (await grid.boundingBox())!,
-    y = Math.min(page.viewportSize()!.height - 120, box.y + 260);
-  const points = [
-    { x: box.x + 80, y, id: 1 },
-    { x: box.x + 200, y, id: 2 },
-  ];
-  const scroll = await page.evaluate(() => scrollY);
-  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [points[0]!] });
-  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: points });
-  for (let step = 1; step <= 8; step++)
-    await touch.send("Input.dispatchTouchEvent", {
-      type: "touchMove",
-      touchPoints: points.map((p) => ({ ...p, y: p.y - step * 25 })),
-    });
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-widget")));
+  for (const editing of [false, true]) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    if (editing) await page.getByRole("button", { name: "Personalizar", exact: true }).click();
+    const box = (await grid.boundingBox())!,
+      start = { x: box.x + box.width / 2, y: Math.min(600, box.y + 240), id: 1 };
+    const scroll = await page.evaluate(() => scrollY);
+    await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [start] });
+    await page.waitForTimeout(600);
+    await expect(page.locator(".widget-lifted")).toHaveCount(0);
+    for (let step = 1; step <= 10; step++) {
+      await touch.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ ...start, y: start.y - step * 20 }],
+      });
+      await page.waitForTimeout(20);
+    }
+    await page.waitForTimeout(100);
+    await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(scroll + 100);
+    expect(
+      await grid
+        .locator("[data-widget]")
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-widget"))),
+    ).toEqual(original);
+    await expect(page.locator(".widget-lifted")).toHaveCount(0);
+  }
+  // An incidental second finger cancels a grip drag without custom scrolling.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const grip = (await page
+    .getByRole("button", { name: "Mover tareas de hoy", exact: true })
+    .boundingBox())!;
+  const start = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2, id: 2 };
+  const before = await page.evaluate(() => scrollY);
+  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [start] });
+  await expect(page.locator(".widget-lifted")).toHaveCount(1);
+  await touch.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [start, { x: start.x + 100, y: start.y - 60, id: 3 }],
+  });
+  await expect(page.locator(".widget-lifted")).toHaveCount(0);
   await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(scroll + 100);
+  expect(await page.evaluate(() => scrollY)).toBeCloseTo(before, 0);
   expect(
     await grid
       .locator("[data-widget]")
-      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-widget"))),
-  ).toEqual(before);
-  await expect(page.locator(".widget-lifted")).toHaveCount(0);
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-widget"))),
+  ).toEqual(original);
+  expect(
+    await grid
+      .locator(".widget-card")
+      .evaluateAll((nodes) =>
+        nodes.every((node) => (node as HTMLElement).style.position !== "fixed"),
+      ),
+  ).toBe(true);
   expect(backend.dashboardSaveRequests).toBe(0);
   await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(page.getByRole("region", { name: "Personalizar inicio", exact: true })).toHaveCount(
     0,
   );
+  expect(backend.unexpectedRequests).toEqual([]);
 });
