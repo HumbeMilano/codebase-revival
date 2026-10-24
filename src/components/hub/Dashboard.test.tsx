@@ -163,3 +163,32 @@ it("removes financial surfaces immediately when the tablet grant expires during 
     prefs.save.mock.calls[0]![0].widgets.some((widget: { id: string }) => widget.id === "finance"),
   ).toBe(true);
 });
+
+it("does not substitute an ordinary note when no note is pinned", () => {
+  const prefs = preference();
+  prefs.layout = { version: 3, widgets: [{ id: "pinned-note", key: "pinned", size: "compact" }] };
+  vi.mocked(useDashboardLayout).mockReturnValue(prefs);
+  const s = state();
+  s.notes = [
+    {
+      id: "10000000-0000-4000-8000-000000000001",
+      title: "Nota sin fijar",
+      body: "Contenido privado de la nota",
+      pinned: false,
+      memberId: "ana",
+    },
+  ];
+  render(
+    <Dashboard
+      s={s}
+      compact
+      scope={scope}
+      user={adult}
+      now={null}
+      go={vi.fn()}
+      onCreate={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("region", { name: "Nota fijada" })).toHaveTextContent("Sin nota fijada");
+  expect(screen.queryByText("Nota sin fijar")).not.toBeInTheDocument();
+});

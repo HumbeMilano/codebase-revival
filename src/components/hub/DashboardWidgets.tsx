@@ -183,7 +183,7 @@ function TinyWidget({ widget, s, now, user, onCreate }: Props) {
   const note =
     widget.id === "specific-note"
       ? s.notes.find((n) => n.id === widget.noteId)
-      : (s.notes.find((n) => n.pinned) ?? s.notes[0]);
+      : s.notes.find((n) => n.pinned);
   const person = MEMBERS.find((p) => p.id === widget.memberId);
   const summary = monthSummary(
     s.bills,
@@ -238,7 +238,7 @@ function TinyWidget({ widget, s, now, user, onCreate }: Props) {
       break;
     case "specific-note":
     case "pinned-note":
-      value = note?.title ?? "Sin notas";
+      value = note?.title ?? "Sin nota fijada";
       break;
     case "family":
       value = MEMBERS.length;
@@ -301,7 +301,7 @@ export function DashboardWidgetContent(props: Props) {
   const note =
     widget.id === "specific-note"
       ? s.notes.find((n) => n.id === widget.noteId)
-      : (s.notes.find((n) => n.pinned) ?? s.notes[0]);
+      : s.notes.find((n) => n.pinned);
   const person = MEMBERS.find((p) => p.id === widget.memberId);
   if (widget.id === "shopping" && !list)
     return (
@@ -448,7 +448,7 @@ export function DashboardWidgetContent(props: Props) {
           <p className="dw-note-body">{note.body}</p>
         </>
       ) : (
-        <Empty>Sin notas</Empty>
+        <Empty>Sin nota fijada</Empty>
       );
       break;
     case "notes":
