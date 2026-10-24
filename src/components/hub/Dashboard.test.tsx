@@ -4,7 +4,7 @@ import { useDashboardLayout } from "@/hooks/use-dashboard-layout";
 import { defaultDashboardLayout, type DashboardScope } from "@/lib/dashboard-layout";
 import { Dashboard } from "./Dashboard";
 import type { HubState } from "./Screens";
-import { MEMBERS, setMembers, type Member } from "./data";
+import { HOUSEHOLD, MEMBERS, setMembers, type Member, type ShopItem } from "./data";
 
 vi.mock("@/hooks/use-dashboard-layout");
 vi.mock("@/lib/db", () => ({ db: () => ({}) }));
@@ -280,4 +280,66 @@ it("starts a real new note from empty note widgets without changing layout prefe
     expect(onCreate).toHaveBeenLastCalledWith("notes");
   }
   expect(prefs.save).not.toHaveBeenCalled();
+});
+
+it("marks only the chosen shopping list and evaluates repeated taps against current items", () => {
+  const prefs = preference();
+  const listId = "10000000-0000-4000-8000-000000000091";
+  prefs.layout = {
+    version: 3,
+    widgets: [{ id: "shopping", key: "shopping", size: "wide", listId }],
+  };
+  vi.mocked(useDashboardLayout).mockReturnValue(prefs);
+  const s = state();
+  s.shoppingLists = [
+    { id: HOUSEHOLD.id, name: "Groceries", archived: false },
+    { id: listId, name: "School", archived: false },
+  ];
+  s.items = [
+    { id: "home", listId: HOUSEHOLD.id, name: "Pan", done: false },
+    { id: "school", listId, name: "Pan", done: false },
+  ];
+  const save = vi.fn().mockResolvedValue(true);
+  s.setItems = save;
+  render(
+    <Dashboard
+      s={s}
+      compact
+      scope={scope}
+      user={adult}
+      now={null}
+      go={vi.fn()}
+      onCreate={vi.fn()}
+    />,
+  );
+  const checkbox = screen.getByRole("checkbox", { name: "Pan" });
+  expect(checkbox).toHaveAttribute("aria-checked", "false");
+  fireEvent.click(checkbox);
+  fireEvent.click(checkbox);
+  expect(save).toHaveBeenCalledTimes(2);
+  const apply = save.mock.calls[0]![0] as (rows: ShopItem[]) => ShopItem[];
+  const again = save.mock.calls[1]![0] as (rows: ShopItem[]) => ShopItem[];
+  const once = apply(s.items);
+  expect(once.map((item) => item.done)).toEqual([false, true]);
+  expect(again(once).map((item) => item.done)).toEqual([false, false]);
+  const moved = s.items.map((item) => ({ ...item, listId: HOUSEHOLD.id }));
+  expect(apply(moved)).toEqual(moved);
+  expect(prefs.save).not.toHaveBeenCalled();
+});
+
+it("shows actual shopping sync conflicts with a route to resolve them", () => {
+  const prefs = preference();
+  prefs.layout = { version: 3, widgets: [{ id: "shopping", key: "shopping", size: "wide" }] };
+  vi.mocked(useDashboardLayout).mockReturnValue(prefs);
+  const s = state();
+  s.shoppingSync = { householdId: HOUSEHOLD.id, error: "", conflict: true } as NonNullable<
+    HubState["shoppingSync"]
+  >;
+  const go = vi.fn();
+  render(
+    <Dashboard s={s} compact scope={scope} user={adult} now={null} go={go} onCreate={vi.fn()} />,
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent("La lista cambió en otro dispositivo.");
+  fireEvent.click(screen.getByRole("button", { name: "Revisar compras" }));
+  expect(go).toHaveBeenCalledWith("shopping");
 });

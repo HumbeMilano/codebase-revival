@@ -142,7 +142,7 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
-test("widgets leave household records unchanged until an explicit edit is saved", async ({
+test("shopping widgets mark products directly and notes require an explicit saved edit", async ({
   page,
 }) => {
   const backend = new HouseholdBackend();
@@ -213,7 +213,7 @@ test("widgets leave household records unchanged until an explicit edit is saved"
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(backend.rows["chores"]?.[0]?.["done"]).toBe(false);
-  expect(backend.rows["shopping_items"]?.[0]?.["done"]).toBe(false);
+  await expect.poll(() => backend.rows["shopping_items"]?.[0]?.["done"]).toBe(true);
   await page.reload();
   await expect(page.locator('[data-widget="shopping"]')).toContainText("Tomates");
   await expect(page.locator('[data-widget="notes"]')).toContainText("En el cajón");
