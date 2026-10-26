@@ -62,6 +62,7 @@ export class BillingFailure extends Error {
   constructor(
     public readonly code: string,
     public readonly status: number,
+    public readonly diagnostic?: { parameter: string; message: string; request_id: string },
   ) {
     super(code);
   }
@@ -116,7 +117,19 @@ export async function sandboxStripe(
   if (!response.ok) {
     const failure = record(JSON.parse(await boundedText(response)));
     const error = record(failure["error"]);
-    throw new BillingFailure(String(error["code"] ?? error["type"] ?? "provider"), 503);
+    const message = String(error["message"] ?? "Provider request failed")
+      .replaceAll(stripeKey, "[redacted]")
+      .replace(/(?:sk|rk)_(?:test|live)_[A-Za-z0-9_]+|whsec_[A-Za-z0-9_]+/g, "[redacted]")
+      .slice(0, 500);
+    const parameter = String(error["param"] ?? "")
+      .replace(/[^a-zA-Z0-9_.]/g, "")
+      .slice(0, 120);
+    const requestId = response.headers.get("request-id") ?? "";
+    throw new BillingFailure(String(error["code"] ?? error["type"] ?? "provider"), 503, {
+      message,
+      parameter,
+      request_id: /^req_[A-Za-z0-9]+$/.test(requestId) ? requestId : "",
+    });
   }
   return record(JSON.parse(await boundedText(response)));
 }

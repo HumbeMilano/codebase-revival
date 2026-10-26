@@ -209,6 +209,11 @@ export async function subscriptions(request: Request, env: WorkerEnv) {
             ? "Ya hay una operación pendiente. Actualiza el estado antes de continuar."
             : "No se pudo confirmar la operación de sandbox. Puedes reintentar.",
         code,
+        // Provider diagnostics are visible only to the management-issued QA
+        // capability, after its server-side job check. Never show them to users.
+        ...(path.endsWith("/qa") && reason instanceof BillingFailure && reason.diagnostic
+          ? { diagnostic: reason.diagnostic }
+          : {}),
       },
       forbidden ? 403 : conflict ? 409 : 503,
     );

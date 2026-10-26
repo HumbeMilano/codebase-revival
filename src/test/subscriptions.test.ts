@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { billingRpc } from "../../workers/billing";
+import { billingRpc, sandboxStripe, BillingFailure } from "../../workers/billing";
 import { subscriptions } from "../../workers/subscriptions";
 import {
   reconcileSandboxEvent,
@@ -67,6 +67,35 @@ const current = {
 const json = (v: unknown, status = 200) => Response.json(v, { status });
 afterEach(() => vi.unstubAllGlobals());
 describe("household sandbox subscriptions", () => {
+  it("redacts provider credentials in diagnostics for authorized QA jobs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          {
+            error: {
+              type: "invalid_request_error",
+              param: "customer",
+              message: `Invalid key ${env.SecreteStripe}`,
+            },
+          },
+          { status: 400, headers: { "request-id": "req_fixture" } },
+        ),
+      ),
+    );
+    try {
+      await sandboxStripe(env, "customers", new URLSearchParams());
+      throw new Error("Expected provider failure");
+    } catch (reason) {
+      expect(reason).toBeInstanceOf(BillingFailure);
+      expect((reason as BillingFailure).diagnostic).toEqual({
+        parameter: "customer",
+        message: "Invalid key [redacted]",
+        request_id: "req_fixture",
+      });
+    }
+  });
+
   it("accepts PostgREST void acknowledgements after confirmed writes", async () => {
     vi.stubGlobal(
       "fetch",
