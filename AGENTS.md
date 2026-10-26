@@ -13,6 +13,9 @@
 
 ## Application and state
 
+- The approved public brand is Skendal: direction B, cobalt #344ED8, coral #FF8A70, lavender #E8DDF5, warm paper #FAF7F2; symbol is the house with three organized interior panels. Marketing sources are in `branding/`, static pages in `site/`; keep English and Spanish versions complete and describe actual language/paid-plan availability honestly. The current application is still Spanish. Do not advertise an English app or active charges until those flows exist.
+- Build website content with `bun run build:site`; export original social PNGs and sharing cards with `bun run export:brand` using the installed Chromium. Marketing previews use explicitly illustrative households; never use private owner photos or household data. `/kit/` is a public, unindexed template editor, not a private admin panel. Draft edits stay in the local browser, use textContent, and are separate from downloadable original PNGs. Preparing assets does not authorize posting to social accounts.
+
 - This is a functional household application, not a device preview. Use responsive layouts and real household data. Do not restore demo PINs, fixed weather, fixed calendar dates or fictitious agenda entries.
 - Use the shared finance visibility predicate for every financial UI surface; financial tables also require server-side authorization through `db()`.
 - Dashboard dragging starts only from the grip button in edit mode, and resizing only from its corner control. Card bodies scroll natively with one finger in both preview and edit mode. Do not restore whole-card holds, whole-card dragging or custom two-finger scrolling. Preserve pointer cancellation, arrow-key movement on the grip and reduced-motion transitions. Preserve saved layouts when expanding the widget catalogue.

@@ -53,3 +53,25 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 scripts/test-database.py
       - run: python3 scripts/test-database.py --empty-install
+
+  website:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: bun install --frozen-lockfile
+      - name: Use runner Chrome for website and marketing exports
+        run: echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+      - run: bun run test:site
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: website-results
+          path: test-results/site/
+          retention-days: 7

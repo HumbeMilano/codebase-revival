@@ -44,3 +44,5 @@ test-results/
 supabase/.temp/
 .dev.vars*
 worker-dist/
+site/assets/generated/
+site/assets/share-*.png

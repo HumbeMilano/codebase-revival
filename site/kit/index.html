@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Skendal · Kit de marca</title>
+    <link rel="icon" href="../assets/skendal-symbol.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="data.js" defer></script>
+    <script src="editor.js" defer></script>
+  </head>
+  <body>
+    <aside class="tools">
+      <a class="tool-brand" href="../"
+        ><img src="../assets/skendal-symbol.png" width="38" height="38" alt="" />skendal
+        <span>Kit de marca</span></a
+      >
+      <p>Tres ideas. Dos idiomas. Una misma identidad.</p>
+      <div class="selectors">
+        <label
+          >Idioma<select id="language">
+            <option value="es">Español</option>
+            <option value="en">English</option>
+          </select></label
+        ><label
+          >Pieza<select id="piece">
+            <option value="launch">Presentación</option>
+            <option value="lists">Listas compartidas</option>
+            <option value="tablet">Tablet del hogar</option>
+          </select></label
+        ><label
+          >Formato<select id="format">
+            <option value="post">Publicación · 1080 × 1350</option>
+            <option value="story">Historia · 1080 × 1920</option>
+            <option value="share">Vista para enlaces · 1200 × 630</option>
+          </select></label
+        >
+      </div>
+      <label>Titular<textarea id="headline" rows="3" maxlength="120"></textarea></label
+      ><label>Texto breve<textarea id="body-copy" rows="3" maxlength="220"></textarea></label>
+      <p id="overflow-status" role="status"></p>
+      <div class="actions">
+        <button id="save-pdf" type="button">Imprimir / guardar PDF</button
+        ><a id="original" download>Descargar PNG original</a
+        ><button id="reset" type="button">Restablecer texto</button>
+      </div>
+      <details>
+        <summary>Texto para acompañar la publicación</summary>
+        <textarea id="caption" rows="6" aria-label="Texto para la publicación"></textarea
+        ><button id="copy-caption" type="button">Copiar texto</button>
+        <p id="copy-status" role="status"></p>
+      </details>
+      <p class="help">
+        Los cambios se guardan en este navegador. PDF usa el texto actual; el PNG contiene el diseño
+        original. Revisa los saltos de línea antes de exportar.
+      </p>
+      <p class="help">
+        Las piezas están preparadas para revisión y publicación manual. La app está actualmente en
+        español.
+      </p>
+    </aside>
+    <main class="preview">
+      <div class="preview-frame">
+        <article
+          id="artboard"
+          class="piece-launch format-post"
+          lang="es"
+          aria-label="Vista previa de la pieza"
+        >
+          <div class="poster-brand">
+            <img src="../assets/skendal-symbol.png" width="84" height="84" alt="" /><span
+              >skendal</span
+            >
+          </div>
+          <div class="poster-copy">
+            <p id="poster-eyebrow"></p>
+            <h1 id="poster-headline"></h1>
+            <p id="poster-text"></p>
+            <p id="poster-detail"></p>
+          </div>
+          <div class="poster-art" aria-hidden="true">
+            <div class="launch-art"><i></i><i></i><i></i></div>
+            <div class="lists-art">
+              <div><strong id="list-label-one"></strong><span>✓</span><i></i><i></i></div>
+              <div><strong id="list-label-two"></strong><span>＋</span><i></i><i></i></div>
+            </div>
+            <div class="tablet-art">
+              <div class="tablet-inner"><span>skendal</span><i></i><i></i><i></i><b>♡</b></div>
+            </div>
+          </div>
+          <footer>
+            <strong>skendal.com <span aria-hidden="true">→</span></strong
+            ><span id="poster-availability"></span>
+          </footer>
+        </article>
+      </div>
+    </main>
+  </body>
+</html>
