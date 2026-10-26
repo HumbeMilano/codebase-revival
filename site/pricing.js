@@ -1,5 +1,6 @@
-// Public catalogue only: no account session, payment data or server credential.
+// Only the public catalogue is read. This page cannot start a charge.
 (async () => {
+  const spanish = document.documentElement.lang === "es";
   try {
     const response = await fetch(
       "https://rwbeiestzyzceramgtdw.supabase.co/rest/v1/rpc/business_catalog",
@@ -9,8 +10,8 @@
       },
     );
     if (!response.ok) return;
-    const catalogue = await response.json();
-    const plan = catalogue.plans?.find((row) => row.id === "pro");
+    const catalogue = await response.json(),
+      plan = catalogue.plans?.find((row) => row.id === "pro");
     if (
       !plan ||
       !/^[A-Z]{3}$/.test(plan.currency) ||
@@ -20,15 +21,19 @@
       plan.annual_amount_cents < 0
     )
       return;
-    const price = new Intl.NumberFormat("en-US", { style: "currency", currency: plan.currency });
-    document.getElementById("monthly-price").textContent = price.format(plan.amount_cents / 100);
-    document.getElementById("annual-price").textContent = price.format(
+    const format = new Intl.NumberFormat(spanish ? "es-US" : "en-US", {
+      style: "currency",
+      currency: plan.currency,
+    });
+    document.getElementById("monthly-price").textContent = format.format(plan.amount_cents / 100);
+    document.getElementById("annual-price").textContent = format.format(
       plan.annual_amount_cents / 100,
     );
+    document.getElementById("pricing-status").textContent = spanish
+      ? `Precios previstos en ${plan.currency}. Los cobros automáticos todavía no están activos.`
+      : `Planned prices in ${plan.currency}. Automatic subscription payments are not active.`;
     document.getElementById("pricing-cards").hidden = false;
-    document.getElementById("pricing-status").textContent =
-      `Precios previstos en ${plan.currency}. Los cobros automáticos todavía no están activos.`;
   } catch {
-    // The account CTA and the rest of the page continue working without the API.
+    /* Registration and the rest of the page remain usable. */
   }
 })();

@@ -16,7 +16,10 @@
     "format:check": "prettier --check .",
     "check": "bun run typecheck && bun run test && bun run lint && bun run format:check && bun run build",
     "test:e2e": "playwright test",
-    "test:db": "python3 scripts/test-database.py"
+    "test:db": "python3 scripts/test-database.py",
+    "build:site": "node scripts/build-site.mjs",
+    "export:brand": "node scripts/export-brand.mjs",
+    "test:site": "playwright test --config playwright.site.config.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1",

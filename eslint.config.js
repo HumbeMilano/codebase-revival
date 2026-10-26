@@ -15,6 +15,7 @@ export default tseslint.config(
       "playwright-report",
       ".output",
       ".vinxi",
+      ".wrangler",
     ],
   },
   {

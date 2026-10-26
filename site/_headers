@@ -5,3 +5,5 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://rwbeiestzyzceramgtdw.supabase.co; base-uri 'self'; frame-ancestors 'none'; form-action 'none'; object-src 'none'
   Cache-Control: public, max-age=300
+/kit/*
+  X-Robots-Tag: noindex, nofollow

@@ -13,4 +13,5 @@ test-results
 # Applied legacy migration artifacts are immutable.
 drizzle/migrations/
 worker-dist/
+.wrangler/
 workers/env.d.ts

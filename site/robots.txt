@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
+Disallow: /kit/
 Sitemap: https://skendal.com/sitemap.xml
