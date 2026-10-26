@@ -515,6 +515,8 @@ export type Database = {
           recipient_email: string | null;
           revoked_at: string | null;
           role: string;
+          target_member_key: string | null;
+          target_state_hash: string | null;
           used_at: string | null;
         };
         Insert: {
@@ -530,6 +532,8 @@ export type Database = {
           recipient_email?: string | null;
           revoked_at?: string | null;
           role?: string;
+          target_member_key?: string | null;
+          target_state_hash?: string | null;
           used_at?: string | null;
         };
         Update: {
@@ -545,9 +549,18 @@ export type Database = {
           recipient_email?: string | null;
           revoked_at?: string | null;
           role?: string;
+          target_member_key?: string | null;
+          target_state_hash?: string | null;
           used_at?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "invite_target_member";
+            columns: ["household_id", "target_member_key"];
+            isOneToOne: false;
+            referencedRelation: "members";
+            referencedColumns: ["household_id", "key"];
+          },
           {
             foreignKeyName: "invites_household_id_fkey";
             columns: ["household_id"];
