@@ -25,6 +25,7 @@ import { dateKey, eventWhen, upcomingEvents, type FamilyEvent } from "./planner-
 import { useHouseholdPhotos } from "@/lib/household-photos";
 import { useKioskWeather } from "@/hooks/use-kiosk-weather";
 import { weatherDescription } from "@/lib/weather";
+import { useMemberAvatar } from "@/lib/member-avatars";
 
 export function useClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -37,18 +38,33 @@ export function useClock() {
 }
 
 export function Avatar({ m, size = "md" }: { m: Member; size?: "sm" | "md" | "lg" }) {
+  const photo = useMemberAvatar(m.id);
+  const [failed, setFailed] = useState<string>();
   const classes =
     size === "lg" ? "size-16 text-xl" : size === "sm" ? "size-7 text-xs" : "size-10 text-sm";
   return (
     <span
       aria-label={m.name}
+      role="img"
+      data-member-avatar={m.id}
       className={cn(
-        "grid shrink-0 place-items-center rounded-full font-display font-bold text-foreground",
+        "grid shrink-0 place-items-center overflow-hidden rounded-full font-display font-bold text-foreground",
         classes,
         memberBg[m.color] ?? "bg-secondary",
       )}
     >
-      {m.name.trim()[0]?.toLocaleUpperCase() ?? "?"}
+      {photo && photo !== failed ? (
+        <img
+          src={photo}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          onError={() => setFailed(photo)}
+          className="size-full object-cover"
+        />
+      ) : (
+        (m.name.trim()[0]?.toLocaleUpperCase() ?? "?")
+      )}
     </span>
   );
 }

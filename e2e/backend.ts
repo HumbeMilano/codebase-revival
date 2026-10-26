@@ -93,6 +93,10 @@ export class HouseholdBackend {
   shoppingReceipts = new Map<string, unknown>();
   photos: Row[] = [];
   photoObjects = new Map<string, Buffer>();
+  avatarObjects = new Map<string, Buffer>();
+  profile: Row = { id: USER_ID, avatar_path: null, preferred_view: "auto", time_format: "24" };
+  avatarSigningRequests = 0;
+  avatarDownloads = 0;
   photoUploadRequests = 0;
   loseNextPhotoRegistration = false;
   dashboardPreference: Row | null = null;
@@ -150,6 +154,39 @@ export class HouseholdBackend {
     await page.route("**/storage/v1/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
+      const avatar = "/object/personal-avatars/";
+      if (request.method() === "POST" && url.pathname.includes(avatar)) {
+        const path = decodeURIComponent(url.pathname.split(avatar)[1]!);
+        const incoming = new Request(request.url(), {
+          method: "POST",
+          headers: request.headers(),
+          body: new Uint8Array(request.postDataBuffer()!),
+        });
+        const form = await incoming.formData();
+        const image = [...form.values()].find((value) => typeof value !== "string");
+        if (!image || typeof image === "string") throw new Error("Avatar upload expected");
+        this.avatarObjects.set(path, Buffer.from(await image.arrayBuffer()));
+        return route.fulfill({
+          json: { Id: crypto.randomUUID(), Key: `personal-avatars/${path}` },
+        });
+      }
+      const signedAvatar = "/object/sign/personal-avatars/";
+      if (url.pathname.includes(signedAvatar)) {
+        const path = decodeURIComponent(url.pathname.split(signedAvatar)[1]!);
+        if (request.method() === "POST")
+          return route.fulfill({
+            json: { signedURL: `/object/sign/personal-avatars/${path}?fixture=1` },
+          });
+        const image = this.avatarObjects.get(path);
+        return image
+          ? route.fulfill({ contentType: "image/png", body: image })
+          : route.fulfill({ status: 404, body: "Missing avatar" });
+      }
+      if (request.method() === "DELETE" && url.pathname.endsWith("/object/personal-avatars")) {
+        const paths = request.postDataJSON().prefixes as string[];
+        for (const path of paths) this.avatarObjects.delete(path);
+        return route.fulfill({ json: paths.map((name) => ({ name })) });
+      }
       const marker = "/object/household-photos/";
       if (request.method() === "POST" && url.pathname.includes(marker)) {
         const path = decodeURIComponent(url.pathname.split(marker)[1]!);
@@ -200,6 +237,26 @@ export class HouseholdBackend {
     await page.route("**/functions/v1/household-photos", (route) =>
       route.fulfill({ json: { photos: this.photos } }),
     );
+    await page.route("**/functions/v1/member-avatars", (route) => {
+      this.avatarSigningRequests++;
+      return route.fulfill({
+        json: {
+          avatars: this.avatarPaths().map((row) => ({
+            ...row,
+            url: `https://avatars.fixture.invalid/${encodeURIComponent(String(row.path))}`,
+          })),
+        },
+      });
+    });
+    await page.route("https://avatars.fixture.invalid/**", (route) => {
+      this.avatarDownloads++;
+      const image = this.avatarObjects.get(
+        decodeURIComponent(new URL(route.request().url()).pathname.slice(1)),
+      );
+      return image
+        ? route.fulfill({ contentType: "image/png", body: image })
+        : route.fulfill({ status: 404, body: "Missing avatar" });
+    });
     await page.routeWebSocket(/\/realtime\/v1\//, (socket) => socket.close());
   }
 
@@ -264,12 +321,8 @@ export class HouseholdBackend {
       return route.fulfill(result);
     }
     if (endpoint === "profiles") {
-      const profile = {
-        id: USER_ID,
-        avatar_path: null,
-        preferred_view: "auto",
-        time_format: "24",
-      };
+      if (request.method() === "PATCH") Object.assign(this.profile, request.postDataJSON());
+      const profile = this.profile;
       return route.fulfill({
         json: request.headers()["accept"]?.includes("vnd.pgrst.object") ? profile : [profile],
       });
@@ -324,6 +377,12 @@ export class HouseholdBackend {
         "Content-Range": `${offset}-${Math.max(offset, offset + rows.length - 1)}/${total}`,
       },
     });
+  }
+
+  private avatarPaths() {
+    return this.profile["avatar_path"]
+      ? [{ member_key: "m_ana", path: this.profile["avatar_path"] }]
+      : [];
   }
 
   private async rpc(
@@ -427,6 +486,8 @@ export class HouseholdBackend {
       }
       case "list_household_photos":
         return { json: this.photos.map(({ url, ...photo }) => photo) };
+      case "household_avatar_paths":
+        return { json: this.avatarPaths() };
       case "add_household_photo": {
         const path = String(args["_path"]);
         let photo = this.photos.find((photo) => photo["path"] === path);

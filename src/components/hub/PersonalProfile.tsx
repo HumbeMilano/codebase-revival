@@ -149,6 +149,7 @@ export function PersonalProfile({
           toast.warning("La foto se guardó, pero no se pudo eliminar el archivo privado anterior.");
       }
       setPath(next);
+      window.dispatchEvent(new Event("homehub-avatars-changed"));
       toast.success("Foto actualizada");
       onSaved();
     } catch {
@@ -178,6 +179,7 @@ export function PersonalProfile({
       setPath(null);
       setPhoto("");
       onSaved();
+      window.dispatchEvent(new Event("homehub-avatars-changed"));
       if (removeError)
         toast.warning("La foto se quitó del perfil, pero no se pudo eliminar el archivo privado.");
       else toast.success("Foto eliminada");
@@ -276,7 +278,9 @@ export function PersonalProfile({
                 }}
               />
             </label>
-            <p className="text-xs text-muted-foreground">JPG, PNG o WebP · hasta 2 MB · privada</p>
+            <p className="text-xs text-muted-foreground">
+              JPG, PNG o WebP · hasta 2 MB · visible en tu hogar
+            </p>
             {path && (
               <Button
                 type="button"
