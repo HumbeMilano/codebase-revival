@@ -996,6 +996,10 @@ export type Database = {
           role: string;
         }[];
       };
+      household_avatar_paths: {
+        Args: never;
+        Returns: { member_key: string; path: string }[];
+      };
       is_household_admin: { Args: { _household: string }; Returns: boolean };
       leave_household: { Args: never; Returns: undefined };
       list_devices: {

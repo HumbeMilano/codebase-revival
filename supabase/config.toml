@@ -4,3 +4,7 @@ project_id = "skendal-homehub"
 # Paired tablets use their device token; the function validates my_context and
 # the household-scoped metadata before signing any private object.
 verify_jwt = false
+
+[functions.member-avatars]
+# Each request validates its account/device household before signing avatar paths.
+verify_jwt = false

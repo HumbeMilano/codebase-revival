@@ -611,7 +611,39 @@ def run():
     check('sandbox ledger is inaccessible to ordinary accounts',sql("SELECT has_table_privilege('authenticated','homehub_private.stripe_sandbox_events','SELECT');"),'f')
     check('public catalogue exposes the editable monthly and annual prices',json.loads(sql('SELECT business_catalog();',device=''))['plans'][1]['annual_amount_cents'],4000)
     test_member_account_changes()
+    test_household_avatars()
     print(f'\n{COUNT} database checks passed (plus negative permission/validation assertions).', flush=True)
+
+
+def test_household_avatars():
+    a,b,c=(str(uuid.uuid4()) for _ in range(3))
+    sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{a}','avatar-a@example.invalid',now()),('{b}','avatar-b@example.invalid',now()),('{c}','avatar-c@example.invalid',now());")
+    hid=sql("SELECT create_household('Avatar household','Parent','1122');",user=a)
+    inv=sql("SELECT prepare_email_invite('Child','member','avatar-b@example.invalid')->>'code';",user=a)
+    sql(f"SELECT redeem_invite('{inv}','3344');",user=b)
+    sql("SELECT create_household('Other household','Outsider','5566');",user=c)
+    for uid in [a,b,c]:
+        sql(f"UPDATE profiles SET avatar_path='{uid}/avatar.png' WHERE id='{uid}';")
+        sql(f"INSERT INTO storage.objects(bucket_id,name) VALUES('personal-avatars','{uid}/avatar.png');",user=uid)
+    paths=lambda **kwargs: json.loads(sql('SELECT coalesce(jsonb_agg(x),\'[]\'::jsonb) FROM household_avatar_paths() x;',**kwargs))
+    check('members can render both avatars in their own household',set(x['path'] for x in paths(user=b)),{f'{a}/avatar.png',f'{b}/avatar.png'})
+    check('avatar metadata excludes other households',[x['path'] for x in paths(user=c)],[f'{c}/avatar.png'])
+    sql('SELECT household_avatar_paths();',device='',fail='Household access denied')
+    check('sharing avatars does not expose another personal profile',sql(f"SELECT count(*) FROM profiles WHERE id='{a}';",user=b),'0')
+    check('sharing avatars does not grant direct access to another private object',sql(f"SELECT count(*) FROM storage.objects WHERE bucket_id='personal-avatars' AND name='{a}/avatar.png';",user=b),'0')
+    token='avatar-device-fixture'
+    sql(f"INSERT INTO devices(household_id,name,token_hash) VALUES('{hid}','Avatar tablet',encode(extensions.digest('{token}','sha256'),'hex'));")
+    check('a paired tablet receives only its own household avatars',len(paths(device=token)),2)
+    sql(f"UPDATE profiles SET avatar_path='{a}/invalid.txt' WHERE id='{a}';")
+    check('an invalid reference cannot break other household avatars',[x['path'] for x in paths(user=b)],[f'{b}/avatar.png'])
+    sql(f"UPDATE profiles SET avatar_path=NULL WHERE id='{a}';")
+    check('removing a profile photo removes it from every household avatar list',[x['path'] for x in paths(user=b)],[f'{b}/avatar.png'])
+    sql(f"UPDATE households SET suspended=true WHERE id='{hid}';")
+    sql('SELECT household_avatar_paths();',user=b,fail='Household suspended')
+    sql('SELECT household_avatar_paths();',device=token,fail='Household suspended')
+    sql(f"UPDATE households SET suspended=false WHERE id='{hid}';UPDATE devices SET revoked=true WHERE household_id='{hid}';")
+    sql('SELECT household_avatar_paths();',device=token,fail='Device revoked')
+    check('avatar bucket remains private',sql("SELECT NOT public FROM storage.buckets WHERE id='personal-avatars';"),'t')
 
 
 if __name__ == '__main__':
