@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+import { PrivacyRequests } from "./PrivacyRequests";
 import { useCallback, useEffect, useState } from "react";
 import { Camera, LogOut, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -328,6 +330,10 @@ export function PersonalProfile({
           {busy ? "Guardando…" : "Guardar preferencias"}
         </Button>
       </form>
+      <Link to="/subscription" className="block rounded-2xl border bg-card p-4 font-semibold">
+        Mi plan · Skendal
+      </Link>
+      <PrivacyRequests />
       <PasskeySettings />
       <section className="rounded-2xl border p-4">
         <h2 className="font-display font-semibold">Tu cuenta y el hogar</h2>

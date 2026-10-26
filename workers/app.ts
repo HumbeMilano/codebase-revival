@@ -1,4 +1,5 @@
 import { billing } from "./billing";
+import { subscriptions } from "./subscriptions";
 import { weatherResponse } from "./weather";
 export type WorkerEnv = Cloudflare.Env;
 const json = (value: unknown, status = 200) =>
@@ -157,6 +158,7 @@ export default {
     if (path === "/api/weather") return weatherResponse(request, env, context);
     if (path === "/api/invitations") return sendInvitation(request, env);
     if (path === "/api/tablet-pairing") return createTabletPairing(request, env);
+    if (path.startsWith("/api/subscriptions/")) return subscriptions(request, env);
     if (path.startsWith("/api/billing/")) return billing(request, env);
     if (path.startsWith("/api/"))
       return Promise.resolve(json({ error: "Ruta no encontrada." }, 404));

@@ -8,3 +8,8 @@ verify_jwt = false
 [functions.member-avatars]
 # Each request validates its account/device household before signing avatar paths.
 verify_jwt = false
+
+[functions.billing-qa-user]
+# Uses a short-lived management-issued test capability, with an independent
+# cleanup capability. It cannot provision or remove ordinary user identities.
+verify_jwt = false

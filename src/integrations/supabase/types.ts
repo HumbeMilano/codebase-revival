@@ -841,6 +841,19 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      admin_business_legal: { Args: Record<string, never>; Returns: Json };
+      admin_save_business_legal: {
+        Args: { _profile: Json; _expected_revision: number };
+        Returns: Json;
+      };
+      admin_update_privacy_request: {
+        Args: { _id: string; _status: string; _resolution: string };
+        Returns: undefined;
+      };
+      create_privacy_request: { Args: { _kind: string; _detail?: string }; Returns: string };
+      my_privacy_requests: { Args: Record<string, never>; Returns: Json };
+      my_household_plan: { Args: Record<string, never>; Returns: Json };
+
       add_household_photo: { Args: { _path: string }; Returns: string };
       admin_business_overview: { Args: never; Returns: Json };
       admin_business_page: {

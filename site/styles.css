@@ -1194,3 +1194,45 @@ footer > span {
     transform: none !important;
   }
 }
+
+.prelaunch {
+  background: var(--lavender, #e8ddf5);
+  padding: 1.1rem 1.5rem;
+  border-radius: 1.3rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-top: 1rem;
+}
+.prelaunch p {
+  margin: 0.3rem 0 0;
+}
+.plan-comparison {
+  overflow-x: auto;
+  margin: 2rem 0;
+}
+.plan-comparison table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+.plan-comparison caption {
+  text-align: left;
+  margin-bottom: 1rem;
+  color: #5c5c65;
+}
+.plan-comparison th,
+.plan-comparison td {
+  padding: 0.8rem 0.5rem;
+  border-bottom: 1px solid #ddd8d2;
+}
+.legal-preparation {
+  max-width: 48rem;
+  line-height: 1.7;
+}
+.legal-preparation h1 {
+  font-size: 2.2rem;
+}
+.legal-preparation p {
+  margin: 1.5rem 0;
+}

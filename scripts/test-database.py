@@ -166,6 +166,15 @@ def run():
         if path.name == '20261022225312_qr_pairing_and_guided_tour.sql':
             sql("INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('dddddddd-dddd-4ddd-8ddd-dddddddddddd','existing@example.invalid',now());")
         sql(path.read_text())
+    if '--legal-only' in sys.argv:
+        master=str(uuid.uuid4())
+        sql("INSERT INTO homehub_private.platform_owners(email) VALUES('legal-owner@example.invalid');")
+        sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{master}','legal-owner@example.invalid',now());")
+        gateway='fixture-gateway-'+'x'*48
+        sql(f"INSERT INTO homehub_private.billing_gateway_keys(id,key_hash) VALUES(true,encode(extensions.digest('{gateway}','sha256'),'hex'));")
+        test_legal_subscriptions(gateway,master)
+        print(f'\n{COUNT} legal/subscription database checks passed (plus negative assertions).',flush=True)
+        return
     sql((ROOT / 'scripts/validate-constraints.sql').read_text())
     check('all integrity constraints validate on a clean installation', sql("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='public' AND NOT c.convalidated;"), '0')
     check('legacy demo pairing credentials are expired without deleting history', sql("SELECT expires_at<=now() FROM pairing_codes WHERE code='PEREZ1';"), 't')
@@ -612,6 +621,7 @@ def run():
     check('public catalogue exposes the editable monthly and annual prices',json.loads(sql('SELECT business_catalog();',device=''))['plans'][1]['annual_amount_cents'],4000)
     test_member_account_changes()
     test_household_avatars()
+    test_legal_subscriptions(test_gateway,master)
     print(f'\n{COUNT} database checks passed (plus negative permission/validation assertions).', flush=True)
 
 
@@ -646,9 +656,100 @@ def test_household_avatars():
     check('avatar bucket remains private',sql("SELECT NOT public FROM storage.buckets WHERE id='personal-avatars';"),'t')
 
 
+def test_legal_subscriptions(gateway,master):
+    a,b=(str(uuid.uuid4()) for _ in range(2))
+    sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{a}','billing-ordinary@example.invalid',now()),('{b}','privacy-other@example.invalid',now());")
+    hid=sql("SELECT create_household('Billing isolation','QA owner','3141');",user=a)
+    sql('SELECT admin_business_legal();',user=a,fail='Forbidden')
+    legal=json.loads(sql('SELECT admin_business_legal();',user=master))
+    check('commercial launch is locked while the company is pending',legal['commercial_launch'],False)
+    check('legal drafts have no invented operator',legal['profile']['operator_name'],'')
+    check('age policy starts at 13 and adult administration at 18',(legal['profile']['minimum_age'],legal['profile']['administrator_age']),(13,18))
+    sql("UPDATE homehub_private.business_rollout SET commercial_launch=true;",fail='check constraint')
+    profile={k:v for k,v in legal['profile'].items() if k not in ('status','revision','updated_at','minimum_age','administrator_age')}
+    query=f"SELECT admin_save_business_legal('{j(profile)}',1);"
+    check('saving legal preparation never publishes contracts',json.loads(sql(query,user=master))['profile']['status'],'draft')
+    sql(query,user=master,fail='Legal profile changed')
+    sql("SELECT admin_save_business_legal('{\"minimum_age\":0}',2);",user=master,fail='Invalid legal fields')
+    rid=sql("SELECT create_privacy_request('access','Please export my data');",user=a)
+    check('privacy request uncertain retry does not create duplicates',sql("SELECT create_privacy_request('access','Retry');",user=a),rid)
+    check('privacy requests are account scoped',json.loads(sql('SELECT my_privacy_requests();',user=b)),[])
+    sql(f"SELECT admin_update_privacy_request('{rid}','completed','');",user=master,fail='Resolution required')
+    sql(f"SELECT admin_update_privacy_request('{rid}','reviewing','Identity verified; preparing export');",user=master)
+    check('customer can see the operator response',json.loads(sql('SELECT my_privacy_requests();',user=a))[0]['status'],'reviewing')
+    plan=json.loads(sql('SELECT my_household_plan();',user=a))
+    check('ordinary households cannot start fake subscriptions',plan['can_test'],False)
+    attempt=str(uuid.uuid4())
+    sql(f"SELECT prepare_sandbox_checkout('{gateway}','{attempt}','month');",user=a,fail='restricted to approved test accounts')
+    job,token,cleanup=str(uuid.uuid4()),uuid.uuid4().hex+uuid.uuid4().hex,uuid.uuid4().hex+uuid.uuid4().hex
+    sql(f"INSERT INTO homehub_private.subscription_test_jobs(id,requested_by,key_hash,cleanup_hash,scenario) VALUES('{job}','{master}',encode(extensions.digest('{token}','sha256'),'hex'),encode(extensions.digest('{cleanup}','sha256'),'hex'),'checkout');")
+    sql(f"SELECT claim_subscription_test_identity('{token}');",user=a,fail='permission denied')
+    claimed=json.loads(sql(f"SET ROLE service_role; SELECT claim_subscription_test_identity('{token}');"))
+    check('test identity name is deterministic and reserved',claimed['email'],f'qa-subs-{job}@example.invalid')
+    sql(f"SET ROLE service_role; SELECT finish_subscription_test_identity('{token}','{a}','{hid}');",fail='registered QA identity')
+    qa=str(uuid.uuid4())
+    sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{qa}','qa-subs-{job}@example.invalid',now());")
+    qhid=sql(f"SELECT create_household('Skendal billing QA {job}','QA','3141');",user=qa)
+    sql(f"SET ROLE service_role; SELECT finish_subscription_test_identity('{token}','{qa}','{qhid}');")
+    check('only the expiring approved identity can exercise sandbox',json.loads(sql('SELECT my_household_plan();',user=qa))['can_test'],True)
+    prepared=json.loads(sql(f"SELECT prepare_sandbox_checkout('{gateway}','{attempt}','month');",user=qa))
+    same=json.loads(sql(f"SELECT prepare_sandbox_checkout('{gateway}','{uuid.uuid4()}','month');",user=qa))
+    check('concurrent duplicate checkout reuses the pending attempt',same['id'],prepared['id'])
+    sql(f"SELECT prepare_sandbox_checkout('{gateway}','{attempt}','year');",user=qa,fail='identity reused')
+    sql(f"SELECT prepare_sandbox_checkout('wrong','{attempt}','month');",user=qa,fail='billing gateway')
+    sql(f"SELECT save_sandbox_customer('{gateway}','{attempt}','cus_fixtureQAtest');",user=qa)
+    sql(f"SELECT save_sandbox_customer('{gateway}','{attempt}','cus_other');",user=qa,fail='already bound')
+    catalog={'plan_revision':prepared['plan_revision'],'product_id':'prod_fixtureQA','month_price_id':'price_fixtureMonth','year_price_id':'price_fixtureYear','monthly_amount':prepared['monthly_amount'],'annual_amount':prepared['annual_amount'],'currency':prepared['currency'],'portal_configuration_id':'bpc_fixtureQA'}
+    sql(f"SELECT save_sandbox_catalog('{gateway}','{j(catalog)}');",device='')
+    sql(f"SELECT save_sandbox_catalog('{gateway}','{j({**catalog,'monthly_amount':1})}');",device='',fail='Immutable price snapshot')
+    lease=sql(f"SELECT claim_sandbox_reconciliation('{gateway}','sub_fixtureQA');",device='')
+    sql(f"SELECT claim_sandbox_reconciliation('{gateway}','sub_fixtureQA');",device='',fail='Reconciliation in progress')
+    snapshot={'id':'sub_fixtureQA','livemode':False,'attempt_id':attempt,'household_id':qhid,'customer_id':'cus_fixtureQAtest','price_id':'price_fixtureMonth','currency':prepared['currency'],'amount':prepared['monthly_amount'],'interval':'month','status':'active','period_start':1760000000,'period_end':1762700000,'cancel_at_period_end':False,'latest_invoice':'in_fixtureQA'}
+    capture=lambda value: f"SELECT capture_sandbox_subscription('{gateway}','{lease}','{j(value)}');"
+    sql(capture({**snapshot,'household_id':hid}),device='',fail='household mismatch')
+    sql(capture({**snapshot,'amount':1}),device='',fail='Unknown subscription price')
+    sql(capture({**snapshot,'livemode':True}),device='',fail='Invalid reconciliation lease')
+    sql(capture(snapshot),device='')
+    check('sandbox active is simulated Pro',json.loads(sql('SELECT my_household_plan();',user=qa))['sandbox']['simulated_plan'],'pro')
+    check('sandbox never grants the real household plan',sql(f"SELECT plan FROM households WHERE id='{qhid}';"),'free')
+    sql(capture({**snapshot,'status':'past_due'}),device='')
+    check('payment failure removes the simulated entitlement',json.loads(sql('SELECT my_household_plan();',user=qa))['sandbox']['simulated_plan'],'free')
+    sql(f"SELECT release_sandbox_reconciliation('{gateway}','sub_fixtureQA','{lease}');",device='')
+    sql(capture(snapshot),device='',fail='Invalid reconciliation lease')
+    sql(f"UPDATE homehub_private.subscription_test_jobs SET expires_at=now()-interval '1 second' WHERE id='{job}';")
+    sql(f"SELECT subscription_test_operation('{gateway}','{token}','inspect','{{}}');",device='',fail='Test job unavailable')
+    check('cleanup capability remains scoped after test expiry',json.loads(sql(f"SELECT subscription_test_operation('{gateway}','{cleanup}','cleanup_provider','{{}}');",device=''))['customer_id'],'cus_fixtureQAtest')
+    sql(f"SELECT subscription_test_operation('{gateway}','{cleanup}','inspect','{{}}');",device='',fail='Test job unavailable')
+    check('QA credentials expire without affecting the real plan',json.loads(sql('SELECT my_household_plan();',user=qa))['can_test'],False)
+    check('ordinary users cannot create test jobs',sql("SELECT has_table_privilege('authenticated','homehub_private.subscription_test_jobs','INSERT');"),'f')
+    sql(f"SET ROLE service_role; SELECT cleanup_subscription_test_identity('{job}','{token}');",fail='Cleanup capability required')
+    sql(f"SET ROLE service_role; SELECT cleanup_subscription_test_identity('{job}','{cleanup}');")
+    sql(f"DELETE FROM auth.users WHERE id='{qa}';")
+    sql(f"SET ROLE service_role; SELECT finish_subscription_test_cleanup('{job}','{cleanup}');")
+    check('QA cleanup deletes only its isolated household',sql(f"SELECT count(*) FROM households WHERE id='{qhid}';"),'0')
+    check('QA cleanup preserves normal households',sql(f"SELECT count(*) FROM households WHERE id='{hid}';"),'1')
+    sql("UPDATE homehub_private.business_rollout SET limits_enabled=true;")
+    sql("UPDATE homehub_private.business_plans SET limits='{\"members\":1,\"lists\":1,\"devices\":1,\"photos\":1,\"widgets\":1}' WHERE id='free';")
+    sql("SELECT create_member('Extra','member','2718');",user=a,fail='Plan capacity reached: members')
+    member=sql('SELECT member_key FROM my_context();',user=a)
+    extra_list=[{'id':str(uuid.uuid4()),'operation':'insert','expected_revision':None,'values':{'name':'Extra list'}}]
+    sql(f"SELECT sync_shopping_lists('{hid}','{uuid.uuid4()}','[]','{j(extra_list)}','{member}');",user=a,fail='Plan capacity reached: lists')
+    sql(f"INSERT INTO household_photos(household_id,path) VALUES('{hid}','{hid}/first.jpg');")
+    sql(f"INSERT INTO household_photos(household_id,path) VALUES('{hid}','{hid}/second.jpg');",fail='Plan capacity reached: photos')
+    sql(f"INSERT INTO devices(household_id,name,token_hash) VALUES('{hid}','First',encode(extensions.digest('first','sha256'),'hex'));")
+    sql(f"INSERT INTO devices(household_id,name,token_hash) VALUES('{hid}','Second',encode(extensions.digest('second','sha256'),'hex'));",fail='Plan capacity reached: devices')
+    layout={'version':3,'widgets':[{'id':'tasks','key':'tasks','size':'wide'}]}
+    sql(f"SELECT save_dashboard_layout('{j(layout)}',0);",user=a)
+    expanded={**layout,'widgets':layout['widgets']+[{'id':'notes','key':'notes','size':'wide'}]}
+    sql(f"SELECT save_dashboard_layout('{j(expanded)}',1);",user=a,fail='Plan capacity reached: widgets')
+    check('capacity failures preserve the confirmed layout',sql(f"SELECT jsonb_array_length(layout->'widgets') FROM dashboard_preferences WHERE user_id='{a}';"),'1')
+    sql("UPDATE homehub_private.business_rollout SET limits_enabled=false;")
+    check('beta can keep existing capacity without deleting data',bool(sql("SELECT create_member('Extra','member','2718');",user=a)),True)
+
+
 if __name__ == '__main__':
-    if sys.argv[1:] not in ([], ['--empty-install']):
-        raise SystemExit('Usage: test-database.py [--empty-install]')
+    if sys.argv[1:] not in ([], ['--empty-install'], ['--legal-only']):
+        raise SystemExit('Usage: test-database.py [--empty-install | --legal-only]')
     try:
         run()
     finally:

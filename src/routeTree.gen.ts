@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SubscriptionRouteImport } from './routes/subscription'
 import { Route as VincularRouteImport } from './routes/vincular'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +30,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SubscriptionRoute = SubscriptionRouteImport.update({
+  id: '/subscription',
+  path: '/subscription',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VincularRoute = VincularRouteImport.update({
   id: '/vincular',
   path: '/vincular',
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/subscription': typeof SubscriptionRoute
   '/vincular': typeof VincularRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/subscription': typeof SubscriptionRoute
   '/vincular': typeof VincularRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,28 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/subscription': typeof SubscriptionRoute
   '/vincular': typeof VincularRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/reset-password' | '/vincular'
+  fullPaths: '/' | '/admin' | '/reset-password' | '/subscription' | '/vincular'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/reset-password' | '/vincular'
-  id: '__root__' | '/' | '/admin' | '/reset-password' | '/vincular'
+  to: '/' | '/admin' | '/reset-password' | '/subscription' | '/vincular'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/reset-password'
+    | '/subscription'
+    | '/vincular'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SubscriptionRoute: typeof SubscriptionRoute
   VincularRoute: typeof VincularRoute
 }
 
@@ -92,6 +108,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/subscription': {
+      id: '/subscription'
+      path: '/subscription'
+      fullPath: '/subscription'
+      preLoaderRoute: typeof SubscriptionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vincular': {
       id: '/vincular'
       path: '/vincular'
@@ -106,6 +129,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  SubscriptionRoute: SubscriptionRoute,
   VincularRoute: VincularRoute,
 }
 export const routeTree = rootRouteImport

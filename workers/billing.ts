@@ -1,4 +1,5 @@
 import type { WorkerEnv } from "./app";
+import { reconcileSandboxEvent } from "./subscription-state";
 
 // Sandbox is intentionally isolated from household entitlements and real revenue.
 export const STRIPE_API_VERSION = "2026-09-30.endive";
@@ -57,7 +58,20 @@ async function gatewayEqual(provided: string, expected: string) {
   for (let i = 0; i < left.length; i++) difference |= left[i]! ^ right[i]!;
   return difference === 0;
 }
-async function rpc(env: WorkerEnv, name: string, args: unknown, authorization?: string) {
+export class BillingFailure extends Error {
+  constructor(
+    public readonly code: string,
+    public readonly status: number,
+  ) {
+    super(code);
+  }
+}
+export async function billingRpc(
+  env: WorkerEnv,
+  name: string,
+  args: unknown,
+  authorization?: string,
+) {
   const headers: Record<string, string> = {
     apikey: env.SUPABASE_PUBLIC_KEY,
     "Content-Type": "application/json",
@@ -69,10 +83,19 @@ async function rpc(env: WorkerEnv, name: string, args: unknown, authorization?: 
     body: JSON.stringify(args),
     signal: AbortSignal.timeout(10000),
   });
-  if (!response.ok) throw new Error("Backend unavailable");
+  if (!response.ok) {
+    const failure = record(JSON.parse(await boundedText(response)));
+    throw new BillingFailure(String(failure["code"] ?? "backend"), response.status);
+  }
   return JSON.parse(await boundedText(response));
 }
-async function stripe(env: WorkerEnv, path: string, form?: URLSearchParams, idempotency?: string) {
+export async function sandboxStripe(
+  env: WorkerEnv,
+  path: string,
+  form?: URLSearchParams,
+  idempotency?: string,
+  method?: "DELETE",
+) {
   const stripeKey = env.SecreteStripe?.trim() ?? "";
   if (!/^(sk|rk)_test_/.test(stripeKey)) throw new Error("Sandbox key required");
   const headers: Record<string, string> = {
@@ -82,12 +105,16 @@ async function stripe(env: WorkerEnv, path: string, form?: URLSearchParams, idem
   if (form) headers["Content-Type"] = "application/x-www-form-urlencoded";
   if (idempotency) headers["Idempotency-Key"] = idempotency;
   const response = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method: form ? "POST" : "GET",
+    method: method ?? (form ? "POST" : "GET"),
     headers,
     ...(form ? { body: form.toString() } : {}),
     signal: AbortSignal.timeout(15000),
   });
-  if (!response.ok) throw new Error("Stripe unavailable");
+  if (!response.ok) {
+    const failure = record(JSON.parse(await boundedText(response)));
+    const error = record(failure["error"]);
+    throw new BillingFailure(String(error["code"] ?? error["type"] ?? "provider"), 503);
+  }
   return record(JSON.parse(await boundedText(response)));
 }
 function stripeSignatures(header: string, now: number) {
@@ -134,7 +161,9 @@ async function webhook(request: Request, env: WorkerEnv) {
     const secret =
       env.STRIPE_WEBHOOK_SECRET ||
       record(
-        await rpc(env, "stripe_sandbox_configuration", { _gateway_key: env.BILLING_GATEWAY_KEY }),
+        await billingRpc(env, "stripe_sandbox_configuration", {
+          _gateway_key: env.BILLING_GATEWAY_KEY,
+        }),
       )["webhook_secret"];
     if (typeof secret !== "string") return json({ error: "Webhook pendiente de configurar." }, 503);
     const raw = await boundedText(request);
@@ -144,10 +173,12 @@ async function webhook(request: Request, env: WorkerEnv) {
     if (event["livemode"] !== false)
       return json({ error: "Solo se admiten eventos de sandbox." }, 400);
     if (!EVENTS.includes(String(event["type"]))) return json({ received: true, ignored: true });
-    const receipt = await rpc(env, "record_stripe_sandbox_event", {
+    const receipt = await billingRpc(env, "record_stripe_sandbox_event", {
       _gateway_key: env.BILLING_GATEWAY_KEY,
       _event: event,
     });
+    // A duplicate event may be retrying after a failed reconciliation.
+    await reconcileSandboxEvent(event, env, { rpc: billingRpc, stripe: sandboxStripe });
     return json(receipt);
   } catch {
     return json({ error: "No se pudo confirmar el evento. Stripe volverá a intentarlo." }, 503);
@@ -170,7 +201,7 @@ function checkoutParameters(name: string, amount: number, currency: string, inte
   });
 }
 async function probeSandbox(env: WorkerEnv) {
-  const catalog = record(await rpc(env, "business_catalog", {}));
+  const catalog = record(await billingRpc(env, "business_catalog", {}));
   if (!Array.isArray(catalog["plans"])) throw new Error("Catalog unavailable");
   const plan = record(catalog["plans"].find((value) => record(value)["id"] === "pro"));
   const amount = plan["amount_cents"];
@@ -178,7 +209,7 @@ async function probeSandbox(env: WorkerEnv) {
     throw new Error("Configure a plan price first");
   const form = checkoutParameters(String(plan["name"]), Number(amount), plan["currency"], "month");
   form.set("metadata[purpose]", "integration_check");
-  const created = await stripe(
+  const created = await sandboxStripe(
     env,
     "checkout/sessions",
     form,
@@ -190,9 +221,9 @@ async function probeSandbox(env: WorkerEnv) {
     !/^cs_test_[a-zA-Z0-9]+$/.test(created["id"])
   )
     throw new Error("Invalid sandbox probe");
-  const session = await stripe(env, `checkout/sessions/${created["id"]}`);
+  const session = await sandboxStripe(env, `checkout/sessions/${created["id"]}`);
   if (session["status"] === "open") {
-    const expired = await stripe(
+    const expired = await sandboxStripe(
       env,
       `checkout/sessions/${created["id"]}/expire`,
       new URLSearchParams(),
@@ -220,10 +251,10 @@ async function setup(request: Request, env: WorkerEnv) {
   )
     return json({ error: "Sin acceso." }, 403);
   try {
-    const existing = await rpc(env, "stripe_sandbox_configuration", {
+    const existing = await billingRpc(env, "stripe_sandbox_configuration", {
       _gateway_key: env.BILLING_GATEWAY_KEY,
     });
-    const account = await stripe(env, "account");
+    const account = await sandboxStripe(env, "account");
     if (typeof account["id"] !== "string" || !account["id"].startsWith("acct_"))
       throw new Error("Invalid account");
     if (existing) {
@@ -242,14 +273,19 @@ async function setup(request: Request, env: WorkerEnv) {
       api_version: STRIPE_API_VERSION,
     });
     for (const event of EVENTS) form.append("enabled_events[]", event);
-    const created = await stripe(env, "webhook_endpoints", form, "homehub-sandbox-webhook-v1");
+    const created = await sandboxStripe(
+      env,
+      "webhook_endpoints",
+      form,
+      "homehub-sandbox-webhook-v1",
+    );
     if (
       created["livemode"] !== false ||
       typeof created["id"] !== "string" ||
       typeof created["secret"] !== "string"
     )
       throw new Error("Invalid webhook receipt");
-    const saved = await rpc(env, "configure_stripe_sandbox", {
+    const saved = await billingRpc(env, "configure_stripe_sandbox", {
       _gateway_key: env.BILLING_GATEWAY_KEY,
       _account_id: account["id"],
       _webhook_id: created["id"],
@@ -279,7 +315,7 @@ export async function billing(request: Request, env: WorkerEnv) {
     return json({ error: "Inicia sesión como administrador." }, 401);
   let overview: Record<string, unknown>;
   try {
-    overview = record(await rpc(env, "admin_business_overview", {}, authorization));
+    overview = record(await billingRpc(env, "admin_business_overview", {}, authorization));
   } catch {
     return json({ error: "Sin acceso a la administración." }, 403);
   }
@@ -323,7 +359,7 @@ export async function billing(request: Request, env: WorkerEnv) {
       plan["currency"],
       String(data["interval"]),
     );
-    const session = await stripe(
+    const session = await sandboxStripe(
       env,
       "checkout/sessions",
       form,
