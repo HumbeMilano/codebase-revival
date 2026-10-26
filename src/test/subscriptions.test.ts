@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { billingRpc } from "../../workers/billing";
 import { subscriptions } from "../../workers/subscriptions";
 import {
   reconcileSandboxEvent,
@@ -66,6 +67,27 @@ const current = {
 const json = (v: unknown, status = 200) => Response.json(v, { status });
 afterEach(() => vi.unstubAllGlobals());
 describe("household sandbox subscriptions", () => {
+  it("accepts PostgREST void acknowledgements after confirmed writes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+    await expect(
+      billingRpc(
+        env,
+        "save_sandbox_customer",
+        { _attempt_id: id, _customer_id: "cus_fixture" },
+        "Bearer user-token",
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      billingRpc(env, "release_sandbox_reconciliation", {
+        _subscription_id: "sub_fixture",
+        _lease: id,
+      }),
+    ).resolves.toBeNull();
+  });
+
   it("requires an account and same-origin requests before any provider access", async () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
@@ -122,7 +144,7 @@ describe("household sandbox subscriptions", () => {
           url: "https://checkout.stripe.com/c/pay/fixture",
         });
       }
-      if (path.endsWith("save_sandbox_checkout")) return json(null);
+      if (path.endsWith("save_sandbox_checkout")) return new Response(null, { status: 204 });
       throw new Error(`Unexpected ${path}`);
     });
     vi.stubGlobal("fetch", fetcher);

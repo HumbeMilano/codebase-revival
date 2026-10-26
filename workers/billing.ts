@@ -87,7 +87,10 @@ export async function billingRpc(
     const failure = record(JSON.parse(await boundedText(response)));
     throw new BillingFailure(String(failure["code"] ?? "backend"), response.status);
   }
-  return JSON.parse(await boundedText(response));
+  // PostgREST returns HTTP 204 with no body for void RPCs. A successful
+  // write must not become a failed checkout because there is no JSON to parse.
+  const raw = await boundedText(response);
+  return raw ? JSON.parse(raw) : null;
 }
 export async function sandboxStripe(
   env: WorkerEnv,
