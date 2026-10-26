@@ -58,7 +58,6 @@ async function checkout(env: WorkerEnv, authorization: string, data: Record<stri
     success_url: "https://app.skendal.com/subscription?checkout=returned",
     cancel_url: "https://app.skendal.com/subscription?checkout=canceled",
     expires_at: String(attempt["expires_at"]),
-    "payment_method_types[0]": "card",
   });
   for (const prefix of ["metadata", "subscription_data[metadata]"]) {
     form.set(`${prefix}[application]`, "homehub");

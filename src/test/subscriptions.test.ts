@@ -223,6 +223,7 @@ describe("household sandbox subscriptions", () => {
         expect(form.get("customer")).toBe("cus_fixture");
         expect(form.get("line_items[0][price]")).toBe("price_month");
         expect(form.has("line_items[0][price_data][unit_amount]")).toBe(false);
+        expect(form.has("payment_method_types[0]")).toBe(false);
         expect(form.get("subscription_data[metadata][attempt_id]")).toBe(id);
         expect(form.get("success_url")).toBe(
           "https://app.skendal.com/subscription?checkout=returned",
