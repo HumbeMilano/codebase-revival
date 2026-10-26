@@ -48,7 +48,7 @@ export function Avatar({ m, size = "md" }: { m: Member; size?: "sm" | "md" | "lg
       role="img"
       data-member-avatar={m.id}
       className={cn(
-        "grid shrink-0 place-items-center overflow-hidden rounded-full font-display font-bold text-foreground",
+        "relative grid shrink-0 place-items-center overflow-hidden rounded-full font-display font-bold text-foreground",
         classes,
         memberBg[m.color] ?? "bg-secondary",
       )}
@@ -60,7 +60,7 @@ export function Avatar({ m, size = "md" }: { m: Member; size?: "sm" | "md" | "lg
           aria-hidden="true"
           draggable={false}
           onError={() => setFailed(photo)}
-          className="size-full object-cover"
+          className="absolute inset-0 size-full object-cover object-center"
         />
       ) : (
         (m.name.trim()[0]?.toLocaleUpperCase() ?? "?")
