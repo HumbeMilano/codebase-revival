@@ -12,7 +12,7 @@ async function noOverflow(page) {
     true,
   );
 }
-test("both static languages navigate, remember a choice, and keep registration and planned prices clear", async ({
+test("both static languages navigate, remember a choice, and keep prelaunch and planned prices clear", async ({
   page,
 }, info) => {
   await pricing(page);
@@ -23,10 +23,7 @@ test("both static languages navigate, remember a choice, and keep registration a
   await expect(page.locator("#annual-price")).toHaveText("$5.99");
   await expect(page.locator("#pricing-status")).toContainText("not active");
   await expect(page.locator(".hero .availability")).toContainText("currently in Spanish");
-  await expect(page.locator(".hero a.button")).toHaveAttribute(
-    "href",
-    "https://app.skendal.com/?registro=1",
-  );
+  await expect(page.locator(".hero a.button")).toHaveAttribute("href", "#everyday");
   await noOverflow(page);
   await page.locator(".site-header [data-language=es]").click();
   await expect(page).toHaveURL(/\/es\/$/);
@@ -135,4 +132,35 @@ test("marketing templates change language, preserve safe edits, and export actua
   expect(
     await page.locator("#artboard").evaluate((el) => ({ w: el.offsetWidth, h: el.offsetHeight })),
   ).toEqual({ w: 1080, h: 1920 });
+});
+
+test("legal preparation and editable Free / Pro proposals do not present final contracts", async ({
+  page,
+}) => {
+  const limits = { members: 4, lists: 3, devices: 1, photos: 3, widgets: 6 };
+  await pricing(page, {
+    plans: [
+      { id: "free", currency: "USD", amount_cents: 0, annual_amount_cents: 0, limits },
+      {
+        id: "pro",
+        currency: "USD",
+        amount_cents: 399,
+        annual_amount_cents: 1299,
+        limits: { members: 12, lists: 20, devices: 3, photos: 12, widgets: 64 },
+      },
+    ],
+  });
+  await page.goto("/?lang=en");
+  await expect(page.getByText("Project in preparation", { exact: true })).toBeVisible();
+  await expect(page.locator("#monthly-price")).toHaveText("$3.99");
+  await expect(page.locator("#plan-comparison table")).toBeVisible();
+  await expect(page.locator("#plan-comparison")).toContainText("Full catalogue");
+  await page.getByRole("link", { name: "Legal preparation", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Legal preparation", exact: true })).toBeVisible();
+  await expect(page.locator("main")).toContainText("has not yet been formed");
+  await expect(page.locator("main")).toContainText("13+");
+  await page.goto("/es/legal/");
+  await expect(page.getByRole("heading", { name: "Preparación legal", exact: true })).toBeVisible();
+  await expect(page.locator("main")).toContainText("no está constituida");
+  await noOverflow(page);
 });

@@ -59,3 +59,12 @@
 - Use Bun 1.4.3 with `bun.lock` and frozen installs. Run typecheck, tests, lint, format checks and build; browser smoke tests use a synthetic local backend.
 - Do not infer production verification from local tests. Record any live flows that still require confirmation in the deployed environment.
 - Production hosting and backend resources must stay on Free plans under the user's $0 infrastructure budget. Static Cloudflare assets must stay below 25 MiB per file.
+
+## Legal and subscription preparation
+
+- The intended operator is a company that has not been formed. Commercial launch and real charges remain blocked. `legal/documents.mjs` contains explicitly non-binding ES/EN drafts; never publish them as accepted contracts or invent an operator/address/contact. Legal preparation is in the separate platform administration. Saving its fields does not publish documents or enable billing.
+- The agreed launch policy is accounts aged 13+ and household administration/contracting aged 18+, with parental permission and supervision for ages 13–17. Do not describe this policy as verified age checks; eligibility/consent operations must be completed before public launch. Existing family testing and invitations remain usable.
+- Free/Pro capacities are proposed, editable server-side configuration. Limits stay disabled during preparation; do not delete over-capacity household data. Billing uses immutable account/household/price snapshots and purchaser-only Stripe portal access.
+- `/api/subscriptions/qa` is restricted to expiring, management-issued synthetic test jobs. Do not turn it into a Stripe proxy or allow users to issue test capabilities. Keep operational and cleanup capabilities independent; no forged user JWTs, live-card tests, service-role downloads or changes to real family data. Reconcile current Stripe state under a lease even when retrying a previously logged webhook event.
+- Privacy-request resolution records a manually fulfilled operation; marking completed does not itself delete Auth or Storage. Do not claim otherwise. Before launch, complete operator contacts, retention/deletion operations, operative terms acceptance and legal review; DMCA registration is a separate, unpaid pending procedure.
+- Do not run another application build while Playwright's preview server uses `dist/`. A rebuild can mix backend configuration between pages and invalidate the browser test.

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { CreditCard, RefreshCw } from "lucide-react";
 import { z } from "zod";
@@ -64,32 +65,6 @@ export function StripeSandbox({ client }: { client: SupabaseClient<Database> }) 
       operation.active = false;
     };
   }, [client, refresh]);
-  const checkout = async (interval: "month" | "year") => {
-    if (busy) return;
-    const operation = binding.current;
-    setBusy(true);
-    setError("");
-    attempt.current =
-      attempt.current?.interval === interval
-        ? attempt.current
-        : { interval, id: crypto.randomUUID() };
-    try {
-      const value = z
-        .object({ url: z.string().url(), mode: z.literal("sandbox") })
-        .parse(
-          await requestAdminApi(client, "checkout", { interval, request_id: attempt.current.id }),
-        );
-      if (!operation.active) return;
-      if (new URL(value.url).origin !== "https://checkout.stripe.com")
-        throw new Error("Destino no válido.");
-      window.location.assign(value.url);
-    } catch (reason) {
-      if (operation.active) {
-        setError(reason instanceof Error ? reason.message : "No se pudo abrir Stripe.");
-        setBusy(false);
-      }
-    }
-  };
   const connected = data?.configured && runtime?.key_configured && runtime.gateway_configured;
   return (
     <section className="rounded-3xl border bg-card p-5 sm:p-6" aria-label="Stripe sandbox">
@@ -116,20 +91,12 @@ export function StripeSandbox({ client }: { client: SupabaseClient<Database> }) 
         </Button>
       </header>
       {connected && (
-        <>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button variant="outline" disabled={busy} onClick={() => void checkout("month")}>
-              Probar mensual
-            </Button>
-            <Button variant="outline" disabled={busy} onClick={() => void checkout("year")}>
-              Probar anual
-            </Button>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Usa una tarjeta de prueba de Stripe. Los importes se toman de la configuración de
-            planes.
-          </p>
-        </>
+        <Link
+          to="/subscription"
+          className="mt-4 inline-block rounded-xl border px-4 py-3 text-sm font-semibold"
+        >
+          Abrir prueba de suscripción del hogar
+        </Link>
       )}
       {error && (
         <p role="alert" className="mt-4 text-sm text-destructive">

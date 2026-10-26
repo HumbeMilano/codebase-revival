@@ -60,3 +60,28 @@ export async function requestAdminApi(
   }
   return value;
 }
+
+/** Billing also uses an immutable personal-account snapshot, never a tablet PIN. */
+export async function requestSubscriptionApi(
+  client: SupabaseClient<Database>,
+  path: "status" | "checkout" | "portal",
+  body?: unknown,
+) {
+  const actor = actors.get(client);
+  if (!actor?.active()) throw new Error("La sesión ha cambiado. Vuelve a cargar.");
+  const response = await fetch(`/api/subscriptions/${path}`, {
+    method: body ? "POST" : "GET",
+    headers: { Authorization: `Bearer ${actor.accessToken}`, "Content-Type": "application/json" },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!actor.active()) throw new Error("La sesión ha cambiado. Vuelve a cargar.");
+  const value: unknown = await response.json();
+  if (!response.ok)
+    throw new Error(
+      value && typeof value === "object" && "error" in value && typeof value.error === "string"
+        ? value.error
+        : "No se pudo confirmar la operación.",
+    );
+  return value;
+}

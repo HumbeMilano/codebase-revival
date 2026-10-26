@@ -19,9 +19,10 @@ import {
 } from "@/components/ui/dialog";
 import type { Database } from "@/integrations/supabase/types";
 
+import { LegalConsole } from "./LegalConsole";
 import { StripeSandbox } from "./StripeSandbox";
 
-export type BusinessTab = "resumen" | "pagos" | "planes" | "actividad" | "configuracion";
+export type BusinessTab = "resumen" | "pagos" | "planes" | "actividad" | "configuracion" | "legal";
 const settingsSchema = z.object({
   business_name: z.string().nullable(),
   country: z.string().nullable(),
@@ -37,6 +38,15 @@ const planSchema = z.object({
   currency: z.string().nullable(),
   billing_interval: z.enum(["month", "year", "none"]),
   revision: z.number(),
+  limits: z
+    .object({
+      members: z.number().int().min(1).max(50),
+      lists: z.number().int().min(1).max(20),
+      devices: z.number().int().min(1).max(20),
+      photos: z.number().int().min(1).max(12),
+      widgets: z.number().int().min(1).max(64),
+    })
+    .optional(),
 });
 const paymentSchema = z.object({
   id: z.string(),
@@ -392,6 +402,7 @@ export function BusinessConsole({
           </div>
         </section>
       )}
+      {tab === "legal" && <LegalConsole client={client} />}
       {tab === "pagos" && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -558,15 +569,38 @@ export function BusinessConsole({
                     ? `${money(plan.annual_amount_cents, plan.currency)} / año`
                     : ""}
                 </p>
+                <ul className="mb-5 space-y-1 text-sm">
+                  {Object.entries(plan.limits ?? {}).map(([key, value]) => (
+                    <li key={key}>
+                      {value}{" "}
+                      {
+                        {
+                          members: "miembros",
+                          lists: "listas activas",
+                          devices: "tablets vinculadas",
+                          photos: "fotos",
+                          widgets: "widgets por inicio",
+                        }[key]
+                      }
+                    </li>
+                  ))}
+                </ul>
                 <p className="mb-5 text-xs text-muted-foreground">
-                  Asignación manual del plan desde Hogares.
+                  Propuesta por hogar. Límites y cobros reales aún desactivados.
                 </p>
                 <Button
                   variant="outline"
                   onClick={() =>
                     open({
                       kind: "plan",
-                      value: { ...plan },
+                      value: {
+                        ...plan,
+                        limits:
+                          plan.limits ??
+                          (plan.id === "free"
+                            ? { members: 4, lists: 3, devices: 1, photos: 3, widgets: 6 }
+                            : { members: 12, lists: 20, devices: 3, photos: 12, widgets: 64 }),
+                      },
                       amount:
                         plan.amount_cents === null ? "" : (plan.amount_cents / 100).toFixed(2),
                       annualAmount:
@@ -797,6 +831,49 @@ export function BusinessConsole({
                     ))}
                   </select>
                 </label>
+                {form.value.limits && (
+                  <fieldset className="space-y-3">
+                    <legend className="text-sm font-bold">Capacidad por hogar</legend>
+                    {Object.entries(form.value.limits).map(([key, value]) => (
+                      <label key={key} className="block text-sm font-semibold">
+                        {
+                          {
+                            members: "Miembros",
+                            lists: "Listas activas",
+                            devices: "Tablets vinculadas",
+                            photos: "Fotos",
+                            widgets: "Widgets por inicio",
+                          }[key]
+                        }
+                        <input
+                          required
+                          type="number"
+                          min={1}
+                          max={
+                            key === "members"
+                              ? 50
+                              : key === "photos"
+                                ? 12
+                                : key === "widgets"
+                                  ? 64
+                                  : 20
+                          }
+                          value={value}
+                          className={inputClass}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              value: {
+                                ...form.value,
+                                limits: { ...form.value.limits!, [key]: Number(e.target.value) },
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
                 <label className="block text-sm font-semibold">
                   Periodicidad
                   <select

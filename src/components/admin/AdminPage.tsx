@@ -312,6 +312,7 @@ export function AdminPage() {
             "planes",
             "actividad",
             "configuracion",
+            "legal",
           ] as const
         ).map((t) => (
           <button
