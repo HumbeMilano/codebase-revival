@@ -67,6 +67,66 @@ const current = {
 const json = (v: unknown, status = 200) => Response.json(v, { status });
 afterEach(() => vi.unstubAllGlobals());
 describe("household sandbox subscriptions", () => {
+  it("uses Payment Methods for test-clock subscriptions instead of obsolete Card Tokens", async () => {
+    const forms: URLSearchParams[] = [];
+    const context = {
+      job_id: id,
+      scenario: "clock-month",
+      user_id: "user-a",
+      household_id: "house-a",
+      customer_id: "cus_fixture",
+      test_clock_id: "clock_fixture",
+      subscription_id: null,
+    };
+    const fetcher = vi.fn(async (input: string, init: RequestInit) => {
+      const url = new URL(input),
+        path = url.pathname;
+      if (init.body && url.hostname === "api.stripe.com")
+        forms.push(new URLSearchParams(String(init.body)));
+      if (path.endsWith("subscription_test_operation")) return json(context);
+      if (path.endsWith("prepare_clock_test_checkout"))
+        return json({ ...attempt, test_clock_id: "clock_fixture" });
+      if (path.endsWith("sandbox_catalog_resources"))
+        return json({ catalog: { month_price_id: "price_month", year_price_id: "price_year" } });
+      if (path.endsWith("payment_methods/pm_card_visa/attach"))
+        return json({ id: "pm_fixture", customer: "cus_fixture", livemode: false });
+      if (path.endsWith("customers/cus_fixture"))
+        return json({ id: "cus_fixture", livemode: false });
+      if (path.endsWith("subscriptions") || path.endsWith("subscriptions/sub_fixture"))
+        return json(current);
+      if (path.endsWith("claim_sandbox_reconciliation")) return json(id);
+      if (
+        path.endsWith("capture_sandbox_subscription") ||
+        path.endsWith("release_sandbox_reconciliation")
+      )
+        return new Response(null, { status: 204 });
+      if (path.endsWith("invoices")) return json({ data: [] });
+      if (path.endsWith("test_clocks/clock_fixture"))
+        return json({
+          id: "clock_fixture",
+          livemode: false,
+          status: "ready",
+          frozen_time: 1900000000,
+        });
+      throw new Error(`Unexpected ${path}`);
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const response = await subscriptions(
+      new Request("https://app.skendal.com/api/subscriptions/qa", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${"fixture-job-capability-".padEnd(64, "x")}` },
+        body: JSON.stringify({ action: "create_clock_subscription", request_id: id }),
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+    expect(forms.some((f) => f.get("default_payment_method") === "pm_fixture")).toBe(true);
+    expect(
+      forms.some((f) => f.get("invoice_settings[default_payment_method]") === "pm_fixture"),
+    ).toBe(true);
+    expect(forms.every((f) => !f.has("source"))).toBe(true);
+  });
+
   it("redacts provider credentials in diagnostics for authorized QA jobs", async () => {
     vi.stubGlobal(
       "fetch",
