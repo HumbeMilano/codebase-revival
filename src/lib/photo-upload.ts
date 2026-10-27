@@ -55,7 +55,8 @@ export function photoErrorMessage(reason: unknown): string {
     return "Solo una cuenta adulta de este hogar puede cambiar las fotos. Actualiza tu sesión y reintenta.";
   if (/suspended/i.test(message))
     return "Este hogar está suspendido. Consulta con quien administra el servicio.";
-  if (/At most 12/i.test(message)) return "Ya hay 12 fotos. Quita una antes de añadir otra.";
+  const limit = /At most (\d+) household photos/i.exec(message);
+  if (limit) return `Este plan permite hasta ${limit[1]} fotos. Quita una antes de añadir otra.`;
   if (
     /^(Elige |La imagen |La foto |No se pudo abrir |No se pudo comprimir |Este navegador |La sesión cambió)/.test(
       message,

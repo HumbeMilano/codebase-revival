@@ -138,3 +138,21 @@ describe("private photo warm cache", () => {
     expect(urls.create).not.toHaveBeenCalled();
   });
 });
+
+it("loads all thirty household photos without the former twelve-photo rejection", async () => {
+  const server = clientFor(HOUSEHOLD.id);
+  server.rows = Array.from({ length: 30 }, (_, position) => ({
+    id: `p${position}`,
+    path: `${HOUSEHOLD.id}/p${position}.png`,
+    position,
+  }));
+  binding.client = server;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("photo", { headers: { "Content-Type": "image/png" } })),
+  );
+  const result = renderHook(() => useHouseholdPhotos());
+  await waitFor(() => expect(result.result.current.photos).toHaveLength(30));
+  expect(result.result.current.error).toBe("");
+  expect(result.result.current.photos[29]?.id).toBe("p29");
+});

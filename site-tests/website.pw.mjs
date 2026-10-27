@@ -23,12 +23,17 @@ test("both static languages navigate, remember a choice, and keep prelaunch and 
   await expect(page.locator("#annual-price")).toHaveText("$5.99");
   await expect(page.locator("#pricing-status")).toContainText("not active");
   await expect(page.locator(".hero .availability")).toContainText("currently in Spanish");
-  await expect(page.locator(".hero a.button")).toHaveAttribute("href", "#everyday");
+  await expect(page.locator(".hero a.button")).toHaveAttribute("href", "#plans");
+  await expect(page.locator(".hero .free-highlight")).toContainText("Free plan");
+  await expect(page.locator(".hero .free-highlight")).toContainText("$0");
+  await expect(page.locator(".hero .free-note")).toContainText("No card");
   await noOverflow(page);
   await page.locator(".site-header [data-language=es]").click();
   await expect(page).toHaveURL(/\/es\/$/);
   await expect(page.locator("h1")).toContainText("Menos pendientes.");
   await expect(page.locator("html")).toHaveAttribute("lang", "es");
+  await expect(page.locator(".hero .free-highlight")).toContainText("Plan gratis");
+  await expect(page.locator(".hero .free-note")).toContainText("Sin tarjeta");
   await expect(page.locator("#pricing-status")).toContainText("no están activos");
   await noOverflow(page);
   await page.goto("/");
@@ -63,11 +68,15 @@ test("a failed or invalid catalogue keeps prices hidden and account links availa
   });
   await page.goto("/?lang=en");
   await expect(page.locator("#pricing-cards")).toBeHidden();
+  await expect(page.locator("#free-plan")).toBeVisible();
+  await expect(page.locator("#free-plan .price")).toContainText("$0");
   await expect(page.locator(".hero a.button")).toBeVisible();
   await page.unroute("**/rest/v1/rpc/business_catalog");
   await pricing(page, null);
   await page.reload();
   await expect(page.locator("#pricing-cards")).toBeHidden();
+  await expect(page.locator("#free-plan")).toBeVisible();
+  await expect(page.locator("#free-plan .price")).toContainText("$0");
   await expect(page.locator("#pricing-status")).toContainText("not active");
 });
 test("language links and FAQs remain readable without JavaScript or browser storage", async ({
@@ -137,7 +146,7 @@ test("marketing templates change language, preserve safe edits, and export actua
 test("legal preparation and editable Free / Pro proposals do not present final contracts", async ({
   page,
 }) => {
-  const limits = { members: 4, lists: 3, devices: 1, photos: 3, widgets: 6 };
+  const limits = { members: 4, lists: 3, devices: 1, photos: 10, widgets: 6 };
   await pricing(page, {
     plans: [
       { id: "free", currency: "USD", amount_cents: 0, annual_amount_cents: 0, limits },
@@ -146,7 +155,7 @@ test("legal preparation and editable Free / Pro proposals do not present final c
         currency: "USD",
         amount_cents: 399,
         annual_amount_cents: 1299,
-        limits: { members: 12, lists: 20, devices: 3, photos: 12, widgets: 64 },
+        limits: { members: 12, lists: 20, devices: 3, photos: 30, widgets: 64 },
       },
     ],
   });
@@ -155,6 +164,12 @@ test("legal preparation and editable Free / Pro proposals do not present final c
   await expect(page.locator("#monthly-price")).toHaveText("$3.99");
   await expect(page.locator("#plan-comparison table")).toBeVisible();
   await expect(page.locator("#plan-comparison")).toContainText("Full catalogue");
+  await expect(
+    page.locator("#plan-comparison tr").filter({ hasText: "Lock-screen photos" }),
+  ).toContainText("10");
+  await expect(
+    page.locator("#plan-comparison tr").filter({ hasText: "Lock-screen photos" }),
+  ).toContainText("30");
   await page.getByRole("link", { name: "Legal preparation", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Legal preparation", exact: true })).toBeVisible();
   await expect(page.locator("main")).toContainText("has not yet been formed");

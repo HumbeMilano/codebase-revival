@@ -1236,3 +1236,61 @@ footer > span {
 .legal-preparation p {
   margin: 1.5rem 0;
 }
+
+.free-highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 22px;
+  background: var(--blue);
+  color: white;
+  border-radius: 18px;
+  text-decoration: none;
+  font-size: clamp(20px, 2vw, 26px);
+  font-weight: 800;
+}
+.free-highlight strong {
+  font-size: 36px;
+  letter-spacing: -1px;
+}
+.free-highlight > span:last-child {
+  color: #ffb29e;
+}
+.free-note {
+  margin: 12px 0 0;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 650;
+}
+.plan-options {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+}
+.plan-options .pricing-cards {
+  max-width: none;
+}
+.free-plan {
+  background: var(--blue);
+  color: white;
+  border-radius: 24px;
+  padding: 30px;
+}
+.free-plan h3 {
+  font-size: 28px;
+  margin: 12px 0 6px;
+}
+.free-plan > p:not(.price) {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.free-plan > strong {
+  display: block;
+  font-size: 13px;
+  color: #ffb29e;
+}
+@media (max-width: 900px) {
+  .plan-options {
+    grid-template-columns: 1fr;
+  }
+}

@@ -225,7 +225,7 @@ test("photos survive a lost registration response, reload, reorder and removal",
   backend.loseNextPhotoRegistration = true;
   await backend.install(page);
   await signIn(page);
-  await section(page, "Hogar");
+  await section(page, "Fotos");
   const image = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS1cAAAAASUVORK5CYII=",
     "base64",
@@ -244,11 +244,48 @@ test("photos survive a lost registration response, reload, reorder and removal",
   await page.getByRole("button", { name: "Adelantar foto 2", exact: true }).click();
   await expect.poll(() => backend.photos[0]!["id"]).toBe(second);
   await page.reload();
-  await section(page, "Hogar");
+  await section(page, "Fotos");
   await expect(page.getByRole("img", { name: "Foto 2 del hogar", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Eliminar foto 1", exact: true }).click();
   await expect(page.getByRole("img", { name: "Foto 2 del hogar", exact: true })).toHaveCount(0);
   expect(backend.photoObjects.size).toBe(1);
   expect(backend.photos).toHaveLength(1);
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("Photos has its own section, displays thirty images and respects the server upload capacity", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  const image = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS1cAAAAASUVORK5CYII=",
+    "base64",
+  );
+  backend.photos = Array.from({ length: 30 }, (_, position) => ({
+    id: crypto.randomUUID(),
+    path: `${HOME_ID}/${position}.jpg`,
+    position,
+    url: `https://photos.fixture.invalid/gallery/${position}.png`,
+  }));
+  await backend.install(page);
+  await page.route("https://photos.fixture.invalid/gallery/**", (route) =>
+    route.fulfill({ contentType: "image/png", body: image }),
+  );
+  await signIn(page);
+  await section(page, "Hogar");
+  await expect(page.getByLabel("Añadir foto", { exact: true })).toHaveCount(0);
+  await section(page, "Fotos");
+  await expect(page.getByRole("heading", { name: "Fotos del hogar", exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Foto \d+ del hogar/ })).toHaveCount(30);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByLabel("Añadir foto", { exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Eliminar foto 30", exact: true }).click();
+  await expect(page.getByRole("img", { name: /Foto \d+ del hogar/ })).toHaveCount(29);
+  await expect(page.getByLabel("Añadir foto", { exact: true })).toBeEnabled();
+  backend.photoCapacity = 10;
+  await page.reload();
+  await section(page, "Fotos");
+  await expect(page.getByRole("img", { name: /Foto \d+ del hogar/ })).toHaveCount(29);
+  await expect(page.getByLabel("Añadir foto", { exact: true })).toBeDisabled();
   expect(backend.unexpectedRequests).toEqual([]);
 });

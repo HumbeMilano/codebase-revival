@@ -43,7 +43,7 @@ const planSchema = z.object({
       members: z.number().int().min(1).max(50),
       lists: z.number().int().min(1).max(20),
       devices: z.number().int().min(1).max(20),
-      photos: z.number().int().min(1).max(12),
+      photos: z.number().int().min(1).max(30),
       widgets: z.number().int().min(1).max(64),
     })
     .optional(),
@@ -598,8 +598,8 @@ export function BusinessConsole({
                         limits:
                           plan.limits ??
                           (plan.id === "free"
-                            ? { members: 4, lists: 3, devices: 1, photos: 3, widgets: 6 }
-                            : { members: 12, lists: 20, devices: 3, photos: 12, widgets: 64 }),
+                            ? { members: 4, lists: 3, devices: 1, photos: 10, widgets: 6 }
+                            : { members: 12, lists: 20, devices: 3, photos: 30, widgets: 64 }),
                       },
                       amount:
                         plan.amount_cents === null ? "" : (plan.amount_cents / 100).toFixed(2),
@@ -853,7 +853,7 @@ export function BusinessConsole({
                             key === "members"
                               ? 50
                               : key === "photos"
-                                ? 12
+                                ? 30
                                 : key === "widgets"
                                   ? 64
                                   : 20

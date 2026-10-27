@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Images, Plus, Trash2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { HOUSEHOLD } from "./data";
@@ -18,6 +18,38 @@ import {
 export function HouseholdPhotos() {
   const { photos, error: loadingError, refresh } = useHouseholdPhotos();
   const [busy, setBusy] = useState(false);
+  const [capacity, setCapacity] = useState<number | null>(null);
+  const [capacityError, setCapacityError] = useState("");
+  const [capacityRevision, setCapacityRevision] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const client = db(),
+      householdId = HOUSEHOLD.id;
+    const controller = new AbortController();
+    setCapacity(null);
+    setCapacityError("");
+    void client
+      .rpc("household_photo_capacity")
+      .abortSignal(controller.signal)
+      .then(
+        ({ data, error }) => {
+          if (!active || client !== db() || householdId !== HOUSEHOLD.id) return;
+          if (error || !Number.isSafeInteger(data) || Number(data) < 1 || Number(data) > 30) {
+            setCapacityError("No se pudo comprobar la capacidad de fotos. Reintenta.");
+            return;
+          }
+          setCapacity(Number(data));
+        },
+        () => {
+          if (active && client === db() && householdId === HOUSEHOLD.id)
+            setCapacityError("No se pudo comprobar la capacidad de fotos. Reintenta.");
+        },
+      );
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [capacityRevision]);
   const [error, setError] = useState("");
   const pending = useRef<{
     client: ReturnType<typeof db>;
@@ -35,7 +67,12 @@ export function HouseholdPhotos() {
       throw new Error("La sesión cambió. Vuelve a abrir el hogar.");
   };
   const upload = async (file?: File) => {
-    if (busy || (!file && !pending.current) || (file && photos.length >= 12)) return;
+    if (
+      busy ||
+      (!file && !pending.current) ||
+      (file && (capacity === null || photos.length >= capacity))
+    )
+      return;
     setBusy(true);
     setError("");
     try {
@@ -113,12 +150,14 @@ export function HouseholdPhotos() {
   return (
     <section className="space-y-4 rounded-3xl bg-card p-5 shadow-card md:col-span-2">
       <h2 className="flex items-center gap-2 font-display text-xl font-bold">
-        <Images /> Fotos de la pantalla de bloqueo
+        <Images /> Fotos del hogar
       </h2>
-      <p className="text-sm text-muted-foreground">{photos.length}/12 fotos</p>
-      {(error || loadingError) && (
+      <p className="text-sm text-muted-foreground">
+        {photos.length} {photos.length === 1 ? "foto" : "fotos"}
+      </p>
+      {(error || loadingError || capacityError) && (
         <p role="alert" className="text-sm text-destructive">
-          {error || loadingError}{" "}
+          {error || loadingError || capacityError}{" "}
           <button
             type="button"
             className="underline"
@@ -128,6 +167,7 @@ export function HouseholdPhotos() {
               else {
                 setError("");
                 refresh();
+                setCapacityRevision((v) => v + 1);
               }
             }}
           >
@@ -140,7 +180,7 @@ export function HouseholdPhotos() {
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp"
-          disabled={busy || photos.length >= 12}
+          disabled={busy || capacity === null || photos.length >= capacity}
           className="sr-only"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -160,7 +200,7 @@ export function HouseholdPhotos() {
             <img
               src={photo.url}
               alt={`Foto ${index + 1} del hogar`}
-              className="aspect-video w-full object-cover"
+              className="aspect-[4/3] w-full bg-muted object-contain"
             />
             <div className="flex justify-between gap-1 p-2">
               <Button

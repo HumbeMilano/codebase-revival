@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { HouseholdBackend, signIn, section } from "./backend";
-const free = { members: 4, lists: 3, devices: 1, photos: 3, widgets: 6 };
-const pro = { members: 12, lists: 20, devices: 3, photos: 12, widgets: 64 };
+const free = { members: 4, lists: 3, devices: 1, photos: 10, widgets: 6 };
+const pro = { members: 12, lists: 20, devices: 3, photos: 30, widgets: 64 };
 const catalog = {
   plans: [
     {

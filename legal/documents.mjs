@@ -1,6 +1,6 @@
 // Drafts for the future operator. Never publish by merely replacing the brand.
 // Company identity, operative contacts and final commercial policy need review.
-export const legalVersion = "2026-10-26-draft-1";
+export const legalVersion = "2026-10-27-draft-2";
 export const documentState = {
   status: "draft",
   operatorKind: "company",
@@ -22,11 +22,11 @@ export const documentState = {
 export const plans = {
   free: {
     name: "Skendal Free",
-    limits: { members: 4, lists: 3, devices: 1, photos: 3, widgets: 6 },
+    limits: { members: 4, lists: 3, devices: 1, photos: 10, widgets: 6 },
   },
   pro: {
     name: "Skendal Pro",
-    limits: { members: 12, lists: 20, devices: 3, photos: 12, widgets: 64 },
+    limits: { members: 12, lists: 20, devices: 3, photos: 30, widgets: 64 },
   },
 };
 export const documents = {
@@ -58,7 +58,7 @@ export const documents = {
         ],
         [
           "6. Gratis y Pro",
-          "La propuesta comercial contempla un plan Gratis y un plan Pro por hogar, compartido por sus miembros. Ambos incluyen las funciones básicas y los controles de seguridad. Las capacidades y los precios vigentes deberán aparecer antes de contratar. La propuesta inicial de límites es: Gratis, 4 miembros, 3 listas, 1 tablet, 3 fotos y 6 widgets; Pro, 12 miembros, 20 listas, 3 tablets, 12 fotos y todo el catálogo disponible de widgets. Son límites de preparación, todavía no aplicados a los hogares actuales. No se ofrece capacidad ilimitada de almacenamiento.",
+          "La propuesta comercial contempla un plan Gratis y un plan Pro por hogar, compartido por sus miembros. Ambos incluyen las funciones básicas y los controles de seguridad. Las capacidades y los precios vigentes deberán aparecer antes de contratar. La propuesta inicial de límites es: Gratis, 4 miembros, 3 listas, 1 tablet, 10 fotos y 6 widgets; Pro, 12 miembros, 20 listas, 3 tablets, 30 fotos y todo el catálogo disponible de widgets. Son límites de preparación, todavía no aplicados a los hogares actuales. No se ofrece capacidad ilimitada de almacenamiento.",
         ],
         [
           "7. Pagos y renovación: propuesta para revisión",
@@ -113,7 +113,7 @@ export const documents = {
         ],
         [
           "6. Free and Pro",
-          "The proposed offering has Free and Pro plans per household, shared by its members. Basic functions and security controls are included in both. Capacities and current prices must appear before purchase. Initial proposed limits are: Free, 4 members, 3 lists, 1 tablet, 3 photos and 6 widgets; Pro, 12 members, 20 lists, 3 tablets, 12 photos and the full available widget catalogue. These are preparation-stage limits, not restrictions currently imposed on existing households. Unlimited storage is not promised.",
+          "The proposed offering has Free and Pro plans per household, shared by its members. Basic functions and security controls are included in both. Capacities and current prices must appear before purchase. Initial proposed limits are: Free, 4 members, 3 lists, 1 tablet, 10 photos and 6 widgets; Pro, 12 members, 20 lists, 3 tablets, 30 photos and the full available widget catalogue. These are preparation-stage limits, not restrictions currently imposed on existing households. Unlimited storage is not promised.",
         ],
         [
           "7. Payments and renewal: proposal for review",
