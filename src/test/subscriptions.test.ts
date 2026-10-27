@@ -290,6 +290,17 @@ describe("household sandbox subscriptions", () => {
   });
 });
 describe("subscription webhook reconciliation", () => {
+  it("recognizes a portal cancellation scheduled at the period end without a legacy flag", () => {
+    const { cancel_at_period_end: legacy, ...modern } = current;
+    void legacy;
+    const end = current.items.data[0]!.current_period_end;
+    expect(subscriptionSnapshot({ ...modern, cancel_at: end }).cancel_at_period_end).toBe(true);
+    expect(subscriptionSnapshot({ ...modern, cancel_at: null }).cancel_at_period_end).toBe(false);
+    expect(subscriptionSnapshot({ ...modern, cancel_at: end - 3600 }).cancel_at_period_end).toBe(
+      false,
+    );
+  });
+
   it("normalizes the current Stripe per-item period and rejects live or multi-item states", () => {
     expect(subscriptionSnapshot(current)).toMatchObject({
       period_start: 1900000000,

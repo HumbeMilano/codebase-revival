@@ -2,7 +2,12 @@
 // customer. This is intentionally not a general-purpose Stripe API proxy.
 import type { WorkerEnv } from "./app";
 import { billingRpc as rpc, sandboxStripe as stripe, boundedText, BillingFailure } from "./billing";
-import { asObject as obj, objectId, reconcileSubscription } from "./subscription-state";
+import {
+  asObject as obj,
+  objectId,
+  reconcileSubscription,
+  subscriptionSnapshot,
+} from "./subscription-state";
 import { subscriptionCatalog } from "./subscription-catalog";
 const uuid = /^[a-f\d]{8}-([a-f\d]{4}-){3}[a-f\d]{12}$/i;
 const services = { rpc, stripe };
@@ -69,7 +74,9 @@ export async function subscriptionQa(request: Request, env: WorkerEnv, authoriza
     return {
       ...context,
       provider_status: state?.["status"] ?? null,
-      cancel_at_period_end: state?.["cancel_at_period_end"] ?? false,
+      cancel_at_period_end: state ? subscriptionSnapshot(state).cancel_at_period_end : false,
+      provider_cancel_at: state?.["cancel_at"] ?? null,
+      provider_cancel_at_period_end: state?.["cancel_at_period_end"] ?? null,
       items: state?.["items"] ?? null,
       latest_invoice: objectId(state?.["latest_invoice"]),
       clock: clockState

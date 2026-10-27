@@ -33,11 +33,15 @@ export function PrivacyRequests() {
   const sequence = useRef(0);
   useEffect(() => {
     let active = true;
+    const invalidateRequests = () => {
+      sequence.current++;
+    };
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
       if (active && (event === "SIGNED_OUT" || event === "SIGNED_IN")) {
-        sequence.current++;
+        invalidateRequests();
+        setBusy(false);
         setRows([]);
         setOpen(false);
         setError("");
@@ -45,7 +49,7 @@ export function PrivacyRequests() {
     });
     return () => {
       active = false;
-      sequence.current++;
+      invalidateRequests();
       subscription.unsubscribe();
     };
   }, []);
