@@ -197,7 +197,12 @@ test("one finger scrolls the widget bodies naturally before and during editing",
     }
     await page.waitForTimeout(100);
     await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(scroll + 100);
+    // Empty phone cards now take less height; a short page can reach its end before 100px.
+    const maximum = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+    expect(maximum).toBeGreaterThan(scroll);
+    await expect
+      .poll(() => page.evaluate(() => scrollY))
+      .toBeGreaterThanOrEqual(Math.min(scroll + 100, maximum) - 1);
     expect(
       await grid
         .locator("[data-widget]")

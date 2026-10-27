@@ -83,7 +83,10 @@ export function mobileWidgetDimensions(widget: DashboardWidget): [number, number
     ].includes(widget.id)
   )
     return [2, widget.id === "family" ? 210 : 200 + rows * 24];
-  return [columns === 3 ? 2 : 1, widget.id === "member-summary" ? 264 : 196];
+  return [
+    columns === 3 ? 2 : 1,
+    widget.id === "member-summary" ? 264 : widget.id === "progress" ? 208 : 196,
+  ];
 }
 
 export function mobileWidgetContentDimensions(
