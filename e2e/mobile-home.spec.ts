@@ -120,14 +120,16 @@ test("phone defaults are readable, saved widgets reflow without changing the tab
     })),
   );
   expect(headings.every((box) => box.width > 75 && box.height < 60)).toBe(true);
-  const ring = await page
-    .locator('[data-widget="progress"] .dw-ring')
-    .evaluate((node) => ({
-      top: node.getBoundingClientRect().top,
-      bottom: node.getBoundingClientRect().bottom,
-      bodyTop: node.closest(".dw-body")!.getBoundingClientRect().top,
-      bodyBottom: node.closest(".dw-body")!.getBoundingClientRect().bottom,
-    }));
+  const ring = await page.locator('[data-widget="progress"] .dw-ring').evaluate((node) => {
+    const bounds = node.getBoundingClientRect();
+    const container = node.closest(".dw-body")!.getBoundingClientRect();
+    return {
+      top: bounds.top,
+      bottom: bounds.bottom,
+      bodyTop: container.top,
+      bodyBottom: container.bottom,
+    };
+  });
   expect(ring.top).toBeGreaterThanOrEqual(ring.bodyTop - 1);
   expect(ring.bottom).toBeLessThanOrEqual(ring.bodyBottom + 1);
   const funding = await page
