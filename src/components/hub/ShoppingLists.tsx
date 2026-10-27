@@ -26,14 +26,16 @@ type ShoppingState = Pick<
 export function Shopping({
   s,
   createRequest = 0,
+  initialListId,
 }: {
   s: ShoppingState;
   compact: boolean;
   createRequest?: number;
+  initialListId?: string | undefined;
 }) {
   const householdId = s.shoppingSync?.householdId ?? HOUSEHOLD.id;
   const lists = s.shoppingLists?.length ? s.shoppingLists : [defaultShoppingList(householdId)];
-  const [selected, setSelected] = useState(householdId);
+  const [selected, setSelected] = useState(initialListId ?? householdId);
   const list =
     lists.find((row) => row.id === selected && !row.archived) ??
     lists.find((row) => !row.archived)!;

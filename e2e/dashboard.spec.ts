@@ -146,6 +146,7 @@ test("shopping widgets mark products directly and notes require an explicit save
   page,
 }) => {
   const backend = new HouseholdBackend();
+  seedLegacyHome(backend);
   const now = new Date();
   const date = (value: Date) =>
     `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
@@ -202,6 +203,8 @@ test("shopping widgets mark products directly and notes require an explicit save
     .locator('[data-widget="tasks"]')
     .getByText("Preparar la cena", { exact: false })
     .click();
+  await expect(page.locator('[data-widget="tasks"]')).toHaveCount(0);
+  await section(page, "Inicio");
   await page.locator('[data-widget="shopping"]').getByText("Tomates", { exact: true }).click();
   await page.locator('[data-widget="notes"]').getByText("Llaves", { exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Editar nota", exact: true })).toBeVisible();
@@ -211,7 +214,9 @@ test("shopping widgets mark products directly and notes require an explicit save
     .locator('[data-widget="calendar"]')
     .getByText("Visita familiar", { exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const day = page.getByRole("dialog", { name: /Agenda ·/ });
+  await expect(day).toContainText("Visita familiar");
+  await day.getByRole("button", { name: "Close", exact: true }).click();
   expect(backend.rows["chores"]?.[0]?.["done"]).toBe(false);
   await expect.poll(() => backend.rows["shopping_items"]?.[0]?.["done"]).toBe(true);
   await page.reload();

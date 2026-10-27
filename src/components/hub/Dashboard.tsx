@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Check, LayoutGrid, Plus, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDashboardLayout } from "@/hooks/use-dashboard-layout";
 import { useToday } from "@/hooks/use-today";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   defaultDashboardLayout,
+  defaultMobileDashboardLayout,
+  sameDashboardLayout,
   WIDGET_IDS,
   WIDGET_SIZES,
   widgetDimensions,
@@ -16,7 +19,13 @@ import {
   type DashboardWidget,
   type WidgetId,
 } from "@/lib/dashboard-layout";
-import { dashboardLists, isFinancialWidget } from "@/lib/dashboard-data";
+import {
+  dashboardLists,
+  dashboardList,
+  isFinancialWidget,
+  widgetSection,
+  mobileWidgetContentDimensions,
+} from "@/lib/dashboard-data";
 import { db } from "@/lib/db";
 import { canViewFinances } from "@/lib/finance-visibility";
 import { cn } from "@/lib/utils";
@@ -25,6 +34,8 @@ import { WidgetGrid } from "./WidgetGrid";
 import { DashboardWidgetContent } from "./DashboardWidgets";
 import { describeWidget, widgetCatalogue } from "./widget-catalogue";
 import type { HubState } from "./Screens";
+
+const CalendarDay = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyCalendar })));
 
 type Section = "chores" | "shopping" | "calendar" | "notes" | "finance";
 type Choice = { id: string; name: string };
@@ -83,12 +94,14 @@ export function Dashboard({
   scope: DashboardScope;
   go: (section: Section) => void;
   onCreate: (section: Section) => void;
-  onOpenRecord?: (section: "calendar" | "notes", id: string) => void;
+  onOpenRecord?: (section: "calendar" | "notes" | "shopping", id: string) => void;
   now: Date | null;
   adultAuthorized?: boolean;
 }) {
   const today = useToday(),
     now = clock ?? today;
+  const phone = useIsMobile() && scope.kind === "account";
+  const [calendarDay, setCalendarDay] = useState<string | null>(null);
   const [client] = useState(db);
   const preference = useDashboardLayout(scope, client);
   const [editor, setEditor] = useState<DashboardSnapshot | null>(null);
@@ -98,8 +111,18 @@ export function Dashboard({
   const [configuration, setConfiguration] = useState<string | null>(null);
   const financialAccess =
     canViewFinances(user.role, adultAuthorized) && (scope.kind === "account" || adultAuthorized);
+  const displayState = financialAccess ? s : { ...s, bills: [], contributions: [] };
   const allowed = (id: WidgetId) => !isFinancialWidget(id) || financialAccess;
-  const source = editor?.layout ?? preference.layout;
+  const baseLayout = useMemo(
+    () =>
+      phone &&
+      preference.revision === 0 &&
+      sameDashboardLayout(preference.layout, defaultDashboardLayout())
+        ? defaultMobileDashboardLayout()
+        : preference.layout,
+    [phone, preference.revision, preference.layout],
+  );
+  const source = editor?.layout ?? baseLayout;
   const visible = useMemo(
     () => ({
       ...source,
@@ -123,8 +146,9 @@ export function Dashboard({
         ? { noteId: value }
         : { memberId: value };
   const open = () => {
+    setCalendarDay(null);
     if (!editor && !preference.loading)
-      setEditor({ layout: preference.layout, revision: preference.revision });
+      setEditor({ layout: baseLayout, revision: preference.revision });
   };
   const close = () => {
     setEditor(null);
@@ -177,6 +201,28 @@ export function Dashboard({
       );
     }
   };
+  const browseShopping = (id?: string) => {
+    if (id && onOpenRecord) onOpenRecord("shopping", id);
+    else go("shopping");
+  };
+  const browseWidget = (entry: DashboardWidget) => {
+    if (editor || entry.id === "quick-add") return;
+    if (entry.id === "shopping") {
+      browseShopping(dashboardList(s, entry)?.id);
+      return;
+    }
+    if (["specific-note", "pinned-note"].includes(entry.id)) {
+      const note =
+        entry.id === "specific-note"
+          ? s.notes.find((n) => n.id === entry.noteId)
+          : s.notes.find((n) => n.pinned);
+      if (note && onOpenRecord) {
+        onOpenRecord("notes", note.id);
+        return;
+      }
+    }
+    go(widgetSection(entry.id));
+  };
   const widget = visible.widgets.find((entry) => entry.key === configuration);
   const change = (value: Partial<DashboardWidget>) =>
     widget &&
@@ -187,10 +233,12 @@ export function Dashboard({
       ),
     });
   return (
-    <div className={cn("space-y-6 pb-5", editor && "dashboard-editing")}>
+    <div
+      className={cn("dashboard-home space-y-4 pb-5 md:space-y-6", editor && "dashboard-editing")}
+    >
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="mb-1 text-sm text-muted-foreground first-letter:uppercase">
+          <p className="mb-1 text-xs text-muted-foreground md:text-sm first-letter:uppercase">
             {now.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" })}
           </p>
           <h2 className="break-words font-display text-3xl font-extrabold">Hola, {user.name}</h2>
@@ -198,12 +246,13 @@ export function Dashboard({
         {!editor && (
           <Button
             variant="outline"
-            className="h-11 rounded-full bg-card"
+            aria-label="Personalizar"
+            className="h-10 rounded-full bg-card sm:h-11"
             disabled={preference.loading}
             onClick={open}
           >
             <SlidersHorizontal className="size-4" />
-            Personalizar
+            <span className="hidden min-[380px]:inline">Personalizar</span>
           </Button>
         )}
       </div>
@@ -237,7 +286,9 @@ export function Dashboard({
             aria-label="Restablecer diseño"
             title="Restablecer diseño"
             disabled={preference.saving}
-            onClick={() => updateDraft(defaultDashboardLayout())}
+            onClick={() =>
+              updateDraft(phone ? defaultMobileDashboardLayout() : defaultDashboardLayout())
+            }
           >
             <RotateCcw />
           </Button>
@@ -292,11 +343,13 @@ export function Dashboard({
             onChange={updateDraft}
             describe={describeWidget}
             onConfigure={setConfiguration}
+            onOpen={browseWidget}
+            mobileSize={(entry) => mobileWidgetContentDimensions(entry, displayState, now)}
           >
             {(entry) => (
               <DashboardWidgetContent
                 widget={entry}
-                s={financialAccess ? s : { ...s, bills: [], contributions: [] }}
+                s={displayState}
                 now={now}
                 user={user}
                 configure={() => {
@@ -304,7 +357,11 @@ export function Dashboard({
                   setConfiguration(entry.key);
                 }}
                 onCreate={onCreate}
-                onBrowseShopping={() => go("shopping")}
+                onBrowseShopping={browseShopping}
+                onBrowse={() => browseWidget(entry)}
+                onOpenDay={(date) => {
+                  if (!editor) setCalendarDay(date);
+                }}
                 onBrowseNotes={() => go("notes")}
                 onOpenNote={(id) => {
                   if (onOpenRecord) onOpenRecord("notes", id);
@@ -329,6 +386,23 @@ export function Dashboard({
             </div>
           )}
         </>
+      )}
+      {calendarDay && !editor && (
+        <Suspense fallback={<p role="status">Abriendo agenda…</p>}>
+          <CalendarDay
+            key={calendarDay}
+            dayDialog
+            onDayClose={() => setCalendarDay(null)}
+            initialEventId={`date:${calendarDay}`}
+            compact
+            events={s.events}
+            setEvents={s.setEvents}
+            bills={financialAccess ? s.bills : []}
+            setBills={s.setBills}
+            financialAccess={financialAccess}
+            user={user}
+          />
+        </Suspense>
       )}
       <Dialog
         open={!!widget && !!editor}
