@@ -56,6 +56,8 @@ export function FamilyCalendar({
   bills = [],
   setBills,
   financialAccess = false,
+  dayDialog = false,
+  onDayClose,
 }: {
   events: FamilyEvent[];
   setEvents: Setter<FamilyEvent>;
@@ -66,6 +68,8 @@ export function FamilyCalendar({
   bills?: LedgerBill[];
   setBills?: PersistedSetter<LedgerBill[]>;
   financialAccess?: boolean;
+  dayDialog?: boolean;
+  onDayClose?: () => void;
 }) {
   const now = useToday();
   const visibleBills = financialAccess ? bills : [];
@@ -85,6 +89,12 @@ export function FamilyCalendar({
     initialEventId?.startsWith("bill:") && financialAccess ? initialEventId : null,
   );
   const [billEditor, setBillEditor] = useState<LedgerBill | "new" | null>(null);
+  useEffect(() => {
+    if (!financialAccess) {
+      setBillDetail(null);
+      setBillEditor(null);
+    }
+  }, [financialAccess]);
   const [allDay, setAllDay] = useState(() => !events.find((e) => e.id === initialEventId)?.time);
   const [saving, setSaving] = useState(false);
   const openedRequest = useRef(0);
@@ -162,205 +172,243 @@ export function FamilyCalendar({
     bill: "bg-accent text-accent-foreground",
   };
   const labels = { event: "Evento", reminder: "Recordatorio", bill: "Factura" };
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Filtrar por persona"
-          value={who}
-          onChange={(e) => setWho(e.target.value)}
-          className={cn(field, "w-auto flex-1")}
-        >
-          <option value="all">Toda la familia</option>
-          {MEMBERS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Tipo de calendario"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className={cn(field, "w-auto flex-1")}
-        >
-          <option value="all">Todos</option>
-          <option value="event">Eventos</option>
-          <option value="reminder">Recordatorios</option>
-          {financialAccess && <option value="bill">Facturas</option>}
-        </select>
-        <Button aria-label="Añadir al calendario" onClick={newEntry} className="rounded-full">
-          <Plus className="size-4" />
-          Añadir
-        </Button>
-      </div>
-      <div
-        className={cn(
-          "grid gap-6",
-          compact ? "grid-cols-1" : "grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]",
-        )}
-      >
-        <section className="min-w-0 rounded-3xl bg-card p-3 shadow-card sm:p-5">
-          <header className="mb-3 flex items-center justify-between gap-1">
-            <Button size="icon" variant="ghost" aria-label="Mes anterior" onClick={() => move(-1)}>
-              <ChevronLeft />
-            </Button>
-            <h2 className="font-display text-xl font-bold capitalize">
-              {month.toLocaleDateString("es", { month: "long", year: "numeric" })}
-            </h2>
-            <Button size="icon" variant="ghost" aria-label="Mes siguiente" onClick={() => move(1)}>
-              <ChevronRight />
-            </Button>
-          </header>
-          <div className="grid grid-cols-7 gap-1">
-            {["L", "M", "X", "J", "V", "S", "D"].map((d, i) => (
-              <span key={i} className="py-2 text-center text-xs font-bold text-muted-foreground">
-                {d}
-              </span>
-            ))}
-            {Array.from({ length: offset }, (_, i) => (
-              <span key={`blank${i}`} />
-            ))}
-            {Array.from({ length: days }, (_, i) => {
-              const key = dateKey(new Date(month.getFullYear(), month.getMonth(), i + 1));
-              const kinds = new Set(
-                filtered.filter((e) => e.date === key).map((e) => e.kind ?? "event"),
-              );
-              return (
-                <button
-                  type="button"
-                  key={key}
-                  aria-label={`Día ${i + 1}`}
-                  aria-pressed={key === selected}
-                  aria-current={key === dateKey(now) ? "date" : undefined}
-                  onClick={() => setSelected(key)}
-                  className={cn(
-                    "relative flex aspect-square min-h-10 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-transparent text-sm font-semibold",
-                    key === selected
-                      ? "bg-primary text-primary-foreground"
-                      : key === dateKey(now)
-                        ? "border-primary bg-secondary"
-                        : "hover:bg-secondary",
-                  )}
-                >
-                  <span>{i + 1}</span>
-                  <span className="absolute bottom-1 flex gap-0.5" aria-hidden="true">
-                    {kinds.has("event") && <i className="size-1.5 rounded-full bg-violet-500" />}
-                    {kinds.has("reminder") && (
-                      <i className="size-1.5 rounded-full bg-emerald-500" />
-                    )}
-                    {kinds.has("bill") && <i className="size-1.5 rounded-full bg-amber-500" />}
+  const agenda = (
+    <section className="min-w-0">
+      <h3 className={cn("mb-4 font-display text-lg font-bold capitalize", dayDialog && "sr-only")}>
+        {parseDate(selected).toLocaleDateString("es", {
+          weekday: "long",
+          day: "numeric",
+          month: "short",
+        })}
+      </h3>
+      {!list.length && <p className="py-6 text-sm text-muted-foreground">Sin entradas</p>}
+      <div className="space-y-3">
+        {list.map((entry) => {
+          const kind = entry.kind ?? "event";
+          const person =
+            entry.kind !== "bill" ? MEMBERS.find((m) => m.id === entry.memberId) : undefined;
+          return (
+            <article
+              key={entry.id}
+              className={cn(
+                "rounded-2xl bg-card p-4 shadow-card",
+                entry.kind !== "bill" && entry.completed && "opacity-60",
+              )}
+              data-calendar-kind={kind}
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", tones[kind])}>
+                  {labels[kind]}
+                </span>
+                <span className="min-w-0 flex-1 text-right text-xs text-muted-foreground">
+                  {entry.time
+                    ? `${entry.time}${entry.kind !== "bill" && entry.endTime ? ` – ${entry.endTime}` : ""}`
+                    : "Todo el día"}
+                </span>
+              </div>
+              {entry.kind === "bill" ? (
+                <button className="w-full text-left" onClick={() => setBillDetail(entry.id)}>
+                  <span className="flex justify-between gap-3 font-display text-lg font-bold">
+                    <span className="break-words">{entry.title}</span>
+                    <span>{money(entry.amount)}</span>
+                  </span>
+                  <span className="mt-2 block text-sm text-muted-foreground">
+                    {entry.status === "paid" ? "Pagada" : "Pendiente"}
                   </span>
                 </button>
-              );
-            })}
-          </div>
-        </section>
-        <section className="min-w-0">
-          <h3 className="mb-4 font-display text-lg font-bold capitalize">
-            {parseDate(selected).toLocaleDateString("es", {
-              weekday: "long",
-              day: "numeric",
-              month: "short",
-            })}
-          </h3>
-          {!list.length && <p className="py-6 text-sm text-muted-foreground">Sin entradas</p>}
-          <div className="space-y-3">
-            {list.map((entry) => {
-              const kind = entry.kind ?? "event";
-              const person =
-                entry.kind !== "bill" ? MEMBERS.find((m) => m.id === entry.memberId) : undefined;
-              return (
-                <article
-                  key={entry.id}
-                  className={cn(
-                    "rounded-2xl bg-card p-4 shadow-card",
-                    entry.kind !== "bill" && entry.completed && "opacity-60",
-                  )}
-                  data-calendar-kind={kind}
-                >
-                  <div className="mb-3 flex items-center gap-2">
-                    <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", tones[kind])}>
-                      {labels[kind]}
-                    </span>
-                    <span className="min-w-0 flex-1 text-right text-xs text-muted-foreground">
-                      {entry.time
-                        ? `${entry.time}${entry.kind !== "bill" && entry.endTime ? ` – ${entry.endTime}` : ""}`
-                        : "Todo el día"}
-                    </span>
+              ) : (
+                <>
+                  <div className="flex items-start gap-2">
+                    {entry.kind === "reminder" && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        aria-label={`Completar ${entry.title}`}
+                        aria-pressed={entry.completed ?? false}
+                        onClick={() => void complete(entry)}
+                        className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border-2 border-current"
+                      >
+                        <Check className={cn("size-5", !entry.completed && "invisible")} />
+                      </button>
+                    )}
+                    <h4
+                      className={cn(
+                        "min-w-0 flex-1 break-words font-display text-lg font-bold",
+                        entry.completed && "line-through",
+                      )}
+                    >
+                      {entry.title}
+                    </h4>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Editar ${entry.title}`}
+                      onClick={() => {
+                        setAllDay(!entry.time);
+                        setDraft({ ...entry });
+                      }}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Eliminar ${entry.title}`}
+                      onClick={() => void remove(entry)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
-                  {entry.kind === "bill" ? (
-                    <button className="w-full text-left" onClick={() => setBillDetail(entry.id)}>
-                      <span className="flex justify-between gap-3 font-display text-lg font-bold">
-                        <span className="break-words">{entry.title}</span>
-                        <span>{money(entry.amount)}</span>
-                      </span>
-                      <span className="mt-2 block text-sm text-muted-foreground">
-                        {entry.status === "paid" ? "Pagada" : "Pendiente"}
+                  {entry.note && (
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                      {entry.note}
+                    </p>
+                  )}
+                  {person && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Avatar m={person} size="sm" />
+                      {person.name}
+                    </div>
+                  )}
+                </>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+  return (
+    <div className="space-y-5">
+      {!dayDialog && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Filtrar por persona"
+              value={who}
+              onChange={(e) => setWho(e.target.value)}
+              className={cn(field, "w-auto flex-1")}
+            >
+              <option value="all">Toda la familia</option>
+              {MEMBERS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Tipo de calendario"
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className={cn(field, "w-auto flex-1")}
+            >
+              <option value="all">Todos</option>
+              <option value="event">Eventos</option>
+              <option value="reminder">Recordatorios</option>
+              {financialAccess && <option value="bill">Facturas</option>}
+            </select>
+            <Button aria-label="Añadir al calendario" onClick={newEntry} className="rounded-full">
+              <Plus className="size-4" />
+              Añadir
+            </Button>
+          </div>
+          <div
+            className={cn(
+              "grid gap-6",
+              compact ? "grid-cols-1" : "grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]",
+            )}
+          >
+            <section className="min-w-0 rounded-3xl bg-card p-3 shadow-card sm:p-5">
+              <header className="mb-3 flex items-center justify-between gap-1">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Mes anterior"
+                  onClick={() => move(-1)}
+                >
+                  <ChevronLeft />
+                </Button>
+                <h2 className="font-display text-xl font-bold capitalize">
+                  {month.toLocaleDateString("es", { month: "long", year: "numeric" })}
+                </h2>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Mes siguiente"
+                  onClick={() => move(1)}
+                >
+                  <ChevronRight />
+                </Button>
+              </header>
+              <div className="grid grid-cols-7 gap-1">
+                {["L", "M", "X", "J", "V", "S", "D"].map((d, i) => (
+                  <span
+                    key={i}
+                    className="py-2 text-center text-xs font-bold text-muted-foreground"
+                  >
+                    {d}
+                  </span>
+                ))}
+                {Array.from({ length: offset }, (_, i) => (
+                  <span key={`blank${i}`} />
+                ))}
+                {Array.from({ length: days }, (_, i) => {
+                  const key = dateKey(new Date(month.getFullYear(), month.getMonth(), i + 1));
+                  const kinds = new Set(
+                    filtered.filter((e) => e.date === key).map((e) => e.kind ?? "event"),
+                  );
+                  return (
+                    <button
+                      type="button"
+                      key={key}
+                      aria-label={`Día ${i + 1}`}
+                      aria-pressed={key === selected}
+                      aria-current={key === dateKey(now) ? "date" : undefined}
+                      onClick={() => setSelected(key)}
+                      className={cn(
+                        "relative flex aspect-square min-h-10 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-transparent text-sm font-semibold",
+                        key === selected
+                          ? "bg-primary text-primary-foreground"
+                          : key === dateKey(now)
+                            ? "border-primary bg-secondary"
+                            : "hover:bg-secondary",
+                      )}
+                    >
+                      <span>{i + 1}</span>
+                      <span className="absolute bottom-1 flex gap-0.5" aria-hidden="true">
+                        {kinds.has("event") && (
+                          <i className="size-1.5 rounded-full bg-violet-500" />
+                        )}
+                        {kinds.has("reminder") && (
+                          <i className="size-1.5 rounded-full bg-emerald-500" />
+                        )}
+                        {kinds.has("bill") && <i className="size-1.5 rounded-full bg-amber-500" />}
                       </span>
                     </button>
-                  ) : (
-                    <>
-                      <div className="flex items-start gap-2">
-                        {entry.kind === "reminder" && (
-                          <button
-                            type="button"
-                            disabled={saving}
-                            aria-label={`Completar ${entry.title}`}
-                            aria-pressed={entry.completed ?? false}
-                            onClick={() => void complete(entry)}
-                            className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border-2 border-current"
-                          >
-                            <Check className={cn("size-5", !entry.completed && "invisible")} />
-                          </button>
-                        )}
-                        <h4
-                          className={cn(
-                            "min-w-0 flex-1 break-words font-display text-lg font-bold",
-                            entry.completed && "line-through",
-                          )}
-                        >
-                          {entry.title}
-                        </h4>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Editar ${entry.title}`}
-                          onClick={() => {
-                            setAllDay(!entry.time);
-                            setDraft({ ...entry });
-                          }}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Eliminar ${entry.title}`}
-                          onClick={() => void remove(entry)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                      {entry.note && (
-                        <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                          {entry.note}
-                        </p>
-                      )}
-                      {person && (
-                        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                          <Avatar m={person} size="sm" />
-                          {person.name}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </article>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </section>
+            {agenda}
           </div>
-        </section>
-      </div>
+        </>
+      )}
+      {dayDialog && !draft && !(financialAccess && (detail || billEditor)) && (
+        <Editor
+          title={`Agenda · ${parseDate(selected).toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`}
+          close={() => onDayClose?.()}
+        >
+          <Button
+            aria-label="Añadir al calendario"
+            onClick={newEntry}
+            className="mb-4 rounded-full"
+          >
+            <Plus className="size-4" />
+            Añadir
+          </Button>
+          {agenda}
+        </Editor>
+      )}
       {draft && (
         <Editor
           title={

@@ -38,7 +38,9 @@ type Props = {
   user: Member;
   configure: () => void;
   onCreate: (section: Section) => void;
-  onBrowseShopping: () => void;
+  onBrowseShopping: (listId?: string) => void;
+  onBrowse: () => void;
+  onOpenDay: (date: string) => void;
   onBrowseNotes: () => void;
   onOpenNote: (id: string) => void;
 };
@@ -46,18 +48,26 @@ const money = (amount: number) =>
   amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const percentage = (done: number, total: number) => (total ? (done / total) * 100 : 0);
 
-function Header({ widget, onBrowseNotes }: Pick<Props, "widget" | "onBrowseNotes">) {
+function Header({ widget, onBrowse }: Pick<Props, "widget" | "onBrowse">) {
   const { title, Icon } = describeWidget(widget.id);
   return (
     <header className="dw-header">
       <Icon aria-hidden="true" />
       <h3>
-        {widget.id === "notes" ? (
-          <button type="button" aria-label="Ver todas las notas" onClick={onBrowseNotes}>
-            {title}
-          </button>
-        ) : (
+        {widget.id === "quick-add" ? (
           title
+        ) : (
+          <button
+            type="button"
+            className="dw-header-link"
+            aria-label={
+              widget.id === "notes" ? "Ver todas las notas" : `Ver ${title.toLocaleLowerCase("es")}`
+            }
+            onClick={onBrowse}
+          >
+            <span>{title}</span>
+            <ChevronRight aria-hidden="true" className="dw-open-arrow" />
+          </button>
         )}
       </h3>
     </header>
@@ -151,7 +161,7 @@ function Stats({ rows }: { rows: [string, number][] }) {
   );
 }
 
-function MonthCalendar({ s, now }: Pick<Props, "s" | "now">) {
+function MonthCalendar({ s, now, onOpenDay }: Pick<Props, "s" | "now" | "onOpenDay">) {
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState(dateKey(now));
   const month = new Date(now.getFullYear(), now.getMonth() + offset, 1);
@@ -201,7 +211,10 @@ function MonthCalendar({ s, now }: Pick<Props, "s" | "now">) {
               })}
               aria-current={key === dateKey(now) ? "date" : undefined}
               aria-pressed={key === selected}
-              onClick={() => setSelected(key)}
+              onClick={() => {
+                setSelected(key);
+                onOpenDay(key);
+              }}
               className={cn("dw-day", date.getMonth() !== month.getMonth() && "dw-outside")}
             >
               <span>{date.getDate()}</span>
@@ -218,7 +231,16 @@ function MonthCalendar({ s, now }: Pick<Props, "s" | "now">) {
   );
 }
 
-function TinyWidget({ widget, s, now, user, onCreate, onBrowseNotes, onOpenNote }: Props) {
+function TinyWidget({
+  widget,
+  s,
+  now,
+  user,
+  onCreate,
+  onBrowseNotes,
+  onOpenNote,
+  onBrowse,
+}: Props) {
   const chores = dashboardChores(s, now).filter(
     (c) => widget.id !== "my-tasks" || c.memberId === user.id,
   );
@@ -340,7 +362,21 @@ function TinyWidget({ widget, s, now, user, onCreate, onBrowseNotes, onOpenNote 
   }
   return (
     <div className="dw-tiny">
-      <h3>{title}</h3>
+      <h3>
+        {["notes", "specific-note", "pinned-note", "quick-add"].includes(widget.id) ? (
+          title
+        ) : (
+          <button
+            type="button"
+            className="dw-header-link"
+            onClick={onBrowse}
+            aria-label={`Ver ${describeWidget(widget.id).title.toLocaleLowerCase("es")}`}
+          >
+            <span>{title}</span>
+            <ChevronRight aria-hidden="true" className="dw-open-arrow" />
+          </button>
+        )}
+      </h3>
       <div className={cn("dw-tiny-value", isMoney && "dw-money")}>{value}</div>
       {widget.id === "member-summary" && individual && (
         <WidgetProgress
@@ -354,8 +390,19 @@ function TinyWidget({ widget, s, now, user, onCreate, onBrowseNotes, onOpenNote 
 }
 
 export function DashboardWidgetContent(props: Props) {
-  const { widget, s, now, user, configure, onCreate, onBrowseShopping, onBrowseNotes, onOpenNote } =
-    props;
+  const {
+    widget,
+    s,
+    now,
+    user,
+    configure,
+    onCreate,
+    onBrowseShopping,
+    onBrowseNotes,
+    onOpenNote,
+    onBrowse,
+    onOpenDay,
+  } = props;
   const list = dashboardList(s, widget);
   const note =
     widget.id === "specific-note"
@@ -365,14 +412,14 @@ export function DashboardWidgetContent(props: Props) {
   if (widget.id === "shopping" && !list)
     return (
       <>
-        <Header widget={widget} onBrowseNotes={onBrowseNotes} />
+        <Header widget={widget} onBrowse={onBrowse} />
         <Choose label="Elegir lista" onClick={configure} />
       </>
     );
   if (widget.id === "specific-note" && !note)
     return (
       <>
-        <Header widget={widget} onBrowseNotes={onBrowseNotes} />
+        <Header widget={widget} onBrowse={onBrowse} />
         {s.notes.length ? (
           <Choose label="Elegir nota" onClick={configure} />
         ) : (
@@ -383,7 +430,7 @@ export function DashboardWidgetContent(props: Props) {
   if (["member-summary", "member-tasks"].includes(widget.id) && !person)
     return (
       <>
-        <Header widget={widget} onBrowseNotes={onBrowseNotes} />
+        <Header widget={widget} onBrowse={onBrowse} />
         <Choose label="Elegir miembro" onClick={configure} />
       </>
     );
@@ -406,7 +453,7 @@ export function DashboardWidgetContent(props: Props) {
   let content: ReactNode;
   switch (widget.id) {
     case "month-calendar":
-      content = <MonthCalendar s={s} now={now} />;
+      content = <MonthCalendar s={s} now={now} onOpenDay={onOpenDay} />;
       break;
     case "clock":
       content = (
@@ -472,7 +519,11 @@ export function DashboardWidgetContent(props: Props) {
           {issue && (
             <div role="alert" className="dw-shopping-error">
               <p>{issue}</p>
-              <button type="button" className="underline" onClick={onBrowseShopping}>
+              <button
+                type="button"
+                className="underline"
+                onClick={() => onBrowseShopping(list!.id)}
+              >
                 Revisar compras
               </button>
             </div>
@@ -518,10 +569,15 @@ export function DashboardWidgetContent(props: Props) {
       content = (
         <div className="dw-rows">
           {dashboardLists(s).map((row) => (
-            <div className="dw-list-card" key={row.id}>
+            <button
+              type="button"
+              className="dw-list-card dw-row-action"
+              key={row.id}
+              onClick={() => onBrowseShopping(row.id)}
+            >
               <strong>{row.name}</strong>
               <span>{dashboardListItems(s, row.id).filter((i) => !i.done).length} pendientes</span>
-            </div>
+            </button>
           ))}
         </div>
       );
@@ -630,19 +686,24 @@ export function DashboardWidgetContent(props: Props) {
       content = entries.length ? (
         <div className="dw-rows">
           {entries.map((entry) => (
-            <div className="dw-row dw-agenda-row" key={entry.id}>
+            <button
+              type="button"
+              className="dw-row dw-agenda-row dw-row-action"
+              key={entry.id}
+              onClick={() => onOpenDay(entry.date)}
+            >
               <span className="dw-date-chip">
                 <strong>{parseDate(entry.date).getDate()}</strong>
                 <span>{parseDate(entry.date).toLocaleDateString("es", { month: "short" })}</span>
               </span>
-              <div className="dw-row-text">
+              <span className="dw-row-text">
                 <strong>{entry.title}</strong>
                 <span>
                   {eventWhen(entry)}
                   {entry.kind === "bill" ? ` · ${money(entry.amount)}` : ""}
                 </span>
-              </div>
-            </div>
+              </span>
+            </button>
           ))}
         </div>
       ) : (
@@ -747,7 +808,7 @@ export function DashboardWidgetContent(props: Props) {
   }
   return (
     <>
-      <Header widget={widget} onBrowseNotes={onBrowseNotes} />
+      <Header widget={widget} onBrowse={onBrowse} />
       <div className="dw-body">{content}</div>
     </>
   );

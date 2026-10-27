@@ -166,6 +166,18 @@ export const defaultDashboardLayout = (): DashboardLayout => ({
     { id: "calendar", key: "calendar", size: "compact" },
   ],
 });
+export const defaultMobileDashboardLayout = (): DashboardLayout => ({
+  version: 3,
+  widgets: [
+    { id: "tasks", key: "tasks", size: "small" },
+    { id: "shopping-summary", key: "shopping-summary", size: "small" },
+    { id: "shopping", key: "shopping", size: "wide" },
+    { id: "calendar", key: "calendar", size: "wide" },
+    { id: "notes", key: "notes", size: "wide" },
+    { id: "month-calendar", key: "month-calendar", size: "large" },
+  ],
+});
+
 export const initialDashboardSnapshot = (): DashboardSnapshot => ({
   layout: defaultDashboardLayout(),
   revision: 0,

@@ -12,6 +12,8 @@ import {
   widgetSizeFor,
 } from "@/lib/dashboard-layout";
 import { cn } from "@/lib/utils";
+import { mobileWidgetDimensions } from "@/lib/dashboard-data";
+import type { CSSProperties } from "react";
 
 type Gesture = {
   id: string;
@@ -34,6 +36,8 @@ type Props = {
   onChange: (layout: DashboardLayout) => void;
   describe: (id: WidgetId) => { title: string; tone: string };
   onConfigure: (key: string) => void;
+  onOpen?: (widget: DashboardWidget) => void;
+  mobileSize?: (widget: DashboardWidget) => [number, number];
   children: (widget: DashboardWidget) => React.ReactNode;
 };
 
@@ -47,6 +51,8 @@ export function WidgetGrid({
   describe,
   children,
   onConfigure,
+  onOpen,
+  mobileSize,
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const props = useRef({ layout, editing, disabled, onChange });
@@ -55,6 +61,7 @@ export function WidgetGrid({
   const cancelGesture = useRef<() => void>(() => {});
   const suppressClickUntil = useRef(0);
   const resized = useRef(false);
+  const bodyPointer = useRef<{ key: string; time: number; x: number; y: number } | null>(null);
   const previous = useRef(
     new Map<string, { left: number; top: number; width: number; height: number }>(),
   );
@@ -327,6 +334,8 @@ export function WidgetGrid({
       >
         {layout.widgets.map((widget) => {
           const { title, tone } = describe(widget.id);
+          const [mobileColumns, mobileHeight] =
+            mobileSize?.(widget) ?? mobileWidgetDimensions(widget);
           return (
             <section
               key={widget.key}
@@ -340,9 +349,49 @@ export function WidgetGrid({
                 widgetDimensions[widget.size][0] > 1 && "widget-wide",
                 active === widget.key && "widget-lifted",
               )}
-              style={{
-                gridColumn: `span ${widgetDimensions[widget.size][0]}`,
-                gridRow: `span ${widgetDimensions[widget.size][1]}`,
+              style={
+                {
+                  gridColumn: `span ${widgetDimensions[widget.size][0]}`,
+                  gridRow: `span ${widgetDimensions[widget.size][1]}`,
+                  "--mobile-columns": mobileColumns,
+                  "--mobile-height": `${mobileHeight}px`,
+                } as CSSProperties
+              }
+              onPointerDown={(event) => {
+                bodyPointer.current = {
+                  key: widget.key,
+                  time: Date.now(),
+                  x: event.clientX,
+                  y: event.clientY,
+                };
+              }}
+              onPointerCancel={() => {
+                bodyPointer.current = null;
+              }}
+              onClick={(event) => {
+                if (
+                  editing ||
+                  gesture.current ||
+                  widget.id === "quick-add" ||
+                  window.getSelection()?.isCollapsed === false
+                )
+                  return;
+                if (
+                  (event.target as HTMLElement).closest(
+                    "button,a,input,select,textarea,[role='checkbox']",
+                  )
+                )
+                  return;
+                const touch = bodyPointer.current;
+                bodyPointer.current = null;
+                if (
+                  event.detail > 0 &&
+                  touch?.key === widget.key &&
+                  (Date.now() - touch.time > 400 ||
+                    Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > 12)
+                )
+                  return;
+                onOpen?.(widget);
               }}
               onContextMenu={(event) => event.preventDefault()}
               onClickCapture={(event) => {

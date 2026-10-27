@@ -461,7 +461,10 @@ function HubShell({
   const [askAdmin, setAskAdmin] = useState(false);
   const [more, setMore] = useState(false);
   const [create, setCreate] = useState<{ tab: Tab; id: number } | null>(null);
-  const [record, setRecord] = useState<{ tab: "calendar" | "notes"; id: string } | null>(null);
+  const [record, setRecord] = useState<{
+    tab: "calendar" | "notes" | "shopping";
+    id: string;
+  } | null>(null);
   const now = useClock();
   useHouseholdPhotos(mode === "device");
   useHouseholdAvatars();
@@ -677,6 +680,7 @@ function HubShell({
                       s={s}
                       compact={compact}
                       createRequest={create?.tab === "shopping" ? create.id : 0}
+                      initialListId={record?.tab === "shopping" ? record.id : undefined}
                     />
                   )}
                   {tab === "finance" && financialAccess && (
