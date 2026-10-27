@@ -2,7 +2,12 @@
 // customer. This is intentionally not a general-purpose Stripe API proxy.
 import type { WorkerEnv } from "./app";
 import { billingRpc as rpc, sandboxStripe as stripe, boundedText, BillingFailure } from "./billing";
-import { asObject as obj, objectId, reconcileSubscription } from "./subscription-state";
+import {
+  asObject as obj,
+  objectId,
+  reconcileSubscription,
+  subscriptionSnapshot,
+} from "./subscription-state";
 import { subscriptionCatalog } from "./subscription-catalog";
 const uuid = /^[a-f\d]{8}-([a-f\d]{4}-){3}[a-f\d]{12}$/i;
 const services = { rpc, stripe };
@@ -35,6 +40,28 @@ export async function subscriptionQa(request: Request, env: WorkerEnv, authoriza
       throw new Error("QA customer mismatch");
     return value;
   };
+  const setPaymentMethod = async (fixture: "pm_card_visa" | "pm_card_chargeCustomerFail") => {
+    const payment = await stripe(
+      env,
+      `payment_methods/${fixture}/attach`,
+      new URLSearchParams({ customer }),
+    );
+    if (payment["livemode"] !== false || objectId(payment["customer"]) !== customer)
+      throw new Error("Test payment method mismatch");
+    const method = String(payment["id"]);
+    await stripe(
+      env,
+      `customers/${customer}`,
+      new URLSearchParams({ "invoice_settings[default_payment_method]": method }),
+    );
+    if (subscription)
+      await stripe(
+        env,
+        `subscriptions/${subscription}`,
+        new URLSearchParams({ default_payment_method: method }),
+      );
+    return method;
+  };
   const report = async () => {
     if (subscription) await reconcileSubscription(subscription, env, services);
     context = obj(
@@ -47,7 +74,9 @@ export async function subscriptionQa(request: Request, env: WorkerEnv, authoriza
     return {
       ...context,
       provider_status: state?.["status"] ?? null,
-      cancel_at_period_end: state?.["cancel_at_period_end"] ?? false,
+      cancel_at_period_end: state ? subscriptionSnapshot(state).cancel_at_period_end : false,
+      provider_cancel_at: state?.["cancel_at"] ?? null,
+      provider_cancel_at_period_end: state?.["cancel_at_period_end"] ?? null,
       items: state?.["items"] ?? null,
       latest_invoice: objectId(state?.["latest_invoice"]),
       clock: clockState
@@ -106,12 +135,11 @@ export async function subscriptionQa(request: Request, env: WorkerEnv, authoriza
         new URLSearchParams({
           test_clock: clock,
           email: String(attempt["email"]),
-          source: "tok_visa",
           "metadata[application]": "homehub",
           "metadata[environment]": "sandbox",
           "metadata[household_id]": String(attempt["household_id"]),
         }),
-        `skendal-qa-customer:${id}`,
+        `skendal-qa-customer-pm-v2:${id}`,
       );
       if (created["livemode"] !== false) throw new Error("Test customer required");
       customer = String(created["id"]);
@@ -119,8 +147,10 @@ export async function subscriptionQa(request: Request, env: WorkerEnv, authoriza
       context = { ...context, customer_id: customer };
     }
     if (!subscription) {
+      const method = await setPaymentMethod("pm_card_visa");
       const form = new URLSearchParams({
         customer,
+        default_payment_method: method,
         "items[0][price]": String(
           catalog[attempt["interval"] === "year" ? "year_price_id" : "month_price_id"],
         ),
@@ -159,12 +189,8 @@ export async function subscriptionQa(request: Request, env: WorkerEnv, authoriza
   }
   await assureCustomer();
   if (action === "set_success_payment" || action === "set_failure_payment") {
-    await stripe(
-      env,
-      `customers/${customer}`,
-      new URLSearchParams({
-        source: action === "set_success_payment" ? "tok_visa" : "tok_chargeCustomerFail",
-      }),
+    await setPaymentMethod(
+      action === "set_success_payment" ? "pm_card_visa" : "pm_card_chargeCustomerFail",
     );
     // Recover an unpaid test invoice using the registered customer only.
     if (action === "set_success_payment" && subscription) {

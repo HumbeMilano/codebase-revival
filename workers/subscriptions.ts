@@ -58,7 +58,6 @@ async function checkout(env: WorkerEnv, authorization: string, data: Record<stri
     success_url: "https://app.skendal.com/subscription?checkout=returned",
     cancel_url: "https://app.skendal.com/subscription?checkout=canceled",
     expires_at: String(attempt["expires_at"]),
-    "payment_method_types[0]": "card",
   });
   for (const prefix of ["metadata", "subscription_data[metadata]"]) {
     form.set(`${prefix}[application]`, "homehub");
@@ -209,6 +208,11 @@ export async function subscriptions(request: Request, env: WorkerEnv) {
             ? "Ya hay una operación pendiente. Actualiza el estado antes de continuar."
             : "No se pudo confirmar la operación de sandbox. Puedes reintentar.",
         code,
+        // Stripe calls happen only after approved sandbox-account/job checks.
+        // Diagnostics are redacted and are not rendered in the user interface.
+        ...(reason instanceof BillingFailure && reason.diagnostic
+          ? { diagnostic: reason.diagnostic }
+          : {}),
       },
       forbidden ? 403 : conflict ? 409 : 503,
     );

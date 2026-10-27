@@ -43,6 +43,10 @@ export function subscriptionSnapshot(value: ObjectValue) {
     !["month", "year"].includes(String(recurring["interval"]))
   )
     throw new Error("Unexpected billing frequency");
+  const periodEnd = item["current_period_end"] ?? value["current_period_end"];
+  const scheduledAtEnd =
+    value["cancel_at_period_end"] === true ||
+    (typeof value["cancel_at"] === "number" && value["cancel_at"] === periodEnd);
   return {
     id: value["id"],
     livemode: false,
@@ -54,9 +58,9 @@ export function subscriptionSnapshot(value: ObjectValue) {
     amount: price["unit_amount"],
     interval: recurring["interval"],
     status: value["status"],
-    cancel_at_period_end: value["cancel_at_period_end"],
+    cancel_at_period_end: scheduledAtEnd,
     period_start: item["current_period_start"] ?? value["current_period_start"],
-    period_end: item["current_period_end"] ?? value["current_period_end"],
+    period_end: periodEnd,
     latest_invoice: objectId(value["latest_invoice"]) || null,
   };
 }

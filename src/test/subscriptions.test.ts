@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { billingRpc, sandboxStripe, BillingFailure } from "../../workers/billing";
 import { subscriptions } from "../../workers/subscriptions";
 import {
   reconcileSandboxEvent,
@@ -66,6 +67,116 @@ const current = {
 const json = (v: unknown, status = 200) => Response.json(v, { status });
 afterEach(() => vi.unstubAllGlobals());
 describe("household sandbox subscriptions", () => {
+  it("uses Payment Methods for test-clock subscriptions instead of obsolete Card Tokens", async () => {
+    const forms: URLSearchParams[] = [];
+    const context = {
+      job_id: id,
+      scenario: "clock-month",
+      user_id: "user-a",
+      household_id: "house-a",
+      customer_id: "cus_fixture",
+      test_clock_id: "clock_fixture",
+      subscription_id: null,
+    };
+    const fetcher = vi.fn(async (input: string, init: RequestInit) => {
+      const url = new URL(input),
+        path = url.pathname;
+      if (init.body && url.hostname === "api.stripe.com")
+        forms.push(new URLSearchParams(String(init.body)));
+      if (path.endsWith("subscription_test_operation")) return json(context);
+      if (path.endsWith("prepare_clock_test_checkout"))
+        return json({ ...attempt, test_clock_id: "clock_fixture" });
+      if (path.endsWith("sandbox_catalog_resources"))
+        return json({ catalog: { month_price_id: "price_month", year_price_id: "price_year" } });
+      if (path.endsWith("payment_methods/pm_card_visa/attach"))
+        return json({ id: "pm_fixture", customer: "cus_fixture", livemode: false });
+      if (path.endsWith("customers/cus_fixture"))
+        return json({ id: "cus_fixture", livemode: false });
+      if (path.endsWith("subscriptions") || path.endsWith("subscriptions/sub_fixture"))
+        return json(current);
+      if (path.endsWith("claim_sandbox_reconciliation")) return json(id);
+      if (
+        path.endsWith("capture_sandbox_subscription") ||
+        path.endsWith("release_sandbox_reconciliation")
+      )
+        return new Response(null, { status: 204 });
+      if (path.endsWith("invoices")) return json({ data: [] });
+      if (path.endsWith("test_clocks/clock_fixture"))
+        return json({
+          id: "clock_fixture",
+          livemode: false,
+          status: "ready",
+          frozen_time: 1900000000,
+        });
+      throw new Error(`Unexpected ${path}`);
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const response = await subscriptions(
+      new Request("https://app.skendal.com/api/subscriptions/qa", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${"fixture-job-capability-".padEnd(64, "x")}` },
+        body: JSON.stringify({ action: "create_clock_subscription", request_id: id }),
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+    expect(forms.some((f) => f.get("default_payment_method") === "pm_fixture")).toBe(true);
+    expect(
+      forms.some((f) => f.get("invoice_settings[default_payment_method]") === "pm_fixture"),
+    ).toBe(true);
+    expect(forms.every((f) => !f.has("source"))).toBe(true);
+  });
+
+  it("redacts provider credentials in diagnostics for authorized QA jobs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          {
+            error: {
+              type: "invalid_request_error",
+              param: "customer",
+              message: `Invalid key ${env.SecreteStripe}`,
+            },
+          },
+          { status: 400, headers: { "request-id": "req_fixture" } },
+        ),
+      ),
+    );
+    try {
+      await sandboxStripe(env, "customers", new URLSearchParams());
+      throw new Error("Expected provider failure");
+    } catch (reason) {
+      expect(reason).toBeInstanceOf(BillingFailure);
+      expect((reason as BillingFailure).diagnostic).toEqual({
+        parameter: "customer",
+        message: "Invalid key [redacted]",
+        request_id: "req_fixture",
+      });
+    }
+  });
+
+  it("accepts PostgREST void acknowledgements after confirmed writes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+    await expect(
+      billingRpc(
+        env,
+        "save_sandbox_customer",
+        { _attempt_id: id, _customer_id: "cus_fixture" },
+        "Bearer user-token",
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      billingRpc(env, "release_sandbox_reconciliation", {
+        _subscription_id: "sub_fixture",
+        _lease: id,
+      }),
+    ).resolves.toBeNull();
+  });
+
   it("requires an account and same-origin requests before any provider access", async () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
@@ -112,6 +223,7 @@ describe("household sandbox subscriptions", () => {
         expect(form.get("customer")).toBe("cus_fixture");
         expect(form.get("line_items[0][price]")).toBe("price_month");
         expect(form.has("line_items[0][price_data][unit_amount]")).toBe(false);
+        expect(form.has("payment_method_types[0]")).toBe(false);
         expect(form.get("subscription_data[metadata][attempt_id]")).toBe(id);
         expect(form.get("success_url")).toBe(
           "https://app.skendal.com/subscription?checkout=returned",
@@ -122,7 +234,7 @@ describe("household sandbox subscriptions", () => {
           url: "https://checkout.stripe.com/c/pay/fixture",
         });
       }
-      if (path.endsWith("save_sandbox_checkout")) return json(null);
+      if (path.endsWith("save_sandbox_checkout")) return new Response(null, { status: 204 });
       throw new Error(`Unexpected ${path}`);
     });
     vi.stubGlobal("fetch", fetcher);
@@ -178,6 +290,17 @@ describe("household sandbox subscriptions", () => {
   });
 });
 describe("subscription webhook reconciliation", () => {
+  it("recognizes a portal cancellation scheduled at the period end without a legacy flag", () => {
+    const { cancel_at_period_end: legacy, ...modern } = current;
+    void legacy;
+    const end = current.items.data[0]!.current_period_end;
+    expect(subscriptionSnapshot({ ...modern, cancel_at: end }).cancel_at_period_end).toBe(true);
+    expect(subscriptionSnapshot({ ...modern, cancel_at: null }).cancel_at_period_end).toBe(false);
+    expect(subscriptionSnapshot({ ...modern, cancel_at: end - 3600 }).cancel_at_period_end).toBe(
+      false,
+    );
+  });
+
   it("normalizes the current Stripe per-item period and rejects live or multi-item states", () => {
     expect(subscriptionSnapshot(current)).toMatchObject({
       period_start: 1900000000,
