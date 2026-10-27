@@ -854,6 +854,7 @@ export type Database = {
       my_privacy_requests: { Args: Record<string, never>; Returns: Json };
       my_household_plan: { Args: Record<string, never>; Returns: Json };
 
+      household_photo_capacity: { Args: Record<string, never>; Returns: number };
       add_household_photo: { Args: { _path: string }; Returns: string };
       admin_business_overview: { Args: never; Returns: Json };
       admin_business_page: {

@@ -3,6 +3,7 @@ import {
   CalendarDays,
   CheckSquare,
   Home,
+  Images,
   LogOut,
   MoreHorizontal,
   Plus,
@@ -54,6 +55,9 @@ import { OfflineShopping } from "./OfflineShopping";
 import { useHouseholdAvatars } from "@/lib/member-avatars";
 import { useHouseholdPhotos } from "@/lib/household-photos";
 
+const HouseholdPhotos = lazy(() =>
+  import("./HouseholdPhotos").then((m) => ({ default: m.HouseholdPhotos })),
+);
 const Dashboard = lazy(() => import("./Dashboard").then((m) => ({ default: m.Dashboard })));
 const Finance = lazy(() => import("./Finance").then((m) => ({ default: m.Finance })));
 const FamilyCalendar = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyCalendar })));
@@ -62,7 +66,15 @@ const PersonalProfile = lazy(() =>
   import("./PersonalProfile").then((m) => ({ default: m.PersonalProfile })),
 );
 type Tab =
-  "home" | "chores" | "shopping" | "finance" | "calendar" | "notes" | "household" | "profile";
+  | "home"
+  | "chores"
+  | "shopping"
+  | "finance"
+  | "calendar"
+  | "notes"
+  | "photos"
+  | "household"
+  | "profile";
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Inicio", icon: Home },
   { id: "chores", label: "Tareas", icon: CheckSquare },
@@ -70,6 +82,7 @@ const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "finance", label: "Finanzas", icon: Wallet },
   { id: "calendar", label: "Calendario", icon: CalendarDays },
   { id: "notes", label: "Notas", icon: StickyNote },
+  { id: "photos", label: "Fotos", icon: Images },
   { id: "household", label: "Hogar", icon: Users },
   { id: "profile", label: "Mi perfil", icon: UserRound },
 ];
@@ -471,10 +484,15 @@ function HubShell({
   const canManage = mode === "account" && user?.role === "admin";
   const s = useHubState({ includeFinances: financialAccess, onContextRefresh, shoppingContext });
   const visibleTabs = TABS.filter(
-    (t) => (t.id !== "household" || canManage) && (t.id !== "profile" || mode === "account"),
+    (t) =>
+      (!["household", "photos"].includes(t.id) || canManage) &&
+      (t.id !== "profile" || mode === "account"),
   );
   useEffect(() => {
-    if ((tab === "finance" && !financialAccess) || (tab === "household" && !canManage))
+    if (
+      (tab === "finance" && !financialAccess) ||
+      (["household", "photos"].includes(tab) && !canManage)
+    )
       setTab("home");
   }, [tab, financialAccess, canManage]);
   const go = (next: Tab) => {
@@ -691,6 +709,7 @@ function HubShell({
                       initialNoteId={record?.tab === "notes" ? record.id : undefined}
                     />
                   )}
+                  {tab === "photos" && canManage && <HouseholdPhotos />}
                   {tab === "household" && canManage && (
                     <HouseholdSettings onMembersChanged={onContextRefresh} />
                   )}
@@ -745,7 +764,9 @@ function HubShell({
               onClick={() => go("shopping")}
             />
             <DockBtn
-              active={["calendar", "notes", "finance", "household", "profile"].includes(tab)}
+              active={["calendar", "notes", "photos", "finance", "household", "profile"].includes(
+                tab,
+              )}
               label="Más"
               Icon={MoreHorizontal}
               onClick={() => setMore(true)}
@@ -787,7 +808,7 @@ function HubShell({
           <div className="space-y-1">
             {visibleTabs
               .filter((t) =>
-                ["calendar", "notes", "finance", "household", "profile"].includes(t.id),
+                ["calendar", "notes", "photos", "finance", "household", "profile"].includes(t.id),
               )
               .map(({ id, label, icon: Icon }) => (
                 <Button

@@ -39,7 +39,7 @@ Deno.serve(async (request: Request) => {
     if (listed.error) throw listed.error;
     const photos = listed.data ?? [];
     if (
-      photos.length > 12 ||
+      photos.length > 30 ||
       photos.some((photo: { path: string }) => !photo.path.startsWith(household + "/"))
     )
       throw new Error("Invalid photo list");

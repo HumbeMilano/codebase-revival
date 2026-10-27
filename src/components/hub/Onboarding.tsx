@@ -12,7 +12,6 @@ import {
 } from "@/lib/account-validation";
 import { Avatar } from "./Kiosk";
 import { TabletPairingPane } from "./TabletPairing";
-import { HouseholdPhotos } from "./HouseholdPhotos";
 import { MEMBERS, setMembers as setHouseholdMembers } from "./data";
 import {
   AlertDialog,
@@ -692,7 +691,6 @@ export function HouseholdSettings({
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <HouseholdPhotos />
       <section className="rounded-[1.75rem] bg-lilac p-5">
         <h2 className="flex items-center gap-2 font-display text-xl font-bold">
           <UserPlus className="size-5" /> Invitar

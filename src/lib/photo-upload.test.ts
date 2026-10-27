@@ -80,6 +80,6 @@ describe("household photo recovery", () => {
     expect(photoErrorMessage({ message: "new row violates row-level security policy" })).toContain(
       "cuenta adulta",
     );
-    expect(photoErrorMessage({ message: "At most 12 household photos" })).toContain("12 fotos");
+    expect(photoErrorMessage({ message: "At most 30 household photos" })).toContain("30 fotos");
   });
 });

@@ -2,16 +2,20 @@ export const content = {
   en: {
     title: "Skendal — Less to juggle. More time together.",
     description:
-      "A shared place for household tasks, shopping lists, calendar, notes and bills. On your phone and the family tablet.",
+      "A free plan for household tasks, shopping lists, calendar, notes and bills. On your phone and the family tablet, with optional Pro.",
     skip: "Skip to content",
     navigation: "Main navigation",
     language: "Choose your language",
     nav: ["Everyday life", "The home tablet", "Good questions"],
     login: "Open app",
-    cta: "Explore Skendal",
-    ctaShort: "View proposal",
+    cta: "Explore the Free plan",
+    ctaShort: "What’s included",
     explore: "Take a look inside",
     eyebrow: "HOME LIFE, A LITTLE MORE TOGETHER",
+    freeLabel: "Free plan",
+    freeNote: "No card needed. Pro is optional.",
+    freeDescription:
+      "Tasks, shopping lists, calendar, notes and household photos. The essentials, together.",
     hero: ["Less to juggle.", "More time", "together."],
     intro:
       "The shopping list. The school dates. That thing someone was going to do. Give it all a shared home, and get on with your day.",
@@ -76,7 +80,7 @@ export const content = {
     ],
     tabletLink: "Link a tablet",
     pricingEyebrow: "A SIMPLE START",
-    pricingTitle: "Start with your household.",
+    pricingTitle: "Your household. A free place to start.",
     pricingIntro:
       "Two proposed plans for your household. Commercial launch will follow company formation. These are planned prices, not an active offer.",
     monthly: "Monthly",
@@ -122,16 +126,20 @@ export const content = {
   es: {
     title: "Skendal — Menos pendientes. Más tiempo juntos.",
     description:
-      "Un espacio compartido para tareas, listas de compras, calendario, notas y gastos del hogar. En tu teléfono y en la tablet de casa.",
+      "Un plan gratis para tareas, listas de compras, calendario, notas y gastos del hogar. En tu teléfono y en la tablet de casa, con Pro opcional.",
     skip: "Saltar al contenido",
     navigation: "Navegación principal",
     language: "Elige tu idioma",
     nav: ["Tu día a día", "La tablet de casa", "Preguntas"],
     login: "Abrir app",
-    cta: "Conoce Skendal",
-    ctaShort: "Ver propuesta",
+    cta: "Conoce el plan gratis",
+    ctaShort: "Qué incluye",
     explore: "Conocer Skendal",
     eyebrow: "LA VIDA EN CASA, MÁS COMPARTIDA",
+    freeLabel: "Plan gratis",
+    freeNote: "Sin tarjeta. Pro es opcional.",
+    freeDescription:
+      "Tareas, listas de compras, calendario, notas y fotos del hogar. Lo esencial, en un solo lugar.",
     hero: ["Menos pendientes.", "Más tiempo", "juntos."],
     intro:
       "La compra, las fechas del colegio, eso que alguien iba a hacer. Dale a todo un lugar compartido y sigue con tu día.",
@@ -196,7 +204,7 @@ export const content = {
     ],
     tabletLink: "Vincular una tablet",
     pricingEyebrow: "UN COMIENZO SENCILLO",
-    pricingTitle: "Empieza por tu hogar.",
+    pricingTitle: "Tu hogar, con un plan gratis.",
     pricingIntro:
       "Dos planes propuestos para tu hogar. El lanzamiento comercial será después de constituir la empresa; estos son precios previstos, no una oferta activa.",
     monthly: "Mensual",

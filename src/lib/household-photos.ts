@@ -89,7 +89,7 @@ class PhotoStore {
         }
         if (!this.valid(controller)) return;
         const rows = [...metadata].sort((a, b) => a.position - b.position);
-        if (rows.length > 12 || rows.some((row) => !row.path.startsWith(this.householdId + "/")))
+        if (rows.length > 30 || rows.some((row) => !row.path.startsWith(this.householdId + "/")))
           throw new Error("Invalid photo scope");
         this.rows = rows;
         this.metadataKnown = true;

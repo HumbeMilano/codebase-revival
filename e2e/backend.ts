@@ -92,6 +92,7 @@ export class HouseholdBackend {
   unexpectedRequests: string[] = [];
   shoppingReceipts = new Map<string, unknown>();
   photos: Row[] = [];
+  photoCapacity = 30;
   photoObjects = new Map<string, Buffer>();
   avatarObjects = new Map<string, Buffer>();
   profile: Row = { id: USER_ID, avatar_path: null, preferred_view: "auto", time_format: "24" };
@@ -484,6 +485,8 @@ export class HouseholdBackend {
           },
         };
       }
+      case "household_photo_capacity":
+        return { json: this.photoCapacity };
       case "list_household_photos":
         return { json: this.photos.map(({ url, ...photo }) => photo) };
       case "household_avatar_paths":

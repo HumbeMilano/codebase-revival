@@ -32,7 +32,7 @@ Ambos incluyen tareas, calendario, notas, finanzas y compras con funcionamiento 
 | Miembros            | 4    | 12                |
 | Listas activas      | 3    | 20                |
 | Tablets vinculadas  | 1    | 3                 |
-| Fotos de bloqueo    | 3    | 12                |
+| Fotos de bloqueo    | 10   | 30                |
 | Widgets por inicio  | 6    | Catálogo completo |
 
 Las cinco capacidades y los precios son editables con control de revisión desde la consola. Los límites están desactivados durante la preparación. Los disparadores del servidor están preparados para altas/incrementos cuando se active el despliegue de límites mediante una futura operación revisada. Superar una capacidad existente no borra datos; reducir o archivar debe seguir siendo posible. El plan manual real sigue separado de la simulación sandbox. No anunciar disponibilidad ilimitada ni activar límites antes de avisar y validar el tratamiento de hogares existentes.
