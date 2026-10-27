@@ -19,7 +19,8 @@
     "test:db": "python3 scripts/test-database.py",
     "build:site": "node scripts/build-site.mjs",
     "export:brand": "node scripts/export-brand.mjs",
-    "test:site": "playwright test --config playwright.site.config.mjs"
+    "test:site": "playwright test --config playwright.site.config.mjs",
+    "export:pwa": "node scripts/export-pwa-icons.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1",
