@@ -4,13 +4,13 @@ import { HubApp } from "@/components/hub/HubApp";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "HomeHub — El centro de mando de tu hogar" },
+      { title: "Skendal" },
       {
         name: "description",
         content:
           "Tareas, compras, calendario y gastos compartidos para toda la familia, en la tablet de casa y en cada móvil.",
       },
-      { property: "og:title", content: "HomeHub — El centro de mando de tu hogar" },
+      { property: "og:title", content: "Skendal" },
       {
         property: "og:description",
         content: "Tareas, compras, calendario y gastos compartidos para toda la familia.",
