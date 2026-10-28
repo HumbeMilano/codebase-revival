@@ -297,7 +297,7 @@ test("profile logout preserves membership while unlinking requires its own confi
   await backend.install(page);
   await signIn(page);
   await section(page, "Mi perfil");
-  await page.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
+  await page.getByRole("main").getByRole("button", { name: "Cerrar sesión", exact: true }).click();
   await expect(page.getByLabel("Contraseña", { exact: true })).toBeVisible();
   expect(backend.logoutRequests).toBe(1);
   expect(backend.leaveRequests).toBe(0);

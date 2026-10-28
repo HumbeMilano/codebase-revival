@@ -534,18 +534,20 @@ function Mini({ label, value }: { label: string; value: number }) {
   );
 }
 function SignIn() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (busy) return;
+    const values = new FormData(e.currentTarget);
+    const email = values.get("username");
+    const password = values.get("password");
     setBusy(true);
     setError("");
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+        email: typeof email === "string" ? email.trim() : "",
+        password: typeof password === "string" ? password : "",
       });
       if (signInError) setError("Correo o contraseña incorrectos.");
     } catch {
@@ -555,7 +557,7 @@ function SignIn() {
     }
   };
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form id="admin-login" method="post" onSubmit={submit} className="space-y-4">
       <h1 className="font-display text-3xl font-bold">Administración</h1>
       <input
         aria-label="Correo"
@@ -565,8 +567,6 @@ function SignIn() {
         required
         autoComplete="username"
         placeholder="Correo"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
         className="w-full rounded-xl border bg-card px-3 py-3"
       />
       <input
@@ -577,8 +577,6 @@ function SignIn() {
         required
         autoComplete="current-password"
         placeholder="Contraseña"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
         className="w-full rounded-xl border bg-card px-3 py-3"
       />
       {error && (

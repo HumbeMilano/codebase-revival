@@ -45,8 +45,7 @@ function ResetPassword() {
   const [mode, setMode] = useState<"loading" | "request" | "sent" | "password" | "done">("loading");
   const [email, setEmail] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const passwordForm = useRef<HTMLFormElement>(null);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -102,6 +101,8 @@ function ResetPassword() {
         if (!current()) return;
         if (latest.error || !latest.data.session || !sameSession(session, latest.data.session))
           throw new Error("Invalid session");
+        if (verified.current && !sameSession(verified.current, latest.data.session))
+          passwordForm.current?.reset();
         verified.current = latest.data.session;
         setAccountEmail(user.data.user.email ?? "");
         if (fromLink) rememberPasswordRecovery(latest.data.session);
@@ -138,8 +139,7 @@ function ResetPassword() {
           setMode("request");
         }
         verified.current = null;
-        setPassword("");
-        setConfirm("");
+        passwordForm.current?.reset();
         forgetPasswordRecovery();
       }
     });
@@ -162,9 +162,9 @@ function ResetPassword() {
     };
   }, []);
 
-  const request = async () => {
+  const request = async (address = email) => {
     if (working.current || cooldown) return;
-    const parsed = credentials.shape.email.safeParse(email);
+    const parsed = credentials.shape.email.safeParse(address);
     if (!parsed.success) {
       setError("Escribe un correo válido.");
       return;
@@ -188,16 +188,19 @@ function ResetPassword() {
       if (active.current) setBusy(false);
     }
   };
-  const save = async (event: React.FormEvent) => {
+  const save = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const bound = verified.current;
     if (working.current || !bound) return;
-    const parsed = credentials.shape.password.safeParse(password);
+    // Read native values at submission. A password provider need not dispatch
+    // React's change event, and rerenders must never overwrite its generated value.
+    const values = new FormData(event.currentTarget);
+    const parsed = credentials.shape.password.safeParse(values.get("new-password"));
     if (!parsed.success) {
       setError("Usa al menos 6 caracteres y un máximo de 128.");
       return;
     }
-    if (password !== confirm) {
+    if (parsed.data !== values.get("confirm-password")) {
       setError("Las contraseñas no coinciden.");
       return;
     }
@@ -227,8 +230,7 @@ function ResetPassword() {
       if (result.error) throw result.error;
       forgetPasswordRecovery();
       verified.current = null;
-      setPassword("");
-      setConfirm("");
+      passwordForm.current?.reset();
       setMode("done");
     } catch (reason) {
       if (active.current) setError(passwordRecoveryError(reason));
@@ -258,8 +260,7 @@ function ResetPassword() {
       verified.current = null;
       forgetPasswordRecovery();
       clearArrival();
-      setPassword("");
-      setConfirm("");
+      passwordForm.current?.reset();
       setAccountEmail("");
       setError("");
       if (requestAnother) setMode("request");
@@ -329,7 +330,13 @@ function ResetPassword() {
             </button>
           </>
         ) : mode === "password" ? (
-          <form onSubmit={save} className="space-y-4">
+          <form
+            ref={passwordForm}
+            id="reset-password-form"
+            method="post"
+            onSubmit={save}
+            className="space-y-4"
+          >
             <label className="block text-sm font-semibold">
               Correo de la cuenta
               <input
@@ -352,8 +359,7 @@ function ResetPassword() {
                 required
                 minLength={6}
                 maxLength={128}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                disabled={busy}
                 className={field}
               />
             </label>
@@ -367,13 +373,15 @@ function ResetPassword() {
                 required
                 minLength={6}
                 maxLength={128}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                disabled={busy}
                 className={field}
               />
             </label>
             <button
               type="button"
+              disabled={busy}
+              aria-pressed={visible}
+              aria-controls="new-password confirm-password"
               className="flex items-center gap-2 py-1 text-sm"
               onClick={() => setVisible((value) => !value)}
             >
@@ -394,9 +402,12 @@ function ResetPassword() {
           </form>
         ) : (
           <form
+            id="request-password-reset"
+            method="post"
             onSubmit={(event) => {
               event.preventDefault();
-              void request();
+              const value = new FormData(event.currentTarget).get("email");
+              void request(typeof value === "string" ? value : "");
             }}
             className="space-y-4"
           >
@@ -408,11 +419,12 @@ function ResetPassword() {
               Correo
               <input
                 type="email"
+                id="recovery-request-email"
+                name="email"
                 autoComplete="email"
                 required
                 maxLength={255}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                defaultValue={email}
                 className={field}
               />
             </label>
