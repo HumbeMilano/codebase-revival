@@ -12,6 +12,7 @@ import {
 } from "@/lib/account-validation";
 import { Avatar } from "./Kiosk";
 import { TabletPairingPane } from "./TabletPairing";
+import { PinEditor } from "./PinEditor";
 import { MEMBERS, setMembers as setHouseholdMembers } from "./data";
 import {
   AlertDialog,
@@ -26,7 +27,6 @@ import {
 
 const field =
   "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-ring";
-const pinField = (v: string) => v.replace(/\D/g, "").slice(0, 4);
 const errMsg = (e: { message?: string } | null) => {
   const m = e?.message ?? "";
   if (m.includes("Household suspended"))
@@ -216,7 +216,10 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
         <label className="block text-sm font-semibold">
           Correo
           <input
+            id="account-email"
+            name="username"
             type="email"
+            autoComplete="username"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -226,6 +229,8 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
         <label className="block text-sm font-semibold">
           Contraseña
           <input
+            id="account-password"
+            name="password"
             type="password"
             required
             minLength={6}
@@ -363,19 +368,7 @@ export function SetupHousehold({ compact, onDone }: { compact: boolean; onDone: 
             />
           </label>
         )}
-        <label className="block text-sm font-semibold">
-          Tu PIN (4 números)
-          <input
-            type="password"
-            autoComplete="new-password"
-            inputMode="numeric"
-            maxLength={4}
-            required
-            value={pin}
-            onChange={(e) => setPin(pinField(e.target.value))}
-            className={cn(field, "font-display tracking-[0.5em]")}
-          />
-        </label>
+        <PinEditor label="Tu PIN (4 números)" value={pin} onChange={setPin} disabled={busy} />
         <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl">
           {view === "create" ? "Crear hogar" : "Unirme"}
         </Button>
@@ -875,17 +868,11 @@ export function HouseholdSettings({
                 </button>
               ))}
             </div>
-            <input
-              type="password"
-              autoComplete="new-password"
-              inputMode="numeric"
-              required
-              maxLength={4}
-              aria-label="PIN de 4 números"
-              placeholder="PIN (4 números)"
+            <PinEditor
+              label="PIN de 4 números"
               value={adding.pin}
-              onChange={(e) => setAdding({ ...adding, pin: pinField(e.target.value) })}
-              className={cn(field, "font-display tracking-[0.5em]")}
+              disabled={busy}
+              onChange={(pin) => setAdding({ ...adding, pin })}
             />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setAdding(null)}>
@@ -927,16 +914,13 @@ export function HouseholdSettings({
                       {r === "admin" ? "Adulto" : "Hijo/a"}
                     </button>
                   ))}
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    inputMode="numeric"
-                    maxLength={4}
-                    aria-label="PIN nuevo (opcional)"
-                    placeholder="PIN nuevo"
+                  <PinEditor
+                    label="PIN nuevo (opcional)"
                     value={editing.pin}
-                    onChange={(e) => setEditing({ ...editing, pin: pinField(e.target.value) })}
-                    className={cn(field, "w-36 font-display tracking-[0.3em]")}
+                    disabled={busy}
+                    optional
+                    className="w-full"
+                    onChange={(pin) => setEditing({ ...editing, pin })}
                   />
                   <Button type="button" variant="ghost" onClick={() => setEditing(null)}>
                     Cancelar

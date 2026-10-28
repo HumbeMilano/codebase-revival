@@ -106,6 +106,13 @@ export class HouseholdBackend {
   photoRegistrationRequests = 0;
   losePhotoRegistrationAt: number | null = null;
   recoveryRequests: { email: string; redirect: string | null }[] = [];
+  hasHousehold = true;
+  members = [
+    { key: memberKey, name: "Ana", role: "admin" },
+    { key: "m_nico", name: "Nico", role: "member" },
+  ];
+  setupRequests: { method: string; args: Row }[] = [];
+  memberChanges: { method: string; args: Row }[] = [];
   passwordUpdates = 0;
   failNextPasswordUpdate = false;
   dashboardPreference: Row | null = null;
@@ -453,6 +460,7 @@ export class HouseholdBackend {
         return { json: [this.dashboardPreference] };
       }
       case "my_context":
+        if (!this.hasHousehold) return { json: [] };
         return {
           json: [
             {
@@ -464,7 +472,30 @@ export class HouseholdBackend {
           ],
         };
       case "household_members":
-        return { json: [member, { key: "m_nico", name: "Nico", role: "member" }] };
+        return { json: this.members };
+      case "create_household":
+      case "redeem_invite":
+        this.setupRequests.push({ method: name, args });
+        this.hasHousehold = true;
+        return { json: HOME_ID };
+      case "create_member": {
+        this.memberChanges.push({ method: name, args });
+        const created = {
+          key: `m_${crypto.randomUUID()}`,
+          name: String(args["_name"]),
+          role: String(args["_role"]),
+        };
+        this.members.push(created);
+        return { json: created.key };
+      }
+      case "update_member": {
+        this.memberChanges.push({ method: name, args });
+        const changed = this.members.find((member) => member.key === args["_key"]);
+        if (!changed) return { status: 404, json: { message: "Member not found" } };
+        changed.name = String(args["_name"]);
+        changed.role = String(args["_role"]);
+        return { json: null };
+      }
       case "tablet_pairing_preview":
       case "tablet_pairing_status":
       case "approve_tablet_pairing":
