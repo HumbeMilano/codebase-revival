@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { HubApp } from "@/components/hub/HubApp";
+import { passwordRecoveryArrival } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   beforeLoad: () => {
@@ -13,6 +14,9 @@ export const Route = createFileRoute("/")({
         replace: true,
         reloadDocument: true,
       });
+    // Auth may have consumed the fragment before this route resolves. Preserve
+    // the captured intent and initialized session with an in-app navigation.
+    if (passwordRecoveryArrival.recovery) throw redirect({ to: "/reset-password", replace: true });
   },
   head: () => ({
     meta: [

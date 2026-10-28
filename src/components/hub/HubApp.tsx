@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   CalendarDays,
   CheckSquare,
@@ -44,6 +45,7 @@ import {
 import { toast } from "sonner";
 import { setHouseholdId } from "@/lib/hub-db";
 import { sessionIdentity } from "@/lib/session-identity";
+import { canResumePasswordRecovery, rememberPasswordRecovery } from "@/lib/password-recovery";
 import { personalPreferences } from "@/lib/account-validation";
 import {
   ACTIVE_SHOPPING_ACCOUNT,
@@ -88,7 +90,8 @@ const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
 ];
 type Gate =
   | { status: "offline"; context: ShoppingContext }
-  | { status: "loading" | "welcome" | "setup" }
+  | { status: "loading" | "welcome" }
+  | { status: "setup"; email: string }
   | { status: "error"; message: string }
   | {
       status: "ready";
@@ -110,6 +113,7 @@ const gateError = (error: unknown) => {
 
 /** Only the latest resolved snapshot is allowed to change shared household state. */
 export function HubApp() {
+  const navigate = useNavigate();
   useEffect(() => {
     try {
       for (const key of Object.keys(localStorage))
@@ -169,6 +173,12 @@ export function HubApp() {
       } = await supabase.auth.getSession();
       requestedAccountId = session?.user.id ?? null;
       if (sessionError) throw sessionError;
+      if (revision !== sequence.current) return;
+      if (session && canResumePasswordRecovery(session)) {
+        invalidateDbContext();
+        await navigate({ to: "/reset-password", replace: true });
+        return;
+      }
       const token = getDeviceToken();
       if (!session && !token) {
         if (revision === sequence.current) {
@@ -180,14 +190,18 @@ export function HubApp() {
         return;
       }
       let userId: string | null = null;
+      let email = "";
       if (session) {
         const {
           data: { user },
           error,
         } = await supabase.auth.getUser();
-        if (error || !user) throw error ?? new Error("Sesión no válida");
+        if (error || !user || user.id !== session.user.id)
+          throw error ?? new Error("Sesión no válida");
         userId = user.id;
+        email = user.email ?? "";
       }
+      if (revision !== sequence.current) return;
       const identity =
         userId && session ? sessionIdentity(userId, session.access_token) : `device:${token}`;
       candidate = prepareDbContext({
@@ -199,6 +213,12 @@ export function HubApp() {
       if (error) throw error;
       const context = data?.[0];
       if (!context) {
+        let admin = false;
+        if (userId) {
+          const result = await candidate.client.rpc("am_platform_admin");
+          if (result.error) throw result.error;
+          admin = result.data === true;
+        }
         if (revision !== sequence.current) {
           candidate.discard();
           return;
@@ -208,7 +228,11 @@ export function HubApp() {
         setMembers([]);
         setHouseholdId("");
         localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
-        if (userId) setGate({ status: "setup" });
+        if (admin) {
+          await navigate({ to: "/admin", replace: true });
+          return;
+        }
+        if (userId) setGate({ status: "setup", email });
         else {
           forgetDevice();
           setGate({ status: "welcome" });
@@ -281,7 +305,7 @@ export function HubApp() {
         setGate({ status: "error", message: gateError(error) });
       }
     }
-  }, [loadPreferences]);
+  }, [loadPreferences, navigate]);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 899px)");
     const resize = () => setCompact(media.matches);
@@ -293,7 +317,17 @@ export function HubApp() {
     media.addEventListener("change", resize);
     window.addEventListener("online", network);
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      const signedIn = event === "SIGNED_IN" || event === "PASSWORD_RECOVERY";
+      if (event === "PASSWORD_RECOVERY" && session) {
+        // A recovery callback is not an ordinary login. Cancel any household
+        // resolution before it can render setup; SDK work stays outside its lock.
+        sequence.current++;
+        invalidateDbContext();
+        rememberPasswordRecovery(session);
+        setGate({ status: "loading" });
+        setTimeout(() => void navigate({ to: "/reset-password", replace: true }), 0);
+        return;
+      }
+      const signedIn = event === "SIGNED_IN";
       if (event === "TOKEN_REFRESHED" && session) {
         if (currentDbIdentity() === sessionIdentity(session.user.id, session.access_token))
           updateAccountToken(session.access_token);
@@ -323,7 +357,7 @@ export function HubApp() {
       window.removeEventListener("online", network);
       data.subscription.unsubscribe();
     };
-  }, [reload]);
+  }, [reload, navigate]);
   const refreshContext = useCallback(async () => {
     const revision = sequence.current;
     const request = ++contextRevision.current;
@@ -390,7 +424,7 @@ export function HubApp() {
         )}
         {gate.status === "setup" && (
           <div className="min-h-dvh">
-            <SetupHousehold compact={compact} onDone={() => void reload()} />
+            <SetupHousehold compact={compact} email={gate.email} onDone={() => void reload()} />
           </div>
         )}
         {gate.status === "error" && (
@@ -715,7 +749,11 @@ function HubShell({
                     <HouseholdSettings onMembersChanged={onContextRefresh} />
                   )}
                   {tab === "profile" && mode === "account" && (
-                    <PersonalProfile onSaved={onProfileSaved} onHouseholdLeft={onReload} />
+                    <PersonalProfile
+                      onSaved={onProfileSaved}
+                      onHouseholdLeft={onReload}
+                      onSignOut={logout}
+                    />
                   )}
                 </Suspense>
               )}

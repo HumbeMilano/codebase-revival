@@ -107,7 +107,8 @@ export function PrivacyRequests() {
       {open && (
         <>
           <p className="text-sm text-muted-foreground">
-            Envía una solicitud al administrador del servicio. Salir del hogar no elimina tu cuenta.
+            Envía una solicitud al administrador del servicio. Desvincularte del hogar no elimina tu
+            cuenta.
           </p>
           <form
             className="space-y-3"

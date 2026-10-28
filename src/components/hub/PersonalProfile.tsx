@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { PrivacyRequests } from "./PrivacyRequests";
 import { useCallback, useEffect, useState } from "react";
-import { Camera, LogOut, RefreshCw, Trash2, UserRound } from "lucide-react";
+import { Camera, LogOut, RefreshCw, Trash2, Unlink, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { clearFinanceAccess } from "@/lib/db";
+import { clearFinanceAccess, db } from "@/lib/db";
 import { personalPreferences } from "@/lib/account-validation";
 import { PasskeySettings } from "./PasskeySettings";
 
@@ -23,9 +23,11 @@ const field = "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base
 export function PersonalProfile({
   onSaved,
   onHouseholdLeft,
+  onSignOut,
 }: {
   onSaved: () => void;
   onHouseholdLeft?: () => void;
+  onSignOut: () => Promise<void>;
 }) {
   const [id, setId] = useState("");
   const [path, setPath] = useState<string | null>(null);
@@ -37,6 +39,7 @@ export function PersonalProfile({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [leaving, setLeaving] = useState(false);
+  const [understood, setUnderstood] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -192,15 +195,16 @@ export function PersonalProfile({
     }
   };
   const leave = async () => {
-    if (busy) return;
+    if (busy || !understood) return;
+    const client = db();
     setBusy(true);
     setError("");
     try {
       await clearFinanceAccess();
-      const { error: leaveError } = await supabase.rpc("leave_household");
+      const { error: leaveError } = await client.rpc("leave_household");
       if (leaveError) {
         if (leaveError.message.includes("last adult"))
-          throw new Error("Vincula otra cuenta adulta al hogar antes de salir.");
+          throw new Error("Vincula otra cuenta adulta antes de desvincular la tuya del hogar.");
         throw leaveError;
       }
       setLeaving(false);
@@ -210,7 +214,7 @@ export function PersonalProfile({
       setError(
         reason instanceof Error
           ? reason.message
-          : "No se pudo salir del hogar. Revisa la conexión.",
+          : "No se pudo desvincular tu cuenta. Revisa la conexión.",
       );
       setLeaving(false);
     } finally {
@@ -335,8 +339,17 @@ export function PersonalProfile({
       </Link>
       <PrivacyRequests />
       <PasskeySettings />
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        disabled={busy}
+        onClick={() => void onSignOut()}
+      >
+        <LogOut /> Cerrar sesión
+      </Button>
       <section className="rounded-2xl border p-4">
-        <h2 className="font-display font-semibold">Tu cuenta y el hogar</h2>
+        <h2 className="font-display font-semibold">Desvincular mi cuenta</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Puedes desvincular tu cuenta. Tus tareas, notas y aportes permanecen en el hogar para
           conservar su historial.
@@ -346,36 +359,53 @@ export function PersonalProfile({
           variant="outline"
           className="mt-4"
           disabled={busy || !id}
-          onClick={() => setLeaving(true)}
+          onClick={() => {
+            setUnderstood(false);
+            setLeaving(true);
+          }}
         >
-          <LogOut />
-          Salir del hogar
+          <Unlink />
+          Desvincular mi cuenta
         </Button>
       </section>
       <AlertDialog
         open={leaving}
         onOpenChange={(open) => {
-          if (!busy) setLeaving(open);
+          if (!busy) {
+            setLeaving(open);
+            if (!open) setUnderstood(false);
+          }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Salir del hogar?</AlertDialogTitle>
+            <AlertDialogTitle>¿Desvincular tu cuenta del hogar?</AlertDialogTitle>
             <AlertDialogDescription>
               Tu cuenta perderá el acceso a este hogar. Necesitarás una nueva invitación para
-              volver. El historial del hogar se conserva.
+              volver. El historial del hogar se conserva. Para cerrar sesión y mantener tu acceso,
+              cancela y utiliza «Cerrar sesión».
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <label className="flex items-start gap-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={understood}
+              disabled={busy}
+              onChange={(event) => setUnderstood(event.target.checked)}
+              className="mt-0.5 size-4 shrink-0"
+            />
+            Entiendo que necesitaré una nueva invitación para volver.
+          </label>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              disabled={busy}
+              disabled={busy || !understood}
               onClick={(event) => {
                 event.preventDefault();
                 void leave();
               }}
             >
-              Salir del hogar
+              Desvincular mi cuenta
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
