@@ -559,9 +559,11 @@ function SignIn() {
       <h1 className="font-display text-3xl font-bold">Administración</h1>
       <input
         aria-label="Correo"
+        id="admin-email"
+        name="username"
         type="email"
         required
-        autoComplete="email"
+        autoComplete="username"
         placeholder="Correo"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
@@ -569,6 +571,8 @@ function SignIn() {
       />
       <input
         aria-label="Contraseña"
+        id="admin-password"
+        name="password"
         type="password"
         required
         autoComplete="current-password"

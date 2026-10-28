@@ -274,6 +274,8 @@ function PairingLogin() {
           className="mt-1 w-full rounded-xl border bg-background px-3 py-3"
           type="email"
           autoComplete="username"
+          id="pairing-email"
+          name="username"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -285,6 +287,8 @@ function PairingLogin() {
           className="mt-1 w-full rounded-xl border bg-background px-3 py-3"
           type="password"
           autoComplete="current-password"
+          id="pairing-password"
+          name="password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}

@@ -44,6 +44,7 @@ const sameSession = (a: Session, b: Session) =>
 function ResetPassword() {
   const [mode, setMode] = useState<"loading" | "request" | "sent" | "password" | "done">("loading");
   const [email, setEmail] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [visible, setVisible] = useState(false);
@@ -102,6 +103,7 @@ function ResetPassword() {
         if (latest.error || !latest.data.session || !sameSession(session, latest.data.session))
           throw new Error("Invalid session");
         verified.current = latest.data.session;
+        setAccountEmail(user.data.user.email ?? "");
         if (fromLink) rememberPasswordRecovery(latest.data.session);
         setError("");
         setMode("password");
@@ -297,8 +299,22 @@ function ResetPassword() {
         ) : mode === "password" ? (
           <form onSubmit={save} className="space-y-4">
             <label className="block text-sm font-semibold">
+              Correo de la cuenta
+              <input
+                id="recovery-email"
+                name="username"
+                type="email"
+                autoComplete="username"
+                readOnly
+                value={accountEmail}
+                className={field}
+              />
+            </label>
+            <label className="block text-sm font-semibold">
               Nueva contraseña
               <input
+                id="new-password"
+                name="new-password"
                 type={visible ? "text" : "password"}
                 autoComplete="new-password"
                 required
@@ -312,6 +328,8 @@ function ResetPassword() {
             <label className="block text-sm font-semibold">
               Repetir contraseña
               <input
+                id="confirm-password"
+                name="confirm-password"
                 type={visible ? "text" : "password"}
                 autoComplete="new-password"
                 required

@@ -27,6 +27,17 @@ test("a recovery link survives reload, validates confirmation, saves and returns
   await backend.install(page);
   await page.goto(recoveryPath());
   await expect(page.getByRole("heading", { name: "Nueva contraseña", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Correo de la cuenta", { exact: true })).toHaveValue(
+    "ana@example.invalid",
+  );
+  await expect(page.getByLabel("Correo de la cuenta", { exact: true })).toHaveAttribute(
+    "autocomplete",
+    "username",
+  );
+  await expect(page.getByLabel("Correo de la cuenta", { exact: true })).toHaveAttribute(
+    "readonly",
+    "",
+  );
   await expect(page).toHaveURL(/\/reset-password$/);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Nueva contraseña", exact: true })).toBeVisible();

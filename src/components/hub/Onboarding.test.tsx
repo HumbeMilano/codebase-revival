@@ -37,6 +37,9 @@ describe("account entry", () => {
       .mockResolvedValueOnce({ error: null, data: { session: {} } });
     render(<Welcome compact onPaired={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Correo"), { target: { value: "ana@example.com" } });
+    expect(screen.getByLabelText("Correo")).toHaveAttribute("autocomplete", "username");
+    expect(screen.getByLabelText("Correo")).toHaveAttribute("name", "username");
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("autocomplete", "current-password");
     fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "password123" } });
     const submit = screen
       .getAllByRole("button", { name: "Entrar" })
