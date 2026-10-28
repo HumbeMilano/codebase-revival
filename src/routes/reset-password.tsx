@@ -13,6 +13,7 @@ import { sessionIdentity } from "@/lib/session-identity";
 import {
   canResumePasswordRecovery,
   forgetPasswordRecovery,
+  recoveryArrival,
   passwordRecoveryError,
   rememberPasswordRecovery,
 } from "@/lib/password-recovery";
@@ -64,6 +65,13 @@ function ResetPassword() {
   useEffect(() => {
     active.current = true;
     const counter = checks.current;
+    const newLink = () => {
+      const incoming = recoveryArrival(new URL(window.location.href));
+      // A second link to this same pathname is a same-document navigation.
+      // Restart Auth's supported callback handling once with the new fragment.
+      if (incoming.recovery || incoming.error) window.location.reload();
+    };
+    window.addEventListener("hashchange", newLink);
     const verify = async (fromLink: boolean, token: string | null) => {
       const check = ++counter.value;
       const current = () => active.current && check === counter.value;
@@ -133,7 +141,7 @@ function ResetPassword() {
         forgetPasswordRecovery();
       }
     });
-    if (arrival.current.error) {
+    if (arrival.current.error || (arrival.current.recovery && !arrival.current.token)) {
       forgetPasswordRecovery();
       setError(expired);
       setMode("request");
@@ -147,6 +155,7 @@ function ResetPassword() {
     return () => {
       active.current = false;
       counter.value++;
+      window.removeEventListener("hashchange", newLink);
       subscription.unsubscribe();
     };
   }, []);

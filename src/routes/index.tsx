@@ -7,7 +7,12 @@ export const Route = createFileRoute("/")({
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery"
     )
-      throw redirect({ to: "/reset-password", hash: window.location.hash.slice(1), replace: true });
+      throw redirect({
+        to: "/reset-password",
+        hash: window.location.hash.slice(1),
+        replace: true,
+        reloadDocument: true,
+      });
   },
   head: () => ({
     meta: [

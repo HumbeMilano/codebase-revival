@@ -123,6 +123,21 @@ test("an invalid recovery token cannot reuse a valid existing login as recovery 
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
+test("a fresh link opened in the existing recovery tab reaches the password form", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  await backend.install(page);
+  await page.goto("/reset-password");
+  await expect(page.getByLabel("Correo", { exact: true })).toBeVisible();
+  await page.goto(recoveryPath());
+  await expect(page.getByRole("heading", { name: "Nueva contraseña", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/reset-password$/);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Nueva contraseña", exact: true })).toBeVisible();
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
 test("a failed recovery email request leaves a working retry", async ({ page }) => {
   const backend = new HouseholdBackend();
   await backend.install(page);
