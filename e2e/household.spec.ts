@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { HOME_ID, HouseholdBackend, openTabletPin, enterPin, section, signIn } from "./backend";
+import {
+  HOME_ID,
+  HouseholdBackend,
+  openTabletPin,
+  enterPin,
+  section,
+  signIn,
+  adminSignIn,
+} from "./backend";
 
 test("a real viewport can create household records and reload confirmed data", async ({
   page,
@@ -121,7 +129,7 @@ test("ordinary accounts cannot claim platform administration", async ({ page }) 
   const backend = new HouseholdBackend();
   await backend.install(page);
   await signIn(page);
-  await page.goto("/admin");
+  await adminSignIn(page, false);
   await expect(page.getByRole("heading", { name: "Sin acceso", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ser administrador" })).toHaveCount(0);
   expect(backend.unexpectedRequests).toEqual([]);
@@ -132,8 +140,7 @@ test("platform action failure remains visible", async ({ page }) => {
   backend.platformAdmin = true;
   backend.failAdminAction = true;
   await backend.install(page);
-  await signIn(page);
-  await page.goto("/admin");
+  await adminSignIn(page);
   await page.getByRole("button", { name: "Pasar a Pro", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("La acción no se pudo completar");
   expect(backend.unexpectedRequests).toEqual([]);

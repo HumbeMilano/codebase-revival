@@ -1,10 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { AdminPage } from "@/components/admin/AdminPage";
+import { adminEntry } from "@/lib/pwa-context";
 
 export const Route = createFileRoute("/admin")({
+  beforeLoad: () => {
+    throw redirect({
+      href: adminEntry(new URL(window.location.href)),
+      reloadDocument: true,
+      replace: true,
+    });
+  },
   head: () => ({
     meta: [
-      { title: "Administración del servicio — HomeHub" },
+      { title: "Skendal Admin" },
       {
         name: "description",
         content:

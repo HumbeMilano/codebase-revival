@@ -5,12 +5,14 @@ import {
   createRootRouteWithContext,
   useRouter,
   HeadContent,
+  redirect,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { AppUpdates } from "@/components/AppUpdates";
+import { currentApplication } from "@/lib/pwa-context";
 
 function NotFoundComponent() {
   return (
@@ -72,11 +74,15 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  beforeLoad: ({ location }) => {
+    if (currentApplication.admin && !["/", "/admin", "/reset-password"].includes(location.pathname))
+      throw redirect({ to: "/", replace: true });
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Skendal" },
+      { title: currentApplication.admin ? "Skendal Admin" : "Skendal" },
       { name: "description", content: "El centro de mando de tu hogar." },
       { property: "og:title", content: "Skendal" },
       { property: "og:description", content: "El centro de mando de tu hogar." },

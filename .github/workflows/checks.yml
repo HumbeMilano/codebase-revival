@@ -37,6 +37,7 @@ jobs:
           "$browser_path" --version
           echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$browser_path" >> "$GITHUB_ENV"
       - run: bun run test:e2e
+      - run: bun run test:pwa
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

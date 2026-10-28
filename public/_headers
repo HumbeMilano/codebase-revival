@@ -9,3 +9,6 @@
 /sw.js
   Cache-Control: no-cache
   Service-Worker-Allowed: /
+/admin-sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /

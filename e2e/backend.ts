@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { expect, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
 export const HOME_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "20000000-0000-4000-8000-000000000001";
@@ -861,6 +861,27 @@ export async function signIn(page: Page) {
   await page.getByLabel("Contraseña", { exact: true }).fill("test-password");
   await page.locator("form").getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page.getByText("Hola, Ana", { exact: true }).first()).toBeVisible();
+}
+
+export function adminUrl(page: Page, path = "/") {
+  const origin = page.url().startsWith("http")
+    ? page.url()
+    : String(test.info().project.use.baseURL ?? "http://127.0.0.1:8080");
+  const url = new URL(path, origin);
+  url.hostname = url.hostname.endsWith("skendal.com") ? "admin.skendal.com" : "admin.localhost";
+  return url.href;
+}
+
+export async function adminSignIn(page: Page, allowed = true) {
+  await page.goto(adminUrl(page));
+  await page.getByLabel("Correo", { exact: true }).fill("ana@example.invalid");
+  await page.getByLabel("Contraseña", { exact: true }).fill("test-password");
+  await page.locator("form").getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(
+    allowed
+      ? page.getByText("Skendal · Consola del negocio", { exact: true })
+      : page.getByRole("heading", { name: "Sin acceso", exact: true }),
+  ).toBeVisible();
 }
 
 /** The browser boundary is synthetic; Postgres tests separately enforce fresh

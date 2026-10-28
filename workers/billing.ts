@@ -1,5 +1,6 @@
 import type { WorkerEnv } from "./app";
 import { reconcileSandboxEvent } from "./subscription-state";
+import { ADMIN_ORIGIN } from "../src/lib/pwa-context";
 
 // Sandbox is intentionally isolated from household entitlements and real revenue.
 export const STRIPE_API_VERSION = "2026-09-30.endive";
@@ -208,8 +209,8 @@ function checkoutParameters(name: string, amount: number, currency: string, inte
     "line_items[0][price_data][recurring][interval]": interval,
     "line_items[0][price_data][product_data][name]": name,
     "line_items[0][quantity]": "1",
-    success_url: "https://app.skendal.com/admin?stripe=success",
-    cancel_url: "https://app.skendal.com/admin?stripe=canceled",
+    success_url: `${ADMIN_ORIGIN}/?stripe=success`,
+    cancel_url: `${ADMIN_ORIGIN}/?stripe=canceled`,
     "metadata[application]": "homehub",
     "metadata[environment]": "sandbox",
     "subscription_data[metadata][application]": "homehub",

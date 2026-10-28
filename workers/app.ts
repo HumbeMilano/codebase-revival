@@ -1,6 +1,7 @@
 import { billing } from "./billing";
 import { subscriptions } from "./subscriptions";
 import { weatherResponse } from "./weather";
+import { adminEntry, applicationContext } from "../src/lib/pwa-context";
 export type WorkerEnv = Cloudflare.Env;
 const json = (value: unknown, status = 200) =>
   Response.json(value, {
@@ -154,7 +155,8 @@ export async function sendInvitation(request: Request, env: WorkerEnv): Promise<
 }
 export default {
   fetch(request: Request, env: WorkerEnv, context?: ExecutionContext): Promise<Response> {
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
     if (path === "/api/weather") return weatherResponse(request, env, context);
     if (path === "/api/invitations") return sendInvitation(request, env);
     if (path === "/api/tablet-pairing") return createTabletPairing(request, env);
@@ -162,7 +164,62 @@ export default {
     if (path.startsWith("/api/billing/")) return billing(request, env);
     if (path.startsWith("/api/"))
       return Promise.resolve(json({ error: "Ruta no encontrada." }, 404));
-    return env.ASSETS.fetch(request);
+    const application = applicationContext(url);
+    if (path === "/index.html")
+      return Promise.resolve(
+        new Response(null, {
+          status: 302,
+          headers: { Location: "/" + url.search, "Cache-Control": "no-store" },
+        }),
+      );
+    if (path === "/admin" || path.startsWith("/admin/"))
+      return Promise.resolve(
+        new Response(null, {
+          status: 302,
+          headers: { Location: adminEntry(url), "Cache-Control": "no-store" },
+        }),
+      );
+    let asset = path;
+    if (application.admin) {
+      if (path === "/" || path === "/index.html" || path === "/reset-password")
+        asset = "/admin-shell.html";
+      else if (path === "/manifest.webmanifest") asset = "/admin.webmanifest";
+      else if (path === "/sw.js") asset = "/admin-sw.js";
+      else if (path === "/favicon.ico") asset = "/admin-favicon.ico";
+      else if (["/subscription", "/vincular"].includes(path))
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { Location: "/#", "Cache-Control": "no-store" },
+          }),
+        );
+      else if (
+        !path.startsWith("/assets/") &&
+        !path.startsWith("/icons/") &&
+        !["/admin-shell.html", "/admin.webmanifest", "/admin-sw.js", "/admin-favicon.ico"].includes(
+          path,
+        )
+      )
+        return Promise.resolve(
+          request.headers.get("accept")?.includes("text/html")
+            ? new Response(null, {
+                status: 302,
+                headers: { Location: "/#", "Cache-Control": "no-store" },
+              })
+            : new Response("Not found", { status: 404 }),
+        );
+    } else if (
+      ["/admin-shell.html", "/admin.webmanifest", "/admin-sw.js", "/admin-favicon.ico"].includes(
+        path,
+      )
+    ) {
+      return Promise.resolve(new Response("Not found", { status: 404 }));
+    }
+    if (asset === path) return env.ASSETS.fetch(request);
+    const target = new URL(url);
+    target.pathname = asset;
+    target.search = "";
+    return env.ASSETS.fetch(new Request(target, request));
   },
 };
 

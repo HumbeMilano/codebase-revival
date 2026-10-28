@@ -46,6 +46,7 @@ import { toast } from "sonner";
 import { setHouseholdId } from "@/lib/hub-db";
 import { sessionIdentity } from "@/lib/session-identity";
 import { canResumePasswordRecovery, rememberPasswordRecovery } from "@/lib/password-recovery";
+import { adminEntry } from "@/lib/pwa-context";
 import { personalPreferences } from "@/lib/account-validation";
 import {
   ACTIVE_SHOPPING_ACCOUNT,
@@ -229,7 +230,9 @@ export function HubApp() {
         setHouseholdId("");
         localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
         if (admin) {
-          await navigate({ to: "/admin", replace: true });
+          const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+          if (signOutError) throw signOutError;
+          window.location.replace(adminEntry(new URL(window.location.href)));
           return;
         }
         if (userId) setGate({ status: "setup", email });
@@ -399,7 +402,7 @@ export function HubApp() {
     try {
       await clearFinanceAccess();
       if (getDeviceToken()) forgetDevice();
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: "local" });
       if (error) throw error;
       await reload();
     } catch {
@@ -548,7 +551,7 @@ function HubShell({
     try {
       await clearFinanceAccess();
       if (mode === "account") {
-        const { error } = await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut({ scope: "local" });
         if (error) throw error;
       } else {
         setUser(null);
