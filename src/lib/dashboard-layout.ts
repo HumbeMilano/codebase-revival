@@ -169,12 +169,12 @@ export const defaultDashboardLayout = (): DashboardLayout => ({
 export const defaultMobileDashboardLayout = (): DashboardLayout => ({
   version: 3,
   widgets: [
-    { id: "tasks", key: "tasks", size: "small" },
+    { id: "tasks", key: "tasks", size: "short" },
     { id: "shopping-summary", key: "shopping-summary", size: "small" },
-    { id: "shopping", key: "shopping", size: "wide" },
-    { id: "calendar", key: "calendar", size: "wide" },
-    { id: "notes", key: "notes", size: "wide" },
-    { id: "month-calendar", key: "month-calendar", size: "large" },
+    { id: "shopping", key: "shopping", size: "panorama" },
+    { id: "calendar", key: "calendar", size: "panorama" },
+    { id: "notes", key: "notes", size: "panorama" },
+    { id: "month-calendar", key: "month-calendar", size: "full" },
   ],
 });
 

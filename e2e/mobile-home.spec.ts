@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { HOME_ID, HouseholdBackend, signIn, section, openTabletPin, enterPin } from "./backend";
 const userId = "20000000-0000-4000-8000-000000000001";
 const schoolId = "10000000-0000-4000-8000-000000000094";
@@ -76,81 +76,154 @@ function seed(backend: HouseholdBackend) {
   };
 }
 
-test("phone defaults are readable, saved widgets reflow without changing the tablet layout", async ({
+async function layoutCells(page: Page) {
+  return page.locator(".dashboard-grid").evaluate((grid) => {
+    const style = getComputedStyle(grid);
+    const columns = style.gridTemplateColumns.split(" ").filter(Boolean).map(Number.parseFloat);
+    const gapX = Number.parseFloat(style.columnGap),
+      gapY = Number.parseFloat(style.rowGap);
+    const unitX = columns[0]! + gapX,
+      unitY = Number.parseFloat(style.gridAutoRows) + gapY;
+    const origin = grid.getBoundingClientRect();
+    return {
+      columns: columns.length,
+      cells: Array.from(grid.querySelectorAll<HTMLElement>("[data-grid-widget]")).map((node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          id: node.dataset["widget"],
+          key: node.dataset["widgetKey"],
+          column: Math.round((rect.left - origin.left) / unitX),
+          row: Math.round((rect.top - origin.top) / unitY),
+          width: Math.round((rect.width + gapX) / unitX),
+          height: Math.round((rect.height + gapY) / unitY),
+        };
+      }),
+    };
+  });
+}
+
+test("phone defaults keep the same explicit grid through editing, reset, save and changing content", async ({
   page,
 }, info) => {
   const backend = new HouseholdBackend();
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await backend.install(page);
   await signIn(page);
-  const ids = () =>
-    page
-      .locator("[data-widget]")
-      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-widget")));
-  await expect
-    .poll(ids)
-    .toEqual(["tasks", "shopping-summary", "shopping", "calendar", "notes", "month-calendar"]);
-  expect(backend.dashboardPreference).toBeNull();
-  const grid = page.locator(".dashboard-grid");
-  expect(
-    (await grid.evaluate((n) => getComputedStyle(n).gridTemplateColumns)).split(" "),
-  ).toHaveLength(2);
-  await page.screenshot({ path: info.outputPath("phone-default.png"), fullPage: true });
-  seed(backend);
-  await page.reload();
-  await expect(page.locator('[data-widget="shopping"]')).toContainText("School");
-  await expect
-    .poll(ids)
-    .toEqual(["progress", "member-summary", "shopping", "month-calendar", "calendar", "finance"]);
-  const month = await page.locator('[data-widget="month-calendar"]').boundingBox();
-  const shopping = await page.locator('[data-widget="shopping"]').boundingBox();
-  expect(month!.width).toBeGreaterThan(330);
-  expect(shopping!.width).toBeGreaterThan(330);
-  expect((await page.locator('[data-widget="calendar"]').boundingBox())!.height).toBeLessThan(330);
-  const calendar = page.locator('[data-widget="month-calendar"]');
-  await calendar.scrollIntoViewIfNeeded();
-  const body = await calendar.boundingBox(),
-    last = await calendar.locator(".dw-day").last().boundingBox();
-  expect(last!.y + last!.height).toBeLessThan(body!.y + body!.height);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const headings = await page.locator("[data-widget] .dw-header-link").evaluateAll((nodes) =>
-    nodes.map((node) => ({
-      width: node.getBoundingClientRect().width,
-      height: node.getBoundingClientRect().height,
-    })),
-  );
-  expect(headings.every((box) => box.width > 75 && box.height < 60)).toBe(true);
-  const ring = await page.locator('[data-widget="progress"] .dw-ring').evaluate((node) => {
-    const bounds = node.getBoundingClientRect();
-    const container = node.closest(".dw-body")!.getBoundingClientRect();
-    return {
-      top: bounds.top,
-      bottom: bounds.bottom,
-      bodyTop: container.top,
-      bodyBottom: container.bottom,
-    };
-  });
-  expect(ring.top).toBeGreaterThanOrEqual(ring.bodyTop - 1);
-  expect(ring.bottom).toBeLessThanOrEqual(ring.bodyBottom + 1);
-  const funding = await page
-    .locator('[data-widget="member-summary"]')
-    .getByRole("progressbar")
-    .evaluate((node) => ({
-      bottom: node.getBoundingClientRect().bottom,
-      card: node.closest(".widget-card")!.getBoundingClientRect().bottom,
-      height: node.getBoundingClientRect().height,
-    }));
-  expect(funding.height).toBeGreaterThanOrEqual(5);
-  expect(funding.bottom).toBeLessThanOrEqual(funding.card);
-  await page.evaluate(() => scrollTo(0, 0));
-  await page.screenshot({ path: info.outputPath("phone-top.png") });
-  await page.screenshot({ path: info.outputPath("phone-saved-widgets.png"), fullPage: true });
-  await page.setViewportSize({ width: 1024, height: 768 });
-  expect(
-    (await grid.evaluate((n) => getComputedStyle(n).gridTemplateColumns)).split(" "),
-  ).toHaveLength(3);
-  await expect(page.locator('[data-widget="shopping"]')).toHaveAttribute("data-size", "portrait");
+  const original = await layoutCells(page);
+  expect(original.columns).toBe(3);
+  expect(original.cells.map(({ id, width, height }) => ({ id, width, height }))).toEqual([
+    { id: "tasks", width: 2, height: 1 },
+    { id: "shopping-summary", width: 1, height: 1 },
+    { id: "shopping", width: 3, height: 2 },
+    { id: "calendar", width: 3, height: 2 },
+    { id: "notes", width: 3, height: 2 },
+    { id: "month-calendar", width: 3, height: 4 },
+  ]);
+  expect(original.cells[0]!.row).toBe(original.cells[1]!.row);
   expect(backend.dashboardSaveRequests).toBe(0);
+  const month = page.locator('[data-widget="month-calendar"]');
+  await month.scrollIntoViewIfNeeded();
+  const box = await month.boundingBox(),
+    last = await month.locator(".dw-day").last().boundingBox();
+  expect(last!.y + last!.height).toBeLessThanOrEqual(box!.y + box!.height);
+  await page.getByRole("button", { name: "Personalizar", exact: true }).click();
+  expect(await layoutCells(page)).toEqual(original);
+  await page.getByRole("button", { name: "Ocultar próximos eventos", exact: true }).click();
+  await page.getByRole("button", { name: "Restablecer diseño", exact: true }).click();
+  expect(await layoutCells(page)).toEqual(original);
+  await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Personalizar inicio", exact: true })).toHaveCount(
+    0,
+  );
+  expect(await layoutCells(page)).toEqual(original);
+  expect(backend.dashboardSaveRequests).toBe(1);
+  backend.rows["shopping_items"] = Array.from({ length: 18 }, (_, position) => ({
+    id: crypto.randomUUID(),
+    household_id: HOME_ID,
+    list_id: HOME_ID,
+    name: `Producto ${position}`,
+    done: false,
+    position,
+    revision: 1,
+  }));
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Personalizar", exact: true })).toBeEnabled();
+  expect(await layoutCells(page)).toEqual(original);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+    true,
+  );
+  await page.screenshot({ path: info.outputPath("phone-default-grid.png"), fullPage: true });
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("all twelve widget sizes retain their chosen cells after customizing, saving and reloading", async ({
+  page,
+}, info) => {
+  const backend = new HouseholdBackend();
+  const choices = [
+    { id: "clock", size: "small", width: 1, height: 1 },
+    { id: "tasks", size: "compact", width: 1, height: 2 },
+    { id: "shopping", size: "tall", width: 1, height: 3 },
+    { id: "family", size: "column", width: 1, height: 4 },
+    { id: "shopping-summary", size: "short", width: 2, height: 1 },
+    { id: "notes", size: "wide", width: 2, height: 2 },
+    { id: "progress", size: "square", width: 2, height: 3 },
+    { id: "calendar", size: "portrait", width: 2, height: 4 },
+    { id: "reminders", size: "banner", width: 3, height: 1 },
+    { id: "week", size: "panorama", width: 3, height: 2 },
+    { id: "month-calendar", size: "large", width: 3, height: 3 },
+    { id: "pinned-note", size: "full", width: 3, height: 4 },
+  ];
+  backend.dashboardPreference = {
+    user_id: userId,
+    revision: 1,
+    layout: { version: 3, widgets: choices.map(({ id, size }) => ({ id, key: id, size })) },
+  };
+  const widths = info.project.name === "mobile" ? [320, 390, 430, 767] : [1024];
+  await page.setViewportSize({ width: widths[0]!, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await backend.install(page);
+  await signIn(page);
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    const before = await layoutCells(page);
+    expect(before.columns).toBe(3);
+    await page.getByRole("button", { name: "Personalizar", exact: true }).click();
+    expect(await layoutCells(page)).toEqual(before);
+    await page.getByRole("button", { name: "Configurar tareas de hoy", exact: true }).click();
+    const config = page.getByRole("dialog", { name: "Configurar widget", exact: true });
+    await config.getByRole("button", { name: "Tamaño 2 por 3", exact: true }).click();
+    await config.getByRole("button", { name: "Listo", exact: true }).click();
+    await page.getByRole("button", { name: "Mover reloj y fecha", exact: true }).press("ArrowDown");
+    const draft = await layoutCells(page);
+    expect(draft.columns).toBe(3);
+    for (const cell of draft.cells) {
+      const wanted =
+        cell.id === "tasks"
+          ? { width: 2, height: 3 }
+          : choices.find((choice) => choice.id === cell.id)!;
+      expect({ width: cell.width, height: cell.height }).toEqual({
+        width: wanted.width,
+        height: wanted.height,
+      });
+    }
+    await page.screenshot({ path: info.outputPath(`layout-editor-${width}.png`), fullPage: true });
+    await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
+    await expect(
+      page.getByRole("region", { name: "Personalizar inicio", exact: true }),
+    ).toHaveCount(0);
+    expect(await layoutCells(page)).toEqual(draft);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Personalizar", exact: true })).toBeEnabled();
+    expect(await layoutCells(page)).toEqual(draft);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+    await page.screenshot({ path: info.outputPath(`layout-saved-${width}.png`), fullPage: true });
+  }
+  expect(backend.dashboardSaveRequests).toBe(widths.length);
+  expect(backend.unexpectedRequests).toEqual([]);
 });
 
 test("widgets navigate to their section and selected list while product taps stay on home", async ({

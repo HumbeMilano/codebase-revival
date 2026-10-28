@@ -39,9 +39,7 @@ function seed(backend: HouseholdBackend) {
   ];
   backend.rows["bill_splits"] = [{ bill_id: billId, person_key: "m_ana", type: "equal", value: 0 }];
 }
-test("small widgets preserve selections and editing keeps three columns", async ({
-  page,
-}, testInfo) => {
+test("small widgets preserve selections and editing keeps three columns", async ({ page }) => {
   const backend = new HouseholdBackend();
   seed(backend);
   backend.dashboardPreference = {
@@ -72,13 +70,9 @@ test("small widgets preserve selections and editing keeps three columns", async 
       })),
     );
   expect(rects).toHaveLength(3);
-  if (testInfo.project.name === "mobile") {
-    expect(Math.abs(rects[0]!.y - rects[1]!.y)).toBeLessThan(1);
-    expect(rects[2]!.y).toBeGreaterThan(rects[0]!.y);
-  } else {
-    expect(Math.abs(rects[0]!.y - rects[2]!.y)).toBeLessThan(1);
-    expect(rects[2]!.x).toBeGreaterThan(rects[1]!.x);
-  }
+  expect(Math.abs(rects[0]!.y - rects[1]!.y)).toBeLessThan(1);
+  expect(Math.abs(rects[0]!.y - rects[2]!.y)).toBeLessThan(1);
+  expect(rects[2]!.x).toBeGreaterThan(rects[1]!.x);
   await expect(page.locator('[data-widget-key="note-a"]')).toContainText("Llevar cuaderno");
   await expect(page.locator('[data-widget-key="note-b"]')).toHaveCount(0);
   await expect(page.locator('[data-widget-key="member"]')).toContainText("$45.00");

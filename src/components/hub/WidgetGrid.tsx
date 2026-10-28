@@ -12,8 +12,6 @@ import {
   widgetSizeFor,
 } from "@/lib/dashboard-layout";
 import { cn } from "@/lib/utils";
-import { mobileWidgetDimensions } from "@/lib/dashboard-data";
-import type { CSSProperties } from "react";
 
 type Gesture = {
   id: string;
@@ -37,7 +35,6 @@ type Props = {
   describe: (id: WidgetId) => { title: string; tone: string };
   onConfigure: (key: string) => void;
   onOpen?: (widget: DashboardWidget) => void;
-  mobileSize?: (widget: DashboardWidget) => [number, number];
   children: (widget: DashboardWidget) => React.ReactNode;
 };
 
@@ -52,7 +49,6 @@ export function WidgetGrid({
   children,
   onConfigure,
   onOpen,
-  mobileSize,
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const props = useRef({ layout, editing, disabled, onChange });
@@ -334,8 +330,6 @@ export function WidgetGrid({
       >
         {layout.widgets.map((widget) => {
           const { title, tone } = describe(widget.id);
-          const [mobileColumns, mobileHeight] =
-            mobileSize?.(widget) ?? mobileWidgetDimensions(widget);
           return (
             <section
               key={widget.key}
@@ -349,14 +343,10 @@ export function WidgetGrid({
                 widgetDimensions[widget.size][0] > 1 && "widget-wide",
                 active === widget.key && "widget-lifted",
               )}
-              style={
-                {
-                  gridColumn: `span ${widgetDimensions[widget.size][0]}`,
-                  gridRow: `span ${widgetDimensions[widget.size][1]}`,
-                  "--mobile-columns": mobileColumns,
-                  "--mobile-height": `${mobileHeight}px`,
-                } as CSSProperties
-              }
+              style={{
+                gridColumn: `span ${widgetDimensions[widget.size][0]}`,
+                gridRow: `span ${widgetDimensions[widget.size][1]}`,
+              }}
               onPointerDown={(event) => {
                 bodyPointer.current = {
                   key: widget.key,
