@@ -293,6 +293,7 @@ export function HubApp() {
     media.addEventListener("change", resize);
     window.addEventListener("online", network);
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      const signedIn = event === "SIGNED_IN" || event === "PASSWORD_RECOVERY";
       if (event === "TOKEN_REFRESHED" && session) {
         if (currentDbIdentity() === sessionIdentity(session.user.id, session.access_token))
           updateAccountToken(session.access_token);
@@ -300,24 +301,20 @@ export function HubApp() {
         return;
       }
       if (
-        event === "SIGNED_IN" &&
+        signedIn &&
         session &&
         currentDbIdentity() === sessionIdentity(session.user.id, session.access_token)
       ) {
         updateAccountToken(session.access_token);
         return;
       }
-      if (
-        event === "SIGNED_IN" &&
-        session &&
-        localStorage.getItem(ACTIVE_SHOPPING_ACCOUNT) !== session.user.id
-      )
+      if (signedIn && session && localStorage.getItem(ACTIVE_SHOPPING_ACCOUNT) !== session.user.id)
         localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
       if (event === "SIGNED_OUT") {
         localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
         invalidateDbContext();
       }
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT") setTimeout(() => void reload(), 0);
+      if (signedIn || event === "SIGNED_OUT") setTimeout(() => void reload(), 0);
     });
     return () => {
       sequence.current++;

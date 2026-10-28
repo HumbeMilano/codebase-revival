@@ -230,7 +230,7 @@ test("photos survive a lost registration response, reload, reorder and removal",
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS1cAAAAASUVORK5CYII=",
     "base64",
   );
-  const picker = page.getByLabel("Añadir foto", { exact: true });
+  const picker = page.getByLabel("Añadir fotos", { exact: true });
   await picker.setInputFiles({ name: "familia.png", mimeType: "image/png", buffer: image });
   await expect(page.getByRole("alert")).toContainText("No se pudo confirmar");
   expect(backend.photoObjects.size).toBe(1);
@@ -273,19 +273,19 @@ test("Photos has its own section, displays thirty images and respects the server
   );
   await signIn(page);
   await section(page, "Hogar");
-  await expect(page.getByLabel("Añadir foto", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Añadir fotos", { exact: true })).toHaveCount(0);
   await section(page, "Fotos");
   await expect(page.getByRole("heading", { name: "Fotos del hogar", exact: true })).toBeVisible();
   await expect(page.getByRole("img", { name: /Foto \d+ del hogar/ })).toHaveCount(30);
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByLabel("Añadir foto", { exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Añadir fotos", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Eliminar foto 30", exact: true }).click();
   await expect(page.getByRole("img", { name: /Foto \d+ del hogar/ })).toHaveCount(29);
-  await expect(page.getByLabel("Añadir foto", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Añadir fotos", { exact: true })).toBeEnabled();
   backend.photoCapacity = 10;
   await page.reload();
   await section(page, "Fotos");
   await expect(page.getByRole("img", { name: /Foto \d+ del hogar/ })).toHaveCount(29);
-  await expect(page.getByLabel("Añadir foto", { exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Añadir fotos", { exact: true })).toBeDisabled();
   expect(backend.unexpectedRequests).toEqual([]);
 });

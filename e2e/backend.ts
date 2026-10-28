@@ -24,6 +24,9 @@ const user = {
 };
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 const token = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ sub: USER_ID, role: "authenticated", session_id: "homehub-e2e-session", exp: Math.floor(Date.now() / 1000) + 86_400 })}.test_signature`;
+export function recoveryPath(path = "/reset-password") {
+  return `${path}#${new URLSearchParams({ access_token: token, refresh_token: "e2e_refresh_token", expires_in: "86400", token_type: "bearer", type: "recovery" })}`;
+}
 
 /** A deterministic API double: all household records stay in test-runner memory.
  * This verifies the browser's Auth/HTTP/state boundaries, not production RLS.
@@ -100,6 +103,11 @@ export class HouseholdBackend {
   avatarDownloads = 0;
   photoUploadRequests = 0;
   loseNextPhotoRegistration = false;
+  photoRegistrationRequests = 0;
+  losePhotoRegistrationAt: number | null = null;
+  recoveryRequests: { email: string; redirect: string | null }[] = [];
+  passwordUpdates = 0;
+  failNextPasswordUpdate = false;
   dashboardPreference: Row | null = null;
   dashboardSaveRequests = 0;
   loseNextDashboardResponse = false;
@@ -303,7 +311,29 @@ export class HouseholdBackend {
         },
       });
     }
-    if (pathname.endsWith("/user")) return route.fulfill({ json: user });
+    if (pathname.endsWith("/recover")) {
+      this.recoveryRequests.push({
+        email: String(route.request().postDataJSON().email),
+        redirect: new URL(route.request().url()).searchParams.get("redirect_to"),
+      });
+      return route.fulfill({ json: {} });
+    }
+    if (pathname.endsWith("/user")) {
+      if (route.request().method() === "PUT") {
+        this.passwordUpdates++;
+        if (this.failNextPasswordUpdate) {
+          this.failNextPasswordUpdate = false;
+          return route.fulfill({
+            status: 422,
+            json: {
+              code: "same_password",
+              message: "New password should be different from the old password.",
+            },
+          });
+        }
+      }
+      return route.fulfill({ json: user });
+    }
     if (pathname.endsWith("/logout")) return route.fulfill({ status: 204 });
     this.unexpectedRequests.push(pathname);
     return route.fulfill({
@@ -492,9 +522,15 @@ export class HouseholdBackend {
       case "household_avatar_paths":
         return { json: this.avatarPaths() };
       case "add_household_photo": {
+        this.photoRegistrationRequests++;
         const path = String(args["_path"]);
         let photo = this.photos.find((photo) => photo["path"] === path);
         if (!photo) {
+          if (this.photos.length >= this.photoCapacity)
+            return {
+              status: 400,
+              json: { message: `At most ${this.photoCapacity} household photos` },
+            };
           photo = {
             id: crypto.randomUUID(),
             path,
@@ -503,7 +539,10 @@ export class HouseholdBackend {
           };
           this.photos.push(photo);
         }
-        if (this.loseNextPhotoRegistration) {
+        if (
+          this.loseNextPhotoRegistration ||
+          this.photoRegistrationRequests === this.losePhotoRegistrationAt
+        ) {
           this.loseNextPhotoRegistration = false;
           return { status: 503, json: { message: "Response lost after commit" } };
         }
