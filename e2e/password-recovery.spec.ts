@@ -113,6 +113,20 @@ test("a legacy recovery redirect to the home page opens the password form", asyn
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
+test("a recovery link opened over an existing home tab still requires the new password", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  await backend.install(page);
+  await signIn(page);
+  await page.goto(recoveryPath("/"));
+  await expect(page).toHaveURL(/\/reset-password$/);
+  await expect(page.getByRole("heading", { name: "Nueva contraseña", exact: true })).toBeVisible();
+  expect(backend.passwordUpdates).toBe(0);
+  expect(backend.setupRequests).toEqual([]);
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
 test("an invalid recovery token cannot reuse a valid existing login as recovery proof", async ({
   page,
 }) => {
