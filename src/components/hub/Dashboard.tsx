@@ -24,7 +24,6 @@ import {
   dashboardList,
   isFinancialWidget,
   widgetSection,
-  mobileWidgetContentDimensions,
 } from "@/lib/dashboard-data";
 import { db } from "@/lib/db";
 import { canViewFinances } from "@/lib/finance-visibility";
@@ -344,7 +343,6 @@ export function Dashboard({
             describe={describeWidget}
             onConfigure={setConfiguration}
             onOpen={browseWidget}
-            mobileSize={(entry) => mobileWidgetContentDimensions(entry, displayState, now)}
           >
             {(entry) => (
               <DashboardWidgetContent

@@ -567,7 +567,10 @@ select.planner-field {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: auto;
   gap: 10px;
 }
 .dw-row {
@@ -916,6 +919,8 @@ select.planner-field {
 }
 .dw-ring {
   position: relative;
+  min-height: 0;
+  flex-shrink: 1;
   width: min(100%, 150px);
   aspect-ratio: 1;
 }
@@ -1608,54 +1613,9 @@ select.planner-field {
   .dashboard-home > div:first-child > button {
     min-width: 44px;
   }
-  .dashboard-grid:not(.is-editing) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: auto;
-    grid-auto-flow: row;
-    gap: 12px;
-  }
-  .dashboard-grid:not(.is-editing) .dashboard-widget {
-    grid-column: span var(--mobile-columns) !important;
-    grid-row: auto !important;
-    height: var(--mobile-height);
-  }
-  .dashboard-grid:not(.is-editing) .widget-card {
-    padding: 17px;
-    border-radius: 23px;
-  }
-  .dashboard-grid:not(.is-editing) .dw-header {
-    margin-bottom: 12px;
-  }
-  .dashboard-grid:not(.is-editing) .dw-header h3 {
-    font-size: 15px;
-  }
-  .dashboard-grid:not(.is-editing) .dw-rows {
-    overflow-y: auto;
-    scrollbar-width: thin;
-    overscroll-behavior: auto;
-  }
-  .dashboard-grid:not(.is-editing) .dw-row-text {
-    font-size: 14px;
-  }
-  .dashboard-grid:not(.is-editing) .dw-ring {
-    max-width: 96px;
-  }
-  .dashboard-grid:not(.is-editing) .dw-family {
+  .dw-family {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-  }
-  .dashboard-grid:not(.is-editing) .dw-day {
-    font-size: 14px;
-  }
-  .dashboard-grid:not(.is-editing) .dw-month-heading strong {
-    font-size: 15px;
-  }
-}
-
-@media (max-width: 360px) {
-  .dashboard-grid:not(.is-editing) .dashboard-widget[data-widget="member-summary"],
-  .dashboard-grid:not(.is-editing) .dashboard-widget[data-widget="finance"] {
-    grid-column: span 2 !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(80px, 100%), 1fr));
   }
 }
 
