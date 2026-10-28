@@ -1,7 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { HubApp } from "@/components/hub/HubApp";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: () => {
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.hash.slice(1)).get("type") === "recovery"
+    )
+      throw redirect({
+        to: "/reset-password",
+        hash: window.location.hash.slice(1),
+        replace: true,
+        reloadDocument: true,
+      });
+  },
   head: () => ({
     meta: [
       { title: "Skendal" },

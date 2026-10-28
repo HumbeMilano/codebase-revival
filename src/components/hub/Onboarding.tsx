@@ -93,7 +93,7 @@ function Shell({ children, compact }: { children: React.ReactNode; compact: bool
 
 /** First screen for a browser with no account and no paired tablet. */
 export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () => void }) {
-  const [view, setView] = useState<"login" | "signup" | "pair" | "forgot">(() =>
+  const [view, setView] = useState<"login" | "signup" | "pair">(() =>
     pendingInvitation() || new URLSearchParams(window.location.search).get("registro") === "1"
       ? "signup"
       : "login",
@@ -117,21 +117,6 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
       e.preventDefault();
       if (busy) return;
       setBusy(true);
-      if (view === "forgot") {
-        const valid = credentials.shape.email.safeParse(email);
-        if (!valid.success) {
-          toast.error("Escribe un correo válido");
-          setBusy(false);
-          return;
-        }
-        const { error } = await supabase.auth.resetPasswordForEmail(valid.data, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
-        setBusy(false);
-        if (error) toast.error("No se pudo enviar el enlace. Intenta de nuevo más tarde.");
-        else setSent(true);
-        return;
-      }
       const valid = credentials.safeParse({ email, password });
       if (!valid.success) {
         toast.error(valid.error.issues[0]?.message ?? "Revisa tus datos");
@@ -185,9 +170,7 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
           <Mail className="mx-auto size-10" />
           <h1 className="font-display text-2xl font-bold">Revisa tu correo</h1>
           <p className="text-sm text-muted-foreground">
-            {view === "forgot"
-              ? "Si el correo tiene una cuenta, recibirás un enlace para recuperar tu contraseña."
-              : `Confirma tu cuenta con el enlace enviado a ${email}.`}
+            {`Confirma tu cuenta con el enlace enviado a ${email}.`}
           </p>
           <Button
             variant="ghost"
@@ -205,11 +188,7 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
   return (
     <Shell compact={compact}>
       <h1 className="font-display text-4xl font-extrabold">
-        {view === "signup"
-          ? "Crea tu cuenta"
-          : view === "forgot"
-            ? "Recuperar acceso"
-            : "Bienvenido"}
+        {view === "signup" ? "Crea tu cuenta" : "Bienvenido"}
       </h1>
       <div className="my-5 grid grid-cols-3 gap-1 rounded-2xl bg-card p-1 shadow-card">
         {(
@@ -244,21 +223,19 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
             className={field}
           />
         </label>
-        {view !== "forgot" && (
-          <label className="block text-sm font-semibold">
-            Contraseña
-            <input
-              type="password"
-              required
-              minLength={6}
-              maxLength={128}
-              autoComplete={view === "signup" ? "new-password" : "current-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={field}
-            />
-          </label>
-        )}
+        <label className="block text-sm font-semibold">
+          Contraseña
+          <input
+            type="password"
+            required
+            minLength={6}
+            maxLength={128}
+            autoComplete={view === "signup" ? "new-password" : "current-password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={field}
+          />
+        </label>
         {view === "signup" && (
           <label className="block text-sm font-semibold">
             Invitación (opcional)
@@ -271,23 +248,15 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
           </label>
         )}
         <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl">
-          {busy
-            ? "Un momento…"
-            : view === "signup"
-              ? "Crear cuenta"
-              : view === "forgot"
-                ? "Enviar enlace"
-                : "Entrar"}
+          {busy ? "Un momento…" : view === "signup" ? "Crear cuenta" : "Entrar"}
         </Button>
         {view === "login" && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full"
-            onClick={() => setView("forgot")}
+          <a
+            href="/reset-password"
+            className="block rounded-xl py-3 text-center text-sm font-medium underline underline-offset-4"
           >
             Olvidé mi contraseña
-          </Button>
+          </a>
         )}
       </form>
     </Shell>

@@ -1,5 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
+import { recoveryArrival } from "@/lib/password-recovery";
+
+// Auth consumes and clears URL credentials during initialization, possibly
+// before the recovery screen mounts. Capture its intent first, in memory only.
+export const passwordRecoveryArrival =
+  typeof window === "undefined"
+    ? { recovery: false, token: null, error: false }
+    : recoveryArrival(new URL(window.location.href));
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
@@ -28,7 +36,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
-function createSupabaseClient(transient = false) {
+function createSupabaseClient(transient = false, purpose = "pair") {
   const SUPABASE_URL = import.meta.env["VITE_SUPABASE_URL"];
   const SUPABASE_PUBLISHABLE_KEY = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
 
@@ -50,12 +58,13 @@ function createSupabaseClient(transient = false) {
       persistSession: !transient,
       autoRefreshToken: !transient,
       detectSessionInUrl: !transient,
-      ...(transient ? { storageKey: `homehub-pair-${crypto.randomUUID()}` } : {}),
+      ...(transient ? { storageKey: `homehub-${purpose}-${crypto.randomUUID()}` } : {}),
     },
   });
 }
 
 export const createPairingClient = () => createSupabaseClient(true);
+export const createRecoveryClient = () => createSupabaseClient(true, "recovery");
 
 let _supabase: ReturnType<typeof createSupabaseClient> | undefined;
 
