@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { clearFinanceAccess } from "@/lib/db";
+import { clearFinanceAccess, db } from "@/lib/db";
 import { personalPreferences } from "@/lib/account-validation";
 import { PasskeySettings } from "./PasskeySettings";
 
@@ -196,11 +196,12 @@ export function PersonalProfile({
   };
   const leave = async () => {
     if (busy || !understood) return;
+    const client = db();
     setBusy(true);
     setError("");
     try {
       await clearFinanceAccess();
-      const { error: leaveError } = await supabase.rpc("leave_household");
+      const { error: leaveError } = await client.rpc("leave_household");
       if (leaveError) {
         if (leaveError.message.includes("last adult"))
           throw new Error("Vincula otra cuenta adulta antes de desvincular la tuya del hogar.");
