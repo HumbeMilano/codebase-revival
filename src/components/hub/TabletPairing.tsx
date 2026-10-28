@@ -242,20 +242,26 @@ export function TabletPairingPane({
 }
 
 function PairingLogin() {
-  const [email, setEmail] = useState(""),
-    [password, setPassword] = useState(""),
-    [busy, setBusy] = useState(false),
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   return (
     <form
+      id="pairing-login"
+      method="post"
       className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (busy) return;
+        const values = new FormData(event.currentTarget);
+        const email = values.get("username");
+        const password = values.get("password");
         setBusy(true);
         setError("");
         void supabase.auth
-          .signInWithPassword({ email: email.trim(), password })
+          .signInWithPassword({
+            email: typeof email === "string" ? email.trim() : "",
+            password: typeof password === "string" ? password : "",
+          })
           .then(
             (result) => {
               if (result.error)
@@ -277,8 +283,6 @@ function PairingLogin() {
           id="pairing-email"
           name="username"
           required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
         />
       </label>
       <label className="block text-sm font-semibold">
@@ -290,8 +294,6 @@ function PairingLogin() {
           id="pairing-password"
           name="password"
           required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
         />
       </label>
       {error && (

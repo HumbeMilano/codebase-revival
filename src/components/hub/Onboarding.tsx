@@ -102,7 +102,6 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
     );
     return parsed.success ? parsed.data : "";
   });
-  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [invitation, setInvitation] = useState("");
@@ -110,12 +109,16 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
     setInvitation(pendingInvitation());
   }, []);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     try {
       e.preventDefault();
       if (busy) return;
+      const values = new FormData(e.currentTarget);
       setBusy(true);
-      const valid = credentials.safeParse({ email, password });
+      const valid = credentials.safeParse({
+        email: values.get("username"),
+        password: values.get("password"),
+      });
       if (!valid.success) {
         toast.error(valid.error.issues[0]?.message ?? "Revisa tus datos");
         setBusy(false);
@@ -146,7 +149,10 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
         toast.error(errMsg(error));
         return;
       }
-      if (view === "signup" && !data.session) setSent(true);
+      if (view === "signup" && !data.session) {
+        setEmail(valid.data.email);
+        setSent(true);
+      }
     } catch {
       toast.error("No se pudo conectar. Revisa la conexión y vuelve a intentarlo.");
     } finally {
@@ -210,7 +216,12 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
           </Button>
         ))}
       </div>
-      <form onSubmit={submit} className="space-y-4 rounded-3xl bg-card p-5 shadow-card">
+      <form
+        id={view === "signup" ? "account-signup" : "account-login"}
+        method="post"
+        onSubmit={submit}
+        className="space-y-4 rounded-3xl bg-card p-5 shadow-card"
+      >
         <label className="block text-sm font-semibold">
           Correo
           <input
@@ -219,8 +230,7 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
             type="email"
             autoComplete="username"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            defaultValue={email}
             className={field}
           />
         </label>
@@ -234,8 +244,6 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
             minLength={6}
             maxLength={128}
             autoComplete={view === "signup" ? "new-password" : "current-password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             className={field}
           />
         </label>
