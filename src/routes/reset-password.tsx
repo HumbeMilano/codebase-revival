@@ -10,6 +10,7 @@ import {
 } from "@/integrations/supabase/client";
 import { credentials } from "@/lib/account-validation";
 import { sessionIdentity } from "@/lib/session-identity";
+import { currentApplication } from "@/lib/pwa-context";
 import {
   canResumePasswordRecovery,
   forgetPasswordRecovery,
@@ -276,7 +277,9 @@ function ResetPassword() {
   return (
     <main className="grid min-h-dvh place-items-center bg-background px-5 py-8">
       <section className="w-full max-w-sm space-y-6">
-        <span className="font-display text-xl font-extrabold tracking-tight">Skendal</span>
+        <span className="font-display text-xl font-extrabold tracking-tight">
+          {currentApplication.admin ? "Skendal Admin" : "Skendal"}
+        </span>
         <h1 className="font-display text-3xl font-bold">
           {mode === "password"
             ? "Nueva contraseña"

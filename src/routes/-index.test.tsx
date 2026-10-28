@@ -11,9 +11,9 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-function redirectOptions() {
+async function redirectOptions() {
   try {
-    Route.options.beforeLoad!({} as never);
+    await Route.options.beforeLoad!({} as never);
   } catch (error) {
     if (isRedirect(error)) return error.options;
     throw error;
@@ -22,23 +22,23 @@ function redirectOptions() {
 }
 
 describe("recovery at the household entry point", () => {
-  it("preserves a live recovery fragment across the legacy document redirect", () => {
+  it("preserves a live recovery fragment across the legacy document redirect", async () => {
     window.history.replaceState({}, "", "/#type=recovery&access_token=temporary");
-    expect(redirectOptions()).toMatchObject({
+    expect(await redirectOptions()).toMatchObject({
       to: "/reset-password",
       hash: "type=recovery&access_token=temporary",
       reloadDocument: true,
       replace: true,
     });
   });
-  it("keeps recovery intent after Auth consumes the fragment without losing it to a reload", () => {
+  it("keeps recovery intent after Auth consumes the fragment without losing it to a reload", async () => {
     arrival.recovery = true;
-    const redirect = redirectOptions();
+    const redirect = await redirectOptions();
     expect(redirect).toMatchObject({ to: "/reset-password", replace: true });
     expect(redirect.reloadDocument).not.toBe(true);
   });
-  it("allows ordinary login and invitation URLs through", () => {
+  it("allows ordinary login and invitation URLs through", async () => {
     window.history.replaceState({}, "", "/?invite=ABCDEF0123456789ABCDEF0123456789");
-    expect(Route.options.beforeLoad!({} as never)).toBeUndefined();
+    expect(await Route.options.beforeLoad!({} as never)).toBeUndefined();
   });
 });

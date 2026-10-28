@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { HouseholdBackend, signIn, section } from "./backend";
+import { HouseholdBackend, signIn, section, adminSignIn } from "./backend";
 const free = { members: 4, lists: 3, devices: 1, photos: 10, widgets: 6 };
 const pro = { members: 12, lists: 20, devices: 3, photos: 30, widgets: 64 };
 const catalog = {
@@ -158,7 +158,7 @@ test("legal drafts and privacy requests are reviewable in the separate administr
   await page.getByRole("button", { name: "Enviar solicitud", exact: true }).click();
   await expect(page.getByText("Acceso y copia · Recibida")).toBeVisible();
   expect(requests).toHaveLength(1);
-  await page.goto("/admin");
+  await adminSignIn(page);
   await page.getByRole("button", { name: "legal", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Preparación legal", exact: true })).toBeVisible();
   await expect(page.getByLabel("Nombre legal de la empresa")).toHaveValue("");

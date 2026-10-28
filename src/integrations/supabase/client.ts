@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 import { recoveryArrival } from "@/lib/password-recovery";
+import { currentApplication } from "@/lib/pwa-context";
 
 // Auth consumes and clears URL credentials during initialization, possibly
 // before the recovery screen mounts. Capture its intent first, in memory only.
@@ -58,6 +59,9 @@ function createSupabaseClient(transient = false, purpose = "pair") {
       persistSession: !transient,
       autoRefreshToken: !transient,
       detectSessionInUrl: !transient,
+      ...(!transient && currentApplication.admin
+        ? { storageKey: `skendal-admin-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-v1` }
+        : {}),
       ...(transient ? { storageKey: `homehub-${purpose}-${crypto.randomUUID()}` } : {}),
     },
   });

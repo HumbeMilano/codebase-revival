@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HouseholdBackend, signIn, section, HOME_ID } from "./backend";
+import { HouseholdBackend, signIn, adminSignIn, section, HOME_ID } from "./backend";
 
 test("independent lists persist and remain editable after an offline reload", async ({
   page,
@@ -77,8 +77,7 @@ test("the business console edits both subscription prices and records external p
   const backend = new HouseholdBackend();
   backend.platformAdmin = true;
   await backend.install(page);
-  await signIn(page);
-  await page.goto("/admin");
+  await adminSignIn(page);
   await page.getByRole("button", { name: "planes", exact: true }).click();
   const pro = page
     .getByRole("article")
@@ -111,7 +110,7 @@ test("the business console edits both subscription prices and records external p
   await page.screenshot({ path: testInfo.outputPath("business-console.png"), fullPage: true });
 });
 
-test("signing out of the business console closes offline household access", async ({
+test("signing out of the business console preserves independent offline household access", async ({
   page,
   context,
 }) => {
@@ -132,12 +131,14 @@ test("signing out of the business console closes offline household access", asyn
         }),
       );
   });
-  await page.goto("/admin");
-  await page.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
-  await expect(page.getByLabel("Correo", { exact: true })).toBeVisible();
+  const admin = await context.newPage();
+  await backend.install(admin);
+  await admin.goto("http://127.0.0.1:8080");
+  await adminSignIn(admin);
+  await admin.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
+  await expect(admin.getByLabel("Correo", { exact: true })).toBeVisible();
   await context.setOffline(true);
-  await page.goto("/");
-  await expect(page.getByText("Conéctate para abrir tus listas.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Compra privada", exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Compra privada", exact: true })).toBeVisible();
   expect(backend.unexpectedRequests).toEqual([]);
 });

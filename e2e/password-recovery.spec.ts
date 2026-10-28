@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HouseholdBackend, recoveryPath, section, signIn } from "./backend";
+import { HouseholdBackend, recoveryPath, section, signIn, adminUrl } from "./backend";
 
 test("forgot password opens a dedicated flow and sends the correct return address", async ({
   page,
@@ -237,12 +237,12 @@ test("a recovered platform administrator returns to administration without house
   backend.hasHousehold = false;
   backend.platformAdmin = true;
   await backend.install(page);
-  await page.goto(recoveryPath());
+  await page.goto(adminUrl(page, recoveryPath()));
   await page.getByLabel("Nueva contraseña", { exact: true }).fill("a-new-test-password");
   await page.getByLabel("Repetir contraseña", { exact: true }).fill("a-new-test-password");
   await page.getByRole("button", { name: "Guardar contraseña", exact: true }).click();
   await page.getByRole("link", { name: "Continuar a Skendal", exact: true }).click();
-  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page).toHaveURL(/\/\/(admin\.localhost:\d+|admin\.skendal\.com)\/$/);
   await expect(page.getByRole("heading", { name: "Administración", exact: true })).toBeVisible();
   await expect(page.getByLabel("Nombre del hogar", { exact: true })).toHaveCount(0);
   expect(backend.passwordUpdates).toBe(1);

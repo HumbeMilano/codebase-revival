@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { createAdminClient } from "@/lib/admin-client";
 import { clearFinanceAccess, invalidateDbContext } from "@/lib/db";
+import { currentApplication } from "@/lib/pwa-context";
+import { rememberPasswordRecovery } from "@/lib/password-recovery";
 import { ACTIVE_SHOPPING_ACCOUNT } from "@/lib/offline-shopping";
 import { BusinessConsole, type BusinessTab } from "./BusinessConsole";
 
@@ -125,6 +127,15 @@ export function AdminPage() {
     void load();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session) {
+        sequence.current++;
+        if (actor.current) actor.current.valid = false;
+        rememberPasswordRecovery(session);
+        setStatus("loading");
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => window.location.assign("/reset-password"), 0);
+        return;
+      }
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
         if (
           event === "SIGNED_OUT" ||
@@ -189,6 +200,13 @@ export function AdminPage() {
           title="Sin acceso"
           text="Esta cuenta no administra el servicio. Pide al propietario que te conceda acceso."
         />
+        <Button
+          className="mt-5"
+          disabled={busy}
+          onClick={() => void run(() => supabase.auth.signOut({ scope: "local" }))}
+        >
+          Entrar con otra cuenta
+        </Button>
       </Shell>
     );
   if (status === "error")
@@ -255,7 +273,7 @@ export function AdminPage() {
             onClick={() =>
               void run(async () => {
                 await clearFinanceAccess();
-                return supabase.auth.signOut();
+                return supabase.auth.signOut({ scope: "local" });
               })
             }
           >
@@ -490,9 +508,14 @@ function Shell({ children }: { children: React.ReactNode }) {
     <main className="grid min-h-screen place-items-center bg-background px-5">
       <section className="w-full max-w-sm">
         {children}
-        <Link to="/" className="mt-6 block text-center text-sm underline">
-          Volver a HomeHub
-        </Link>
+        <a
+          href={currentApplication.householdOrigin}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-6 block text-center text-sm underline"
+        >
+          Abrir Skendal
+        </a>
       </section>
     </main>
   );
@@ -587,6 +610,9 @@ function SignIn() {
       <Button disabled={busy} type="submit" className="w-full">
         Entrar
       </Button>
+      <Link to="/reset-password" className="block py-2 text-center text-sm underline">
+        Olvidé mi contraseña
+      </Link>
     </form>
   );
 }

@@ -1,0 +1,17 @@
+{
+  "name": "skendal-pwa-local-test",
+  "main": "workers/app.ts",
+  "compatibility_date": "2026-10-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true,
+  },
+  "vars": {
+    "SUPABASE_URL": "http://127.0.0.1:54329",
+    "SUPABASE_PUBLIC_KEY": "sb_publishable_homehub_e2e",
+  },
+}
