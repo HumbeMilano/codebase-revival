@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = Path(__file__).resolve().parents[1]
 ENV = os.environ.copy()
@@ -115,6 +116,64 @@ def test_member_account_changes():
     sql(f"SELECT redeem_invite('{fresh['code']}','9876');",user=recipient,fail='Invalid or expired')
     sql("SELECT leave_household();",user=recipient,fail='last adult account')
     check('ordinary clients cannot prepare account changes',sql("SELECT has_function_privilege('authenticated','homehub_private.prepare_member_account_change(uuid,text,text,text,uuid)','EXECUTE');"),'f')
+
+
+def test_member_account_restoration():
+    owner, recipient, adult, outsider = (str(uuid.uuid4()) for _ in range(4))
+    sql("INSERT INTO homehub_private.platform_owners(email) VALUES('restore-owner@example.invalid');")
+    sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{owner}','restore-owner@example.invalid',now()),('{recipient}','restore-recipient@example.invalid',now()),('{adult}','restore-adult@example.invalid',now()),('{outsider}','restore-outsider@example.invalid',now());")
+    hid = sql("SELECT create_household('Restore access','Keep my history','2468');",user=owner)
+    key = sql('SELECT member_key FROM my_context();',user=owner)
+    other_key = sql("SELECT create_member('Other adult','admin','5678');",user=owner)
+    sql(f"INSERT INTO household_accounts(user_id,household_id,member_key) VALUES('{adult}','{hid}','{other_key}');")
+    invitation = json.loads(sql(f"SELECT homehub_private.prepare_member_account_change('{hid}','{key}','Keep my history','restore-recipient@example.invalid','{owner}');"))
+    sql(f"SELECT redeem_invite('{invitation['code']}','2468');",user=recipient)
+    note_id = str(uuid.uuid4())
+    sql(f"INSERT INTO notes(id,household_id,title,body,member_key) VALUES('{note_id}','{hid}','Preserved note','Preserved content','{key}');")
+    sql(f"UPDATE profiles SET preferred_view='mobile',time_format='12' WHERE id='{recipient}';")
+    sql(f"INSERT INTO dashboard_preferences(user_id,layout) VALUES('{recipient}','{{\"version\":3,\"widgets\":[{{\"id\":\"notes\",\"key\":\"notes\",\"size\":\"wide\"}}]}}');")
+    snapshot_query = f"SELECT jsonb_build_object('member',to_jsonb(m),'profile',(SELECT to_jsonb(p) FROM profiles p WHERE id='{recipient}'),'layout',(SELECT to_jsonb(d) FROM dashboard_preferences d WHERE user_id='{recipient}')) FROM members m WHERE household_id='{hid}' AND key='{key}';"
+    before = sql(snapshot_query)
+    grant = sql("SELECT authorize_finances('2468');",user=recipient)
+    sql('SELECT leave_household();',user=recipient)
+    check('unlink retains the historical member but removes account access',sql('SELECT count(*) FROM my_context();',user=recipient),'0')
+    fingerprint = sql(f"SELECT homehub_private.member_account_state('{hid}','{key}');")
+    restore = f"SELECT homehub_private.restore_member_account('{hid}','{key}','{recipient}','{fingerprint}','{owner}','Owner confirmed accidental unlink; restore access');"
+    for role in ('anon','authenticated','service_role'):
+        check(f'{role} cannot call the owner restoration function',sql(f"SELECT has_function_privilege('{role}','homehub_private.restore_member_account(uuid,text,uuid,text,uuid,text)','EXECUTE');"),'f')
+    sql(restore,user=recipient,fail='permission denied')
+    sql(restore.replace(owner,outsider),fail='Verified platform owner')
+    sql(restore.replace(fingerprint,'0'*64),fail='Member account changed')
+    sql(restore.replace(recipient,outsider),fail='Previously accepted member invitation')
+    sql(f"UPDATE auth.users SET email_confirmed_at=NULL WHERE id='{recipient}';")
+    sql(restore,fail='Verified recipient')
+    sql(f"UPDATE auth.users SET email_confirmed_at=now(),created_at=now()+interval '1 day' WHERE id='{recipient}';")
+    sql(restore,fail='Previously accepted member invitation')
+    sql(f"UPDATE auth.users SET created_at=now()-interval '1 day' WHERE id='{recipient}';")
+    sql(f"UPDATE invites SET revoked_at=now() WHERE code='{invitation['code']}';")
+    sql(restore,fail='Previously accepted member invitation')
+    sql(f"UPDATE invites SET revoked_at=NULL WHERE code='{invitation['code']}'; UPDATE households SET suspended=true WHERE id='{hid}';")
+    sql(restore,fail='Household unavailable')
+    sql(f"UPDATE households SET suspended=false WHERE id='{hid}';")
+    sql(f"INSERT INTO household_accounts(user_id,household_id,member_key) VALUES('{outsider}','{hid}','{key}');")
+    sql(restore,fail='Member already has a linked account')
+    sql(f"DELETE FROM household_accounts WHERE user_id='{outsider}'; INSERT INTO household_accounts(user_id,household_id,member_key) VALUES('{recipient}','{hid}','{other_key}');")
+    sql(restore,fail='Recipient already belongs to a household')
+    sql(f"DELETE FROM household_accounts WHERE user_id='{recipient}';")
+    check('rejected restorations never change household access',sql(f"SELECT count(*) FROM household_accounts WHERE household_id='{hid}' AND member_key='{key}';"),'0')
+    # Simulate a residual old grant: restoration must revoke it, never reactivate it.
+    sql(f"UPDATE finance_sessions SET revoked=false WHERE token_hash=encode(extensions.digest('{grant}','sha256'),'hex');")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        receipts = list(pool.map(lambda _: sql(restore),range(2)))
+    check('concurrent restoration inserts once and returns a safe retry',sorted(receipts),['f','t'])
+    check('restored account returns to the exact historical member',sql('SELECT household_id||\':\'||member_key FROM my_context();',user=recipient),f'{hid}:{key}')
+    check('restoration preserves member, PIN, personal preferences and layout',sql(snapshot_query),before)
+    check('restored account can read its historical note',sql(f"SELECT body FROM notes WHERE id='{note_id}';",user=recipient),'Preserved content')
+    check('restoration retains other adults and never duplicates members',sql(f"SELECT count(*)||':'||(SELECT count(*) FROM members WHERE household_id='{hid}') FROM household_accounts WHERE household_id='{hid}';"),'2:2')
+    check('restoration revokes residual financial authorization',sql(f"SELECT revoked FROM finance_sessions WHERE token_hash=encode(extensions.digest('{grant}','sha256'),'hex');"),'t')
+    check('household restoration does not grant platform administration',sql('SELECT am_platform_admin();',user=recipient),'f')
+    check('restoration writes exactly one owner audit record',sql(f"SELECT count(*) FROM homehub_private.platform_audit WHERE action='member.account_restored' AND target_id='{recipient}' AND actor_id='{owner}';"),'1')
+    check('the administrative owner stays outside the restored household',sql('SELECT count(*) FROM my_context();',user=owner),'0')
 
 
 def run():
@@ -638,6 +697,7 @@ def run():
     check('sandbox ledger is inaccessible to ordinary accounts',sql("SELECT has_table_privilege('authenticated','homehub_private.stripe_sandbox_events','SELECT');"),'f')
     check('public catalogue exposes the editable monthly and annual prices',json.loads(sql('SELECT business_catalog();',device=''))['plans'][1]['annual_amount_cents'],4000)
     test_member_account_changes()
+    test_member_account_restoration()
     test_household_avatars()
     test_legal_subscriptions(test_gateway,master)
     print(f'\n{COUNT} database checks passed (plus negative permission/validation assertions).', flush=True)

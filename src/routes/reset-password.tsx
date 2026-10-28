@@ -237,13 +237,45 @@ function ResetPassword() {
       if (active.current) setBusy(false);
     }
   };
+  const leaveRecovery = async (requestAnother: boolean) => {
+    if (working.current) return;
+    working.current = true;
+    setBusy(true);
+    setError("");
+    const bound = verified.current;
+    try {
+      if (bound) {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!data.session || !sameSession(bound, data.session)) throw new Error("Invalid session");
+        // Leaving an unfinished recovery must not leave its temporary login at
+        // the household entry point. This only signs out this browser session.
+        const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+        if (signOutError) throw signOutError;
+      }
+      if (!active.current) return;
+      checks.current.value++;
+      verified.current = null;
+      forgetPasswordRecovery();
+      clearArrival();
+      setPassword("");
+      setConfirm("");
+      setAccountEmail("");
+      setError("");
+      if (requestAnother) setMode("request");
+      else window.location.assign("/");
+    } catch (reason) {
+      if (active.current) setError(passwordRecoveryError(reason));
+    } finally {
+      working.current = false;
+      if (active.current) setBusy(false);
+    }
+  };
 
   return (
     <main className="grid min-h-dvh place-items-center bg-background px-5 py-8">
       <section className="w-full max-w-sm space-y-6">
-        <Link to="/" className="font-display text-xl font-extrabold tracking-tight">
-          Skendal
-        </Link>
+        <span className="font-display text-xl font-extrabold tracking-tight">Skendal</span>
         <h1 className="font-display text-3xl font-bold">
           {mode === "password"
             ? "Nueva contraseña"
@@ -355,15 +387,7 @@ function ResetPassword() {
               type="button"
               className="w-full py-2 text-sm underline"
               disabled={busy}
-              onClick={() => {
-                checks.current.value++;
-                verified.current = null;
-                setPassword("");
-                setConfirm("");
-                forgetPasswordRecovery();
-                setError("");
-                setMode("request");
-              }}
+              onClick={() => void leaveRecovery(true)}
             >
               Solicitar otro enlace
             </button>
@@ -398,9 +422,14 @@ function ResetPassword() {
           </form>
         )}
         {mode !== "done" && (
-          <Link to="/" className="block py-2 text-center text-sm underline">
+          <button
+            type="button"
+            disabled={busy || mode === "loading"}
+            onClick={() => void leaveRecovery(false)}
+            className="block w-full py-2 text-center text-sm underline"
+          >
             Volver al acceso
-          </Link>
+          </button>
         )}
       </section>
     </main>

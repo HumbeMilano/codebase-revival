@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { HouseholdBackend, recoveryPath, signIn } from "./backend";
+import { HouseholdBackend, recoveryPath, section, signIn } from "./backend";
 
 test("forgot password opens a dedicated flow and sends the correct return address", async ({
   page,
@@ -171,5 +171,142 @@ test("a failed recovery email request leaves a working retry", async ({ page }) 
   await page.getByRole("button", { name: "Enviar enlace", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Revisa tu correo", exact: true })).toBeVisible();
   expect(backend.recoveryRequests).toHaveLength(1);
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("an unfinished recovery cannot open household setup by returning to the root", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  backend.hasHousehold = false;
+  await backend.install(page);
+  await page.goto(recoveryPath());
+  await expect(page.getByLabel("Nueva contraseña", { exact: true })).toBeVisible();
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/reset-password$/);
+  await expect(page.getByLabel("Nueva contraseña", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Nombre del hogar", { exact: true })).toHaveCount(0);
+  expect(backend.setupRequests).toEqual([]);
+  expect(backend.passwordUpdates).toBe(0);
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("recovery without a household explains the missing link and requires explicit creation", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  backend.hasHousehold = false;
+  await backend.install(page);
+  await page.goto(recoveryPath("/"));
+  await page.getByLabel("Nueva contraseña", { exact: true }).fill("a-new-test-password");
+  await page.getByLabel("Repetir contraseña", { exact: true }).fill("a-new-test-password");
+  await page.getByRole("button", { name: "Guardar contraseña", exact: true }).click();
+  await page.getByRole("link", { name: "Continuar a Skendal", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Acceso a tu cuenta", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("ana@example.invalid", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Esta cuenta no tiene un hogar vinculado/)).toBeVisible();
+  await expect(page.getByLabel("Nombre del hogar", { exact: true })).toHaveCount(0);
+  expect(backend.setupRequests).toEqual([]);
+  expect(backend.leaveRequests).toBe(0);
+  expect(backend.passwordUpdates).toBe(1);
+  await page.getByRole("button", { name: "Tengo una invitación", exact: true }).click();
+  await expect(page.getByLabel("Código de invitación", { exact: true })).toBeVisible();
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("a recovered platform administrator returns to administration without household setup", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  backend.hasHousehold = false;
+  backend.platformAdmin = true;
+  await backend.install(page);
+  await page.goto(recoveryPath());
+  await page.getByLabel("Nueva contraseña", { exact: true }).fill("a-new-test-password");
+  await page.getByLabel("Repetir contraseña", { exact: true }).fill("a-new-test-password");
+  await page.getByRole("button", { name: "Guardar contraseña", exact: true }).click();
+  await page.getByRole("link", { name: "Continuar a Skendal", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("heading", { name: "Administración", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Nombre del hogar", { exact: true })).toHaveCount(0);
+  expect(backend.passwordUpdates).toBe(1);
+  expect(backend.setupRequests).toEqual([]);
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("canceling an unfinished recovery returns to login without unlinking the household", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  await backend.install(page);
+  await page.goto(recoveryPath());
+  await expect(page.getByLabel("Nueva contraseña", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Volver al acceso", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByLabel("Contraseña", { exact: true })).toBeVisible();
+  expect(backend.logoutRequests).toBe(1);
+  expect(backend.leaveRequests).toBe(0);
+  expect(backend.hasHousehold).toBe(true);
+  expect(backend.passwordUpdates).toBe(0);
+  expect(await page.evaluate(() => sessionStorage.getItem("skendal-password-recovery"))).toBeNull();
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("a recovery event in an open household routes to the password form instead of setup", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  await backend.install(page);
+  await signIn(page);
+  backend.hasHousehold = false;
+  await page.evaluate(async () => {
+    const key = Object.keys(localStorage).find((key) => /^sb-.+-auth-token$/.test(key))!;
+    const session = JSON.parse(localStorage.getItem(key)!);
+    const channel = new BroadcastChannel(key);
+    channel.postMessage({ event: "PASSWORD_RECOVERY", session });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    channel.close();
+  });
+  await expect(page).toHaveURL(/\/reset-password$/);
+  await expect(page.getByLabel("Nueva contraseña", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Nombre del hogar", { exact: true })).toHaveCount(0);
+  expect(backend.setupRequests).toEqual([]);
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("profile logout preserves membership while unlinking requires its own confirmation", async ({
+  page,
+}) => {
+  const backend = new HouseholdBackend();
+  await backend.install(page);
+  await signIn(page);
+  await section(page, "Mi perfil");
+  await page.getByRole("button", { name: "Cerrar sesión", exact: true }).click();
+  await expect(page.getByLabel("Contraseña", { exact: true })).toBeVisible();
+  expect(backend.logoutRequests).toBe(1);
+  expect(backend.leaveRequests).toBe(0);
+  expect(backend.hasHousehold).toBe(true);
+  await signIn(page);
+  await section(page, "Mi perfil");
+  await page.getByRole("button", { name: "Desvincular mi cuenta", exact: true }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog.getByText(/Para cerrar sesión y mantener tu acceso/)).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Desvincular mi cuenta", exact: true }),
+  ).toBeDisabled();
+  await dialog.getByRole("checkbox").check();
+  await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  expect(backend.leaveRequests).toBe(0);
+  await page.getByRole("button", { name: "Desvincular mi cuenta", exact: true }).click();
+  await expect(dialog.getByRole("checkbox")).not.toBeChecked();
+  await dialog.getByRole("checkbox").check();
+  await dialog.getByRole("button", { name: "Desvincular mi cuenta", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Acceso a tu cuenta", exact: true }),
+  ).toBeVisible();
+  expect(backend.leaveRequests).toBe(1);
+  expect(backend.members.map((member) => member.key)).toEqual(["m_ana", "m_nico"]);
   expect(backend.unexpectedRequests).toEqual([]);
 });

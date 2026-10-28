@@ -114,6 +114,8 @@ export class HouseholdBackend {
   setupRequests: { method: string; args: Row }[] = [];
   memberChanges: { method: string; args: Row }[] = [];
   passwordUpdates = 0;
+  leaveRequests = 0;
+  logoutRequests = 0;
   failNextPasswordUpdate = false;
   dashboardPreference: Row | null = null;
   dashboardSaveRequests = 0;
@@ -341,7 +343,10 @@ export class HouseholdBackend {
       }
       return route.fulfill({ json: user });
     }
-    if (pathname.endsWith("/logout")) return route.fulfill({ status: 204 });
+    if (pathname.endsWith("/logout")) {
+      this.logoutRequests++;
+      return route.fulfill({ status: 204 });
+    }
     this.unexpectedRequests.push(pathname);
     return route.fulfill({
       status: 400,
@@ -473,6 +478,10 @@ export class HouseholdBackend {
         };
       case "household_members":
         return { json: this.members };
+      case "leave_household":
+        this.leaveRequests++;
+        this.hasHousehold = false;
+        return { status: 204 };
       case "create_household":
       case "redeem_invite":
         this.setupRequests.push({ method: name, args });

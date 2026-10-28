@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Welcome } from "./Onboarding";
+import { SetupHousehold, Welcome } from "./Onboarding";
 
 const auth = vi.hoisted(() => ({ signIn: vi.fn() }));
 const notices = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
@@ -31,6 +31,23 @@ afterEach(() => {
 });
 
 describe("account entry", () => {
+  it("does not assume an unlinked account wants to create a new household", () => {
+    render(<SetupHousehold compact email="ana@example.com" onDone={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "Acceso a tu cuenta" })).toBeInTheDocument();
+    expect(screen.getByText("ana@example.com")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Nombre del hogar")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Crear un nuevo hogar" }));
+    expect(screen.getByLabelText("Nombre del hogar")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Volver a mi cuenta" }));
+    expect(screen.queryByLabelText("Nombre del hogar")).not.toBeInTheDocument();
+  });
+  it("opens a pending invitation directly without showing household creation", () => {
+    const code = "ABCDEF0123456789ABCDEF0123456789";
+    window.history.replaceState({}, "", `/?invite=${code}`);
+    render(<SetupHousehold compact email="ana@example.com" onDone={vi.fn()} />);
+    expect(screen.getByLabelText("Código de invitación")).toHaveValue(code);
+    expect(screen.queryByLabelText("Nombre del hogar")).not.toBeInTheDocument();
+  });
   it("allows retry after a rejected network request and does not remain busy", async () => {
     auth.signIn
       .mockRejectedValueOnce(new Error("network unavailable"))

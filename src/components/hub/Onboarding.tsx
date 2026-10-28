@@ -36,8 +36,8 @@ const errMsg = (e: { message?: string } | null) => {
   if (m.includes("Member has household history"))
     return "Esta persona tiene historial de tareas o finanzas y no se puede borrar. Conserva su historial.";
   if (m.includes("Cannot unlink the last adult account"))
-    return "Debe quedar otra cuenta adulta vinculada antes de salir o desvincular esta cuenta.";
-  if (m.includes("Cannot unlink yourself")) return "Para salir del hogar utiliza Mi perfil.";
+    return "Debe quedar otra cuenta adulta vinculada antes de desvincular esta cuenta.";
+  if (m.includes("Cannot unlink yourself")) return "Para desvincular tu cuenta utiliza Mi perfil.";
   if (m.includes("Failed to fetch") || m.includes("NetworkError") || m.includes("fetch failed"))
     return "No se pudo conectar. Revisa tu conexión y vuelve a intentarlo.";
   if (m.includes("Invalid login")) return "Correo o contraseña incorrectos";
@@ -83,9 +83,7 @@ function pendingInvitation() {
 function Shell({ children, compact }: { children: React.ReactNode; compact: boolean }) {
   return (
     <div className={cn("flex min-h-dvh w-full flex-col overflow-y-auto", compact ? "p-5" : "p-10")}>
-      <span className="font-display text-xl font-extrabold tracking-tight">
-        home<span className="text-muted-foreground">hub</span>
-      </span>
+      <span className="font-display text-xl font-extrabold tracking-tight">Skendal</span>
       <div className="mx-auto my-auto w-full max-w-sm py-6">{children}</div>
     </div>
   );
@@ -269,8 +267,16 @@ export function Welcome({ compact, onPaired }: { compact: boolean; onPaired: () 
 }
 
 /** Signed-in account without a household: create one or join with an invite. */
-export function SetupHousehold({ compact, onDone }: { compact: boolean; onDone: () => void }) {
-  const [view, setView] = useState<"create" | "join">("create");
+export function SetupHousehold({
+  compact,
+  email,
+  onDone,
+}: {
+  compact: boolean;
+  email: string;
+  onDone: () => void;
+}) {
+  const [view, setView] = useState<"choose" | "create" | "join">("choose");
   const [home, setHome] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -286,7 +292,7 @@ export function SetupHousehold({ compact, onDone }: { compact: boolean; onDone: 
   const submit = async (e: React.FormEvent) => {
     try {
       e.preventDefault();
-      if (busy) return;
+      if (busy || view === "choose") return;
       if (pin.length !== 4) {
         toast.error("El PIN debe tener 4 números");
         return;
@@ -310,8 +316,57 @@ export function SetupHousehold({ compact, onDone }: { compact: boolean; onDone: 
       setBusy(false);
     }
   };
+  const signOut = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "local" });
+      if (error) throw error;
+    } catch {
+      toast.error("No se pudo cerrar sesión. Revisa la conexión y vuelve a intentarlo.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (view === "choose")
+    return (
+      <Shell compact={compact}>
+        <section className="space-y-5 rounded-3xl bg-card p-6 shadow-card">
+          <h1 className="font-display text-3xl font-extrabold tracking-[-0.04em]">
+            Acceso a tu cuenta
+          </h1>
+          <p className="break-words text-sm font-semibold">{email}</p>
+          <p className="text-sm text-muted-foreground">
+            Esta cuenta no tiene un hogar vinculado. Si ya formabas parte de uno, pide que revisen
+            el vínculo de tu cuenta con ese hogar antes de crear otro.
+          </p>
+          <Button className="w-full" onClick={() => setView("join")}>
+            <KeyRound /> Tengo una invitación
+          </Button>
+          <Button variant="outline" className="w-full" onClick={() => setView("create")}>
+            <Home /> Crear un nuevo hogar
+          </Button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void signOut()}
+            className="w-full py-2 text-sm underline underline-offset-4"
+          >
+            Cerrar sesión
+          </button>
+        </section>
+      </Shell>
+    );
   return (
     <Shell compact={compact}>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setView("choose")}
+        className="mb-4 py-2 text-sm underline underline-offset-4"
+      >
+        Volver a mi cuenta
+      </button>
       <h1 className="font-display text-4xl font-extrabold tracking-[-0.04em]">Tu hogar</h1>
       <div className="my-5 grid grid-cols-2 gap-1 rounded-2xl bg-card p-1 shadow-card">
         {(
@@ -374,7 +429,8 @@ export function SetupHousehold({ compact, onDone }: { compact: boolean; onDone: 
         </Button>
         <button
           type="button"
-          onClick={() => void supabase.auth.signOut()}
+          disabled={busy}
+          onClick={() => void signOut()}
           className="w-full text-xs text-muted-foreground"
         >
           Cerrar sesión
