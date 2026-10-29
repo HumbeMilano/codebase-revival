@@ -74,14 +74,28 @@ test("small widgets preserve selections and editing keeps three columns", async 
   expect(Math.abs(rects[0]!.y - rects[2]!.y)).toBeLessThan(1);
   expect(rects[2]!.x).toBeGreaterThan(rects[1]!.x);
   await expect(page.locator('[data-widget-key="note-a"]')).toContainText("Llevar cuaderno");
-  await expect(page.locator('[data-widget-key="note-b"]')).toHaveCount(0);
+  await expect(page.locator('[data-widget-key="note-b"]')).toContainText("Llevar pasaporte");
   await expect(page.locator('[data-widget-key="member"]')).toContainText("$45.00");
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
   await page
     .locator('[data-widget-key="note-a"]')
-    .getByRole("button", { name: "Configurar nota específica", exact: true })
+    .getByRole("button", { name: "Configurar nota específica · nota de escuela", exact: true })
     .click();
   const config = page.getByRole("dialog", { name: "Configurar widget", exact: true });
+  await expect(config.getByRole("option", { name: "Nota de viaje", exact: true })).toHaveAttribute(
+    "disabled",
+    "",
+  );
+  await expect(config.getByLabel("Nota del widget")).toHaveValue(noteA);
+  await config.getByRole("button", { name: "Listo", exact: true }).click();
+  await page
+    .locator('[data-widget-key="note-b"]')
+    .getByRole("button", { name: /^Ocultar / })
+    .click();
+  await page
+    .locator('[data-widget-key="note-a"]')
+    .getByRole("button", { name: "Configurar nota específica", exact: true })
+    .click();
   await config.getByLabel("Nota del widget").selectOption(noteB);
   await config.getByRole("button", { name: "Tamaño 1 por 4", exact: true }).click();
   await config.getByRole("button", { name: "Listo", exact: true }).click();
@@ -99,6 +113,7 @@ test("small widgets preserve selections and editing keeps three columns", async 
   await expect(page.locator('[data-widget="clock"]')).toHaveCount(1);
   await expect(page.locator('[data-widget-key="note-a"]')).toContainText("Llevar pasaporte");
   await expect(page.locator('[data-widget-key="note-a"]')).toHaveAttribute("data-size", "column");
+  await expect(page.locator('[data-widget-key="note-b"]')).toHaveCount(0);
   expect(JSON.stringify(backend.dashboardPreference?.["layout"])).not.toContain("Llevar");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(backend.unexpectedRequests).toEqual([]);
