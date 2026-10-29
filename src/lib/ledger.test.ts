@@ -18,8 +18,8 @@ const bill = (p: Partial<LedgerBill>): LedgerBill => ({
 const today = new Date(2026, 9, 21);
 
 describe("ledger", () => {
-  it("marks auto-pay bills paid once the due day arrives", () => {
-    expect(billStatus(bill({ autoPay: true, dueDay: 15 }), "2026-10", today)).toBe("paid");
+  it("estimates scheduled payments without confirming them", () => {
+    expect(billStatus(bill({ autoPay: true, dueDay: 15 }), "2026-10", today)).toBe("estimated");
     expect(billStatus(bill({ autoPay: true, dueDay: 25 }), "2026-10", today)).toBe("pending");
   });
 
@@ -27,6 +27,48 @@ describe("ledger", () => {
     const b = bill({ overrides: { "2026-10": { amount: 140 } } });
     expect(monthSummary([b], [], "2026-10", today, ["a", "b"]).total).toBe(140);
     expect(monthSummary([b], [], "2026-11", today, ["a", "b"]).total).toBe(100);
+  });
+
+  it("keeps estimates out of confirmed payments and available balances until confirmation", () => {
+    const scheduled = bill({ id: "scheduled", base: 100, autoPay: true, dueDay: 10 });
+    const confirmed = bill({
+      id: "confirmed",
+      base: 60,
+      overrides: { "2026-10": { status: "paid" } },
+    });
+    const waiting = bill({ id: "waiting", base: 40 });
+    const contributions = [
+      { id: "a", personId: "a", amount: 50, month: "2026-10" },
+      { id: "b", personId: "b", amount: 50, month: "2026-10" },
+    ];
+    const snapshot = structuredClone(scheduled);
+    const summary = monthSummary([scheduled, confirmed, waiting], contributions, "2026-10", today, [
+      "a",
+      "b",
+    ]);
+    expect(summary.total).toBe(200);
+    expect(summary.paid).toBe(60);
+    expect(summary.estimated).toBe(100);
+    expect(summary.pending).toBe(140);
+    expect(summary.paid + summary.pending).toBe(summary.total);
+    expect(summary.persons.map((p) => p.available)).toEqual([20, 20]);
+    expect(summary.persons.reduce((sum, p) => sum + p.estimated, 0)).toBe(100);
+    expect(scheduled).toEqual(snapshot);
+    const paid = { ...scheduled, overrides: { "2026-10": { status: "paid" as const } } };
+    const after = monthSummary([paid, confirmed, waiting], contributions, "2026-10", today, [
+      "a",
+      "b",
+    ]);
+    expect(after.paid).toBe(160);
+    expect(after.estimated).toBe(0);
+    expect(after.persons.map((p) => p.available)).toEqual([-30, -30]);
+  });
+
+  it("an explicit pending override defeats a scheduled estimate and history stays unchanged", () => {
+    const scheduled = bill({ autoPay: true, overrides: { "2026-10": { status: "pending" } } });
+    expect(billStatus(scheduled, "2026-10", today)).toBe("pending");
+    expect(billStatus(scheduled, "2026-09", today)).toBe("estimated");
+    expect(scheduled.overrides).toEqual({ "2026-10": { status: "pending" } });
   });
 
   it("skipped bills don't count that month", () => {
@@ -56,13 +98,13 @@ describe("calendar and legacy ledger integrity", () => {
       "pending",
     );
     expect(billStatus(bill({ autoPay: true, dueDay: 31 }), "2026-02", new Date(2026, 1, 28))).toBe(
-      "paid",
+      "estimated",
     );
     expect(billStatus(bill({ autoPay: true, dueDay: 31 }), "2028-02", new Date(2028, 1, 28))).toBe(
       "pending",
     );
     expect(billStatus(bill({ autoPay: true, dueDay: 31 }), "2028-02", new Date(2028, 1, 29))).toBe(
-      "paid",
+      "estimated",
     );
   });
 

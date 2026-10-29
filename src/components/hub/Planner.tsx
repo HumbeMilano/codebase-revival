@@ -10,7 +10,7 @@ import { Avatar } from "./Kiosk";
 import { MEMBERS, type Member } from "./data";
 import { useToday } from "@/hooks/use-today";
 import { calendarBills, calendarDateFromId, type CalendarItem } from "@/lib/calendar";
-import type { LedgerBill } from "@/lib/ledger";
+import { billStatusLabel, type LedgerBill } from "@/lib/ledger";
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const BillForm = lazy(() => import("./Finance").then((m) => ({ default: m.BillForm })));
 import { dateKey, parseDate, type FamilyEvent, type FamilyNote } from "./planner-data";
@@ -213,7 +213,7 @@ export function FamilyCalendar({
                     <span>{money(entry.amount)}</span>
                   </span>
                   <span className="mt-2 block text-sm text-muted-foreground">
-                    {entry.status === "paid" ? "Pagada" : "Pendiente"}
+                    {billStatusLabel(entry.status, true)}
                   </span>
                 </button>
               ) : (
@@ -613,7 +613,7 @@ export function FamilyCalendar({
         >
           <div className="space-y-5">
             <span className="inline-block rounded-full bg-accent px-3 py-1 text-sm font-bold">
-              Factura · {detail.status === "paid" ? "Pagada" : "Pendiente"}
+              Factura · {billStatusLabel(detail.status, true)}
             </span>
             <p className="font-display text-3xl font-bold">{money(detail.amount)}</p>
             <p>

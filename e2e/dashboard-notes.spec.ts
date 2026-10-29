@@ -81,6 +81,9 @@ test("dashboard notes open the selected editor, save across widgets and survive 
   await editor.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await page.reload();
+  await expect(editor.getByLabel("Título", { exact: true })).toHaveValue("Escuela de Ana");
+  await editor.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await section(page, "Inicio");
   await expect(page.locator('[data-widget="specific-note"]')).toContainText("Escuela de Ana");
   await expect(page.locator('[data-widget="notes"]')).toContainText("Escuela de Ana");
   await page

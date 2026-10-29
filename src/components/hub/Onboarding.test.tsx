@@ -33,10 +33,10 @@ afterEach(() => {
 describe("account entry", () => {
   it("does not assume an unlinked account wants to create a new household", () => {
     render(<SetupHousehold compact email="ana@example.com" onDone={vi.fn()} />);
-    expect(screen.getByRole("heading", { name: "Acceso a tu cuenta" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tu hogar" })).toBeInTheDocument();
     expect(screen.getByText("ana@example.com")).toBeInTheDocument();
     expect(screen.queryByLabelText("Nombre del hogar")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Crear un nuevo hogar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crear hogar" }));
     expect(screen.getByLabelText("Nombre del hogar")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Volver a mi cuenta" }));
     expect(screen.queryByLabelText("Nombre del hogar")).not.toBeInTheDocument();

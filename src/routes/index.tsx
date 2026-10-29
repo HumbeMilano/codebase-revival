@@ -4,8 +4,10 @@ import { passwordRecoveryArrival, supabase } from "@/integrations/supabase/clien
 import { AdminPage } from "@/components/admin/AdminPage";
 import { currentApplication } from "@/lib/pwa-context";
 import { canResumePasswordRecovery } from "@/lib/password-recovery";
+import { hubSearch } from "@/lib/hub-navigation";
 
 export const Route = createFileRoute("/")({
+  validateSearch: hubSearch,
   beforeLoad: async () => {
     if (
       typeof window !== "undefined" &&

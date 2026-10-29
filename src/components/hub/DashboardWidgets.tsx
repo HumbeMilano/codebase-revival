@@ -20,7 +20,7 @@ import {
   fundingPercent,
 } from "@/lib/dashboard-data";
 import { calendarBills, upcomingCalendarItems } from "@/lib/calendar";
-import { monthSummary } from "@/lib/ledger";
+import { monthSummary, billStatusLabel } from "@/lib/ledger";
 import { cn } from "@/lib/utils";
 import { shoppingListId } from "@/lib/offline-shopping";
 import { dateKey, eventWhen, parseDate } from "./planner-data";
@@ -278,7 +278,11 @@ function TinyWidget({
       break;
     case "tasks":
     case "my-tasks":
-      value = chores.filter((c) => !c.done).length;
+      value = chores.length ? (
+        chores.filter((c) => !c.done).length
+      ) : (
+        <Choose label="Añadir tarea" onClick={() => onCreate("chores")} />
+      );
       break;
     case "shopping":
       title = list?.name ?? title;
@@ -293,7 +297,9 @@ function TinyWidget({
       break;
     case "calendar":
     case "week":
-      value = events[0]?.title ?? "Sin eventos";
+      value = events[0]?.title ?? (
+        <Choose label="Añadir evento" onClick={() => onCreate("calendar")} />
+      );
       break;
     case "reminders":
       value = s.events.filter((e) => e.kind === "reminder" && !e.completed).length;
@@ -497,6 +503,7 @@ export function DashboardWidgetContent(props: Props) {
                 </div>
               ))}
           </div>
+          {!chores.length && <Choose label="Añadir tarea" onClick={() => onCreate("chores")} />}
           {widget.id === "member-tasks" && (
             <WidgetProgress
               label={`Tareas de ${person?.name}`}
@@ -559,7 +566,7 @@ export function DashboardWidgetContent(props: Props) {
               text={`${done} de ${items.length} comprados`}
             />
           ) : (
-            <Empty>Sin productos</Empty>
+            <Choose label="Añadir productos" onClick={() => onBrowseShopping(list!.id)} />
           )}
         </>
       );
@@ -707,7 +714,10 @@ export function DashboardWidgetContent(props: Props) {
           ))}
         </div>
       ) : (
-        <Empty>{widget.id === "reminders" ? "Sin recordatorios" : "Sin próximos eventos"}</Empty>
+        <Choose
+          label={widget.id === "reminders" ? "Abrir calendario" : "Añadir evento"}
+          onClick={() => (widget.id === "reminders" ? onBrowse() : onCreate("calendar"))}
+        />
       );
       break;
     }
@@ -720,7 +730,9 @@ export function DashboardWidgetContent(props: Props) {
               <span className={cn("dw-status-dot", bill.status === "paid" && "dw-paid")} />
               <div className="dw-row-text">
                 <strong>{bill.title}</strong>
-                <span>{bill.status === "paid" ? "Pagada" : eventWhen(bill)}</span>
+                <span>
+                  {bill.status === "pending" ? eventWhen(bill) : billStatusLabel(bill.status, true)}
+                </span>
               </div>
               <strong className="dw-bill-amount">{money(bill.amount)}</strong>
             </div>
@@ -756,6 +768,9 @@ export function DashboardWidgetContent(props: Props) {
             rows={[
               ["Aportado", summary.contributed],
               ["Pagado", summary.paid],
+              ...(summary.estimated > 0
+                ? [["Estimado", summary.estimated] as [string, number]]
+                : []),
             ]}
           />
         </>

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   CalendarDays,
   CheckSquare,
@@ -45,6 +45,8 @@ import {
 import { toast } from "sonner";
 import { setHouseholdId } from "@/lib/hub-db";
 import { sessionIdentity } from "@/lib/session-identity";
+import { isTransientContextError } from "@/lib/transient-context-error";
+import type { HubSection, HubSearch } from "@/lib/hub-navigation";
 import { canResumePasswordRecovery, rememberPasswordRecovery } from "@/lib/password-recovery";
 import { adminEntry } from "@/lib/pwa-context";
 import { personalPreferences } from "@/lib/account-validation";
@@ -68,16 +70,7 @@ const FamilyNotes = lazy(() => import("./Planner").then((m) => ({ default: m.Fam
 const PersonalProfile = lazy(() =>
   import("./PersonalProfile").then((m) => ({ default: m.PersonalProfile })),
 );
-type Tab =
-  | "home"
-  | "chores"
-  | "shopping"
-  | "finance"
-  | "calendar"
-  | "notes"
-  | "photos"
-  | "household"
-  | "profile";
+type Tab = HubSection;
 const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Inicio", icon: Home },
   { id: "chores", label: "Tareas", icon: CheckSquare },
@@ -124,6 +117,8 @@ export function HubApp() {
     }
   }, []);
   const [gate, setGate] = useState<Gate>({ status: "loading" });
+  const visibleGate = useRef(gate);
+  visibleGate.current = gate;
   const [compact, setCompact] = useState(false);
   const [timeFormat, setTimeFormat] = useState<"12" | "24">("24");
   const [membersVersion, setMembersVersion] = useState(0);
@@ -149,7 +144,12 @@ export function HubApp() {
   }, []);
   const reload = useCallback(async () => {
     const revision = ++sequence.current;
-    setGate({ status: "loading" });
+    const activeIdentity = currentDbIdentity();
+    const visible = visibleGate.current;
+    const retaining = visible.status === "ready" && visible.identity === activeIdentity;
+    if (!retaining) setGate({ status: "loading" });
+    let attemptedIdentity = activeIdentity;
+    let failureStatus: number | undefined;
     let candidate: ReturnType<typeof prepareDbContext> | undefined;
     let requestedAccountId: string | null = null;
     try {
@@ -190,6 +190,15 @@ export function HubApp() {
         }
         return;
       }
+      attemptedIdentity = session
+        ? sessionIdentity(session.user.id, session.access_token)
+        : `device:${token}`;
+      if (currentDbIdentity() && currentDbIdentity() !== attemptedIdentity) {
+        invalidateDbContext();
+        setMembers([]);
+        setHouseholdId("");
+        setGate({ status: "loading" });
+      }
       let userId: string | null = null;
       let email = "";
       if (session) {
@@ -210,8 +219,12 @@ export function HubApp() {
         deviceToken: userId ? null : token,
         identity,
       });
-      const { data, error } = await candidate.client.rpc("my_context");
-      if (error) throw error;
+      const contextResult = await candidate.client.rpc("my_context");
+      const { data, error } = contextResult;
+      if (error) {
+        failureStatus = contextResult.status;
+        throw error;
+      }
       const context = data?.[0];
       if (!context) {
         let admin = false;
@@ -242,8 +255,12 @@ export function HubApp() {
         }
         return;
       }
-      const { data: rows, error: memberError } = await candidate.client.rpc("household_members");
-      if (memberError) throw memberError;
+      const membersResult = await candidate.client.rpc("household_members");
+      const { data: rows, error: memberError } = membersResult;
+      if (memberError) {
+        failureStatus = membersResult.status;
+        throw memberError;
+      }
       if (revision !== sequence.current) {
         candidate.discard();
         return;
@@ -278,18 +295,27 @@ export function HubApp() {
       if (shoppingContext) localStorage.setItem(ACTIVE_SHOPPING_ACCOUNT, userId!);
       setGate({ status: "ready", mode: candidate.mode, member, identity, shoppingContext });
       setMembersVersion((v) => v + 1);
+      toast.dismiss("skendal-context-connection");
       if (userId) void loadPreferences();
     } catch (error) {
       candidate?.discard();
       if (revision === sequence.current) {
+        const temporary = isTransientContextError(error, failureStatus);
+        if (
+          retaining &&
+          attemptedIdentity &&
+          attemptedIdentity === currentDbIdentity() &&
+          temporary
+        ) {
+          toast.warning("No se pudo verificar el hogar. Reintentando…", {
+            id: "skendal-context-connection",
+          });
+          return;
+        }
         invalidateDbContext();
         setHouseholdId("");
         setMembers([]);
-        const message =
-          error && typeof error === "object" && "message" in error
-            ? String(error.message)
-            : String(error);
-        if (navigator.onLine === false || /fetch|network|timeout|timed out/i.test(message)) {
+        if (temporary) {
           try {
             const accountId = localStorage.getItem(ACTIVE_SHOPPING_ACCOUNT);
             const cached =
@@ -313,7 +339,7 @@ export function HubApp() {
     const media = window.matchMedia("(max-width: 899px)");
     const resize = () => setCompact(media.matches);
     const network = () => {
-      if (navigator.onLine && !currentDbIdentity()) void reload();
+      if (navigator.onLine) void reload();
     };
     resize();
     void reload();
@@ -334,7 +360,14 @@ export function HubApp() {
       if (event === "TOKEN_REFRESHED" && session) {
         if (currentDbIdentity() === sessionIdentity(session.user.id, session.access_token))
           updateAccountToken(session.access_token);
-        else setTimeout(() => void reload(), 0);
+        else {
+          sequence.current++;
+          invalidateDbContext();
+          setMembers([]);
+          setHouseholdId("");
+          setGate({ status: "loading" });
+          setTimeout(() => void reload(), 0);
+        }
         return;
       }
       if (
@@ -349,9 +382,16 @@ export function HubApp() {
         localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
       if (event === "SIGNED_OUT") {
         localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
-        invalidateDbContext();
       }
-      if (signedIn || event === "SIGNED_OUT") setTimeout(() => void reload(), 0);
+      if (signedIn || event === "SIGNED_OUT") {
+        sequence.current++;
+        preferencesRevision.current++;
+        invalidateDbContext();
+        setMembers([]);
+        setHouseholdId("");
+        setGate({ status: "loading" });
+        setTimeout(() => void reload(), 0);
+      }
     });
     return () => {
       sequence.current++;
@@ -364,20 +404,44 @@ export function HubApp() {
   const refreshContext = useCallback(async () => {
     const revision = sequence.current;
     const request = ++contextRevision.current;
+    const identity = currentDbIdentity();
+    const householdId = HOUSEHOLD.id;
     const [context, members] = await Promise.all([
       db().rpc("my_context"),
       db().rpc("household_members"),
     ]);
-    if (revision !== sequence.current || request !== contextRevision.current) return;
+    if (
+      revision !== sequence.current ||
+      request !== contextRevision.current ||
+      identity !== currentDbIdentity() ||
+      householdId !== HOUSEHOLD.id
+    )
+      return;
+    const failures = [context, members].filter((result) => result.error);
+    if (
+      failures.length &&
+      failures.every((result) => isTransientContextError(result.error, result.status))
+    ) {
+      toast.warning("No se pudo verificar el hogar. Reintentando…", {
+        id: "skendal-context-connection",
+      });
+      return;
+    }
     if (
       context.error ||
       !context.data?.[0] ||
-      context.data[0].household_id !== HOUSEHOLD.id ||
+      context.data[0].household_id !== householdId ||
       members.error
     ) {
+      invalidateDbContext();
+      localStorage.removeItem(ACTIVE_SHOPPING_ACCOUNT);
+      setMembers([]);
+      setHouseholdId("");
+      setGate({ status: "loading" });
       void reload();
       return;
     }
+    toast.dismiss("skendal-context-connection");
     const rows: MemberRow[] = members.data ?? [];
     if (
       JSON.stringify(rows) !==
@@ -385,18 +449,18 @@ export function HubApp() {
     ) {
       setMembers(rows);
       setMembersVersion((v) => v + 1);
-      setGate((old) =>
-        old.status !== "ready"
-          ? old
-          : {
-              ...old,
-              member: MEMBERS.find((m) => m.id === context.data?.[0]?.member_key) ?? null,
-              shoppingContext: old.shoppingContext
-                ? { ...old.shoppingContext, memberKey: context.data?.[0]?.member_key ?? "" }
-                : null,
-            },
-      );
     }
+    setGate((old) =>
+      old.status !== "ready"
+        ? old
+        : {
+            ...old,
+            member: MEMBERS.find((m) => m.id === context.data?.[0]?.member_key) ?? null,
+            shoppingContext: old.shoppingContext
+              ? { ...old.shoppingContext, memberKey: context.data?.[0]?.member_key ?? "" }
+              : null,
+          },
+    );
   }, [reload]);
   const exit = async () => {
     try {
@@ -488,17 +552,30 @@ function HubShell({
   onReload: () => void;
   shoppingContext: ShoppingContext | null;
 }) {
+  const navigate = useNavigate({ from: "/" });
+  const search = useSearch({ from: "/" });
   const [user, setUser] = useState<Member | null>(accountMember);
-  const [tab, setTab] = useState<Tab>("home");
+  const tab = search.section ?? "home";
   const [financeUnlocked, setFinanceUnlocked] = useState(hasFinanceToken);
   const [quick, setQuick] = useState(false);
   const [askAdmin, setAskAdmin] = useState(false);
   const [more, setMore] = useState(false);
   const [create, setCreate] = useState<{ tab: Tab; id: number } | null>(null);
-  const [record, setRecord] = useState<{
-    tab: "calendar" | "notes" | "shopping";
-    id: string;
-  } | null>(null);
+  const record = search.record ? { tab, id: search.record } : null;
+  const visit = useCallback(
+    (next: Tab, reference?: string, replace = false) => {
+      void navigate({
+        to: "/",
+        search: (previous: HubSearch) => ({
+          ...previous,
+          section: next === "home" ? undefined : next,
+          record: reference,
+        }),
+        replace,
+      });
+    },
+    [navigate],
+  );
   const now = useClock();
   useHouseholdPhotos(mode === "device");
   useHouseholdAvatars();
@@ -530,18 +607,22 @@ function HubShell({
       (tab === "finance" && !financialAccess) ||
       (["household", "photos"].includes(tab) && !canManage)
     )
-      setTab("home");
-  }, [tab, financialAccess, canManage]);
-  const go = (next: Tab) => {
+      visit("home", undefined, true);
+  }, [tab, financialAccess, canManage, visit]);
+  const go = (next: Tab, reference?: string) => {
     setMore(false);
     setCreate(null);
-    setRecord(null);
     if (next === "finance" && !financialAccess) {
       setAskAdmin(true);
       return;
     }
-    setTab(next);
+    visit(next, reference);
   };
+  useEffect(() => {
+    setMore(false);
+    setQuick(false);
+    setCreate((previous) => (previous?.tab === tab ? previous : null));
+  }, [tab, search.record]);
   const quickAdd = (next: Tab) => {
     setQuick(false);
     go(next);
@@ -553,9 +634,10 @@ function HubShell({
       if (mode === "account") {
         const { error } = await supabase.auth.signOut({ scope: "local" });
         if (error) throw error;
+        visit("home", undefined, true);
       } else {
         setUser(null);
-        setTab("home");
+        visit("home", undefined, true);
         setQuick(false);
         setMore(false);
       }
@@ -696,8 +778,7 @@ function HubShell({
                       go={go}
                       onCreate={quickAdd}
                       onOpenRecord={(next, id) => {
-                        go(next);
-                        setRecord({ tab: next, id });
+                        go(next, id);
                       }}
                       adultAuthorized={financialAccess}
                     />
@@ -874,7 +955,7 @@ function HubShell({
           onSuccess={() => {
             setAskAdmin(false);
             setFinanceUnlocked(hasFinanceToken());
-            setTab("finance");
+            visit("finance");
           }}
         />
       )}

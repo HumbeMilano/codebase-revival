@@ -17,6 +17,7 @@ import { splitBill, validateSplits, type Split } from "@/lib/split";
 import {
   billAmount,
   billStatus,
+  billStatusLabel,
   billsForMonth,
   effectiveDueDay,
   monthKey,
@@ -154,8 +155,8 @@ function BillRow({
   today: Date;
   onClick: () => void;
 }) {
-  const paid = billStatus(b, mk, today) === "paid";
-  const explicit = b.overrides[mk]?.status;
+  const status = billStatus(b, mk, today);
+  const paid = status === "paid";
   return (
     <button
       onClick={onClick}
@@ -175,7 +176,7 @@ function BillRow({
             ))}
           </span>
           <span className="truncate">{names(b)}</span>
-          {b.autoPay && <span>· Automático</span>}
+          {b.autoPay && <span>· Estimación programada</span>}
         </div>
       </div>
       <div className="shrink-0 text-right">
@@ -183,10 +184,14 @@ function BillRow({
         <span
           className={cn(
             "mt-1 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold",
-            paid ? "bg-success text-success-foreground" : "bg-destructive-soft text-destructive",
+            paid
+              ? "bg-success text-success-foreground"
+              : status === "estimated"
+                ? "bg-accent text-accent-foreground"
+                : "bg-destructive-soft text-destructive",
           )}
         >
-          {paid ? (b.autoPay && !explicit ? "Pago estimado" : "Pagado") : "Pendiente"}
+          {billStatusLabel(status)}
         </span>
       </div>
     </button>
@@ -367,7 +372,7 @@ export function BillForm({
             onChange={(e) => setAutoPay(e.target.checked)}
             className="mt-1 size-5 accent-primary"
           />
-          <span className="font-semibold">Marcar pagada al vencer</span>
+          <span className="font-semibold">Estimar pago al vencer</span>
         </label>
 
         <p className="pt-1 text-sm font-semibold">¿Quién paga esta factura?</p>
@@ -510,7 +515,7 @@ export function Finance({
     };
   }, []);
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
-  const [filter, setFilter] = useState<"all" | "pending" | "paid">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "paid" | "estimated">("all");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<LedgerBill | null>(null);
   const [editing, setEditing] = useState<LedgerBill | "new" | null>(null);
@@ -563,8 +568,9 @@ export function Finance({
 
   const filtered = visible.filter((b) => {
     const st = billStatus(b, mk, today);
-    if (filter === "pending" && st !== "pending") return false;
+    if (filter === "pending" && st === "paid") return false;
     if (filter === "paid" && st !== "paid") return false;
+    if (filter === "estimated" && st !== "estimated") return false;
     const t = q.trim().toLowerCase();
     return !t || [b.name, b.category, names(b)].some((x) => x.toLowerCase().includes(t));
   });
@@ -687,6 +693,12 @@ export function Finance({
                 </div>
               ))}
             </div>
+            {sum.estimated > 0 && (
+              <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                <span>Pagos estimados</span>
+                <strong className="tabular">{money(sum.estimated)}</strong>
+              </div>
+            )}
           </section>
 
           {/* People ledger */}
@@ -856,7 +868,7 @@ export function Finance({
               ))}
               {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
                 const due = visible.filter((b) => effectiveDueDay(b.dueDay, mk) === d);
-                const anyPending = due.some((b) => billStatus(b, mk, today) === "pending");
+                const anyPending = due.some((b) => billStatus(b, mk, today) !== "paid");
                 return (
                   <button
                     key={d}
@@ -900,6 +912,7 @@ export function Finance({
                   ["all", "Todos"],
                   ["pending", "Pend."],
                   ["paid", "Pagados"],
+                  ["estimated", "Estimados"],
                 ] as const
               ).map(([k, l]) => (
                 <button
@@ -957,12 +970,11 @@ export function Finance({
           }}
         >
           <div className="space-y-2.5">
-            {billStatus(sel, mk, today) === "paid" && sel.overrides[mk]?.status !== "paid" && (
+            {billStatus(sel, mk, today) === "estimated" && (
               <SheetAction
                 disabled={saving}
                 icon={RotateCcw}
                 title="Confirmar pago real"
-                hint="Sustituye la estimación por tu confirmación"
                 onClick={() => {
                   void commit(
                     () => patchMonth(sel.id, { status: "paid" }),
@@ -971,7 +983,7 @@ export function Finance({
                 }}
               />
             )}
-            {billStatus(sel, mk, today) === "paid" ? (
+            {billStatus(sel, mk, today) !== "pending" ? (
               <SheetAction
                 disabled={saving}
                 icon={RotateCcw}
