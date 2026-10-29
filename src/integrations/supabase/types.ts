@@ -576,7 +576,7 @@ export type Database = {
           id: string;
           key: string;
           name: string;
-          pin_hash: string;
+          pin_hash: string | null;
           role: string;
         };
         Insert: {
@@ -584,7 +584,7 @@ export type Database = {
           id?: string;
           key: string;
           name: string;
-          pin_hash: string;
+          pin_hash?: string | null;
           role?: string;
         };
         Update: {
@@ -592,7 +592,7 @@ export type Database = {
           id?: string;
           key?: string;
           name?: string;
-          pin_hash?: string;
+          pin_hash?: string | null;
           role?: string;
         };
         Relationships: [
@@ -841,6 +841,8 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      my_pin_configured: { Args: Record<PropertyKey, never>; Returns: boolean };
+      set_my_pin: { Args: { _pin: string; _account: string }; Returns: undefined };
       admin_business_legal: { Args: Record<string, never>; Returns: Json };
       admin_save_business_legal: {
         Args: { _profile: Json; _expected_revision: number };

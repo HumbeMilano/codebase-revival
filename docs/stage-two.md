@@ -13,8 +13,20 @@ Trabajo autorizado el 29 de octubre de 2026. Seguimiento: [M1 #34](https://githu
 
 Las regresiones usan cuentas, hogares y respuestas sintéticas. Los controles físicos de teclado/gestor, instalación, QR y lectores de pantalla se registran por separado en #48. Una prueba de navegador móvil emulado no equivale a un dispositivo real.
 
-La configuración inicial de PIN sigue siendo obligatoria en el contrato actual del servidor. Su aplazamiento y la activación al vincular tablet requieren una actualización coordinada que mantenga todas las verificaciones del servidor. Esa parte de #37 permanece abierta hasta completarse.
+## Segundo bloque: PIN cuando hace falta
+
+La creación y la aceptación de hogar permiten posponer el PIN. La primera vinculación por QR pide al adulto configurar el suyo antes de la verificación con passkey; también se configura o cambia desde Mi perfil. El PIN sigue siendo un teclado de botones, separado de la contraseña de la cuenta.
+
+La migración nueva permite un hash privado nulo para «sin configurar», sin generar un PIN predeterminado. Un valor nulo nunca verifica ni autoriza finanzas. Los PIN anteriores no se modifican; el cambio propio comprueba la cuenta esperada, toma el bloqueo del hogar, conserva roles/perfiles e invalida las autorizaciones financieras existentes. La invitación de reasignación conserva el miembro y su historial, pero desactiva el PIN del titular anterior cuando el receptor elige configurarlo después.
+
+El servidor exige un PIN configurado al adulto que aprueba el QR. Esa comprobación complementa los controles existentes de rol, sesión, passkey reciente, uso único y secretos separados. #37 sigue abierta hasta comprobar el primer resultado y la comprensión del recorrido con participantes.
 
 Rutinas, avisos externos, integración de agenda, mejoras de compras, idioma, oferta, operación y condiciones de lanzamiento se siguen en sus tareas. Este bloque no activa cobros, límites, ampliaciones de planes ni una apertura pública. La empresa constituida y los documentos definitivos siguen siendo condiciones pendientes del propietario.
 
 Cada entrega registra commit, CI, despliegue y evidencia publicados. El diagnóstico original permanece como línea de base, con su commit y limitaciones; no se cambia para presentar observaciones antiguas como fallos actuales.
+
+## Primera publicación verificada
+
+PR [#51](https://github.com/HumbeMilano/codebase-revival/pull/51), commit integrado `b32332f9c632272f3e888270d18ef1fa68472d8c`, CI [40915293928](https://github.com/HumbeMilano/codebase-revival/actions/runs/40915293928): 214 pruebas unitarias, 189 de navegador y 12 de PWA; tres omisiones de navegador existentes. También pasaron los trabajos de base de datos y web.
+
+Versión publicada `6f495055-0589-4a96-ba71-831a2960fc88`, en app y administración; 16 hashes públicos coinciden y se conservaron las 11 definiciones de bindings. Los 36 casos nuevos y 12 de separación PWA pasaron contra esos archivos publicados con Auth/datos sintéticos. No hubo cambios de esquema ni de cuentas reales en ese bloque. #36 está cerrada; los criterios restantes de #37/#38/#43 y las pruebas físicas siguen abiertos.
