@@ -948,7 +948,9 @@ export async function pairTablet(
   beforeApproval?: (phone: Page) => Promise<void>,
 ) {
   const browser = page.context().browser()!;
-  const phoneContext = await browser.newContext({ baseURL: "http://127.0.0.1:8080" });
+  const phoneContext = await browser.newContext({
+    baseURL: String(test.info().project.use.baseURL ?? "http://127.0.0.1:8080"),
+  });
   const phone = await phoneContext.newPage();
   try {
     await backend.install(phone);

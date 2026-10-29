@@ -96,12 +96,18 @@ export function Shopping({
       toast.info("Ese producto ya está en esta lista.");
       return;
     }
-    const item: ShopItem = { id: crypto.randomUUID(), name: name.trim(), done: false, listId };
+    const submittedName = name;
+    const item: ShopItem = {
+      id: crypto.randomUUID(),
+      name: submittedName.trim(),
+      done: false,
+      listId,
+    };
     setBusy(true);
     const saved = await s.setItems((rows) => addShoppingItem(rows, item));
     setBusy(false);
     if (saved) {
-      setName("");
+      setName((current) => (current === submittedName ? "" : current));
       input.current?.focus();
     }
   };
@@ -243,6 +249,7 @@ export function Shopping({
         </header>
         <form
           onSubmit={(event) => void add(event)}
+          aria-busy={busy}
           className="flex items-center gap-2 rounded-2xl bg-secondary p-2 pl-4"
         >
           <input

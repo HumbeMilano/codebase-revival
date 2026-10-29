@@ -31,6 +31,28 @@ const client = (fetcher: typeof fetch) =>
 afterEach(() => vi.restoreAllMocks());
 
 describe("durable shopping outbox", () => {
+  it("protects a reload until a local edit commits, then leaves the durable offline queue quiet", async () => {
+    const key = scope();
+    const saving = enqueueShopping(key, () => [item("Guardado local")]);
+    const pending = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(pending);
+    expect(pending.defaultPrevented).toBe(true);
+    await saving;
+    expect((await readShopping(key)).queue).toHaveLength(1);
+    const durable = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(durable);
+    expect(durable.defaultPrevented).toBe(false);
+  });
+  it("releases a failed local edit without leaving an exit warning behind", async () => {
+    await expect(
+      enqueueShopping(scope(), () => {
+        throw new Error("Local write failed");
+      }),
+    ).rejects.toThrow("Local write failed");
+    const exit = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(exit);
+    expect(exit.defaultPrevented).toBe(false);
+  });
   it("retains local operations across independent reads and serializes simultaneous edits", async () => {
     const key = scope(),
       milk = item();

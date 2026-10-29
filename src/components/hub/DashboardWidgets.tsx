@@ -109,8 +109,8 @@ function Choose({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <Button
       type="button"
-      variant="ghost"
-      className="my-auto whitespace-normal text-current"
+      variant="outline"
+      className="my-auto min-h-11 whitespace-normal border-current/20 bg-white/40 text-current shadow-none hover:bg-white/60"
       onClick={onClick}
     >
       {label}
@@ -279,7 +279,11 @@ function TinyWidget({
     case "tasks":
     case "my-tasks":
       value = chores.length ? (
-        chores.filter((c) => !c.done).length
+        widgetDimensions[widget.size][0] > 1 ? (
+          (chores.find((c) => !c.done)?.title ?? "Todo listo")
+        ) : (
+          chores.filter((c) => !c.done).length
+        )
       ) : (
         <Choose label="Añadir tarea" onClick={() => onCreate("chores")} />
       );
@@ -383,7 +387,17 @@ function TinyWidget({
           </button>
         )}
       </h3>
-      <div className={cn("dw-tiny-value", isMoney && "dw-money")}>{value}</div>
+      <div
+        className={cn(
+          "dw-tiny-value",
+          isMoney && "dw-money",
+          ["tasks", "my-tasks"].includes(widget.id) &&
+            widgetDimensions[widget.size][0] > 1 &&
+            "dw-task-title",
+        )}
+      >
+        {value}
+      </div>
       {widget.id === "member-summary" && individual && (
         <WidgetProgress
           value={fundingPercent(individual.assigned, individual.contributed)}

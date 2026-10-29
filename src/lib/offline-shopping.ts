@@ -248,24 +248,44 @@ function apply(items: ShopItem[], changes: Change[], returned: SavedRow[] = []):
   }
   return [...result.values()].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 }
+// A reload may abort a local transaction before its completion callback. Warn
+// only while a user edit is still committing, never for the durable sync queue.
+let localWrites = 0;
+const pendingLocalWrite = (event: BeforeUnloadEvent) => {
+  event.preventDefault();
+  event.returnValue = "";
+};
+async function commitLocalEdit<T>(write: () => Promise<T>): Promise<T> {
+  if (localWrites++ === 0 && typeof window !== "undefined")
+    window.addEventListener("beforeunload", pendingLocalWrite);
+  try {
+    return await write();
+  } finally {
+    if (--localWrites === 0 && typeof window !== "undefined")
+      window.removeEventListener("beforeunload", pendingLocalWrite);
+  }
+}
+
 export async function enqueueShopping(
   scope: string,
   change: (items: ShopItem[]) => ShopItem[],
 ): Promise<ShoppingRecord> {
-  return transaction("lists", scope, (value) => {
-    const record = (value as ShoppingRecord | undefined) ?? blank(scope);
-    if (record.queue.length >= 500)
-      throw new Error("Sincroniza las compras antes de añadir más cambios.");
-    const proposed = change(structuredClone(record.local));
-    const changes = shoppingChanges(record.local, proposed, scope.split(":")[1]);
-    if (!changes.length) return { result: record };
-    const next = {
-      ...record,
-      local: apply(record.local, changes),
-      queue: [...record.queue, { id: crypto.randomUUID(), changes, createdAt: Date.now() }],
-    };
-    return { value: next, result: next };
-  });
+  return commitLocalEdit(() =>
+    transaction("lists", scope, (value) => {
+      const record = (value as ShoppingRecord | undefined) ?? blank(scope);
+      if (record.queue.length >= 500)
+        throw new Error("Sincroniza las compras antes de añadir más cambios.");
+      const proposed = change(structuredClone(record.local));
+      const changes = shoppingChanges(record.local, proposed, scope.split(":")[1]);
+      if (!changes.length) return { result: record };
+      const next = {
+        ...record,
+        local: apply(record.local, changes),
+        queue: [...record.queue, { id: crypto.randomUUID(), changes, createdAt: Date.now() }],
+      };
+      return { value: next, result: next };
+    }),
+  );
 }
 export async function acceptShoppingSnapshot(
   scope: string,
@@ -351,28 +371,30 @@ export async function enqueueShoppingLists(
   scope: string,
   update: (lists: ShoppingList[]) => ShoppingList[],
 ) {
-  return transaction("lists", scope, (value) => {
-    const record = (value as ShoppingRecord | undefined) ?? blank(scope);
-    const lists = record.lists ?? blank(scope).lists!;
-    const desired = update(structuredClone(lists));
-    const defaultId = scope.split(":")[1];
-    if (desired.some((list) => list.id === defaultId && list.archived))
-      throw new Error("La lista inicial se puede renombrar, pero debe permanecer activa.");
-    if (record.queue.length >= 500)
-      throw new Error("Sincroniza tus compras antes de añadir más cambios.");
-    const changes = listChanges(lists, desired);
-    if (!changes.length) return { result: record };
-    const next = {
-      ...record,
-      lists: applyLists(lists, changes),
-      baseLists: record.baseLists ?? lists,
-      queue: [
-        ...record.queue,
-        { id: crypto.randomUUID(), changes: [], listChanges: changes, createdAt: Date.now() },
-      ],
-    };
-    return { value: next, result: next };
-  });
+  return commitLocalEdit(() =>
+    transaction("lists", scope, (value) => {
+      const record = (value as ShoppingRecord | undefined) ?? blank(scope);
+      const lists = record.lists ?? blank(scope).lists!;
+      const desired = update(structuredClone(lists));
+      const defaultId = scope.split(":")[1];
+      if (desired.some((list) => list.id === defaultId && list.archived))
+        throw new Error("La lista inicial se puede renombrar, pero debe permanecer activa.");
+      if (record.queue.length >= 500)
+        throw new Error("Sincroniza tus compras antes de añadir más cambios.");
+      const changes = listChanges(lists, desired);
+      if (!changes.length) return { result: record };
+      const next = {
+        ...record,
+        lists: applyLists(lists, changes),
+        baseLists: record.baseLists ?? lists,
+        queue: [
+          ...record.queue,
+          { id: crypto.randomUUID(), changes: [], listChanges: changes, createdAt: Date.now() },
+        ],
+      };
+      return { value: next, result: next };
+    }),
+  );
 }
 const flushing = new Map<string, Promise<void>>();
 export function flushShopping(
