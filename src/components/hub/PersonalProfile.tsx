@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearFinanceAccess, db } from "@/lib/db";
 import { personalPreferences } from "@/lib/account-validation";
 import { PasskeySettings } from "./PasskeySettings";
+import { MemberPinSettings } from "./MemberPinSettings";
 
 const field = "mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-base";
 export function PersonalProfile({
@@ -338,6 +339,7 @@ export function PersonalProfile({
         Mi plan · Skendal
       </Link>
       <PrivacyRequests />
+      {id && <MemberPinSettings key={id} accountId={id} />}
       <PasskeySettings />
       <Button
         type="button"

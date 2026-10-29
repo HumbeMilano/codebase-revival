@@ -17,6 +17,7 @@ export const previewSchema = z.object({
   household_name: z.string(),
   expires_at: z.string(),
   status: z.enum(["pending", "approved"]),
+  requires_pin_setup: z.boolean().optional().default(false),
 });
 const storageKey = "homehub-tablet-pairing-v1";
 let starting: Promise<TabletPairingRequest> | null = null;

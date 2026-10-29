@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 export const HOME_ID = "10000000-0000-4000-8000-000000000001";
-const USER_ID = "20000000-0000-4000-8000-000000000001";
+export const USER_ID = "20000000-0000-4000-8000-000000000001";
 const memberKey = "m_ana";
 type Row = Record<string, unknown>;
 type Change = {
@@ -113,6 +113,8 @@ export class HouseholdBackend {
   ];
   setupRequests: { method: string; args: Row }[] = [];
   memberChanges: { method: string; args: Row }[] = [];
+  pinConfigured = true;
+  pinSetRequests: Row[] = [];
   passwordUpdates = 0;
   leaveRequests = 0;
   logoutRequests = 0;
@@ -482,8 +484,17 @@ export class HouseholdBackend {
         this.leaveRequests++;
         this.hasHousehold = false;
         return { status: 204 };
+      case "my_pin_configured":
+        return { json: this.pinConfigured };
+      case "set_my_pin":
+        if (args["_account"] !== USER_ID)
+          return { status: 403, json: { message: "Account changed" } };
+        this.pinSetRequests.push(args);
+        this.pinConfigured = true;
+        return { json: null };
       case "create_household":
       case "redeem_invite":
+        this.pinConfigured = Boolean(args["_pin"]);
         this.setupRequests.push({ method: name, args });
         this.hasHousehold = true;
         return { json: HOME_ID };
@@ -526,9 +537,12 @@ export class HouseholdBackend {
               household_name: "Hogar de prueba",
               expires_at: request.expiresAt,
               status: request.approved ? "approved" : "pending",
+              requires_pin_setup: !this.pinConfigured,
             },
           };
         if (name === "approve_tablet_pairing") {
+          if (!this.pinConfigured)
+            return { status: 403, json: { message: "Set your tablet PIN before pairing" } };
           request.approved = true;
           return { json: null };
         }
@@ -928,7 +942,11 @@ export async function section(page: Page, label: string) {
 }
 
 /** Exercise the visible QR flow with isolated phone/tablet storage. */
-export async function pairTablet(page: Page, backend: HouseholdBackend) {
+export async function pairTablet(
+  page: Page,
+  backend: HouseholdBackend,
+  beforeApproval?: (phone: Page) => Promise<void>,
+) {
   const browser = page.context().browser()!;
   const phoneContext = await browser.newContext({ baseURL: "http://127.0.0.1:8080" });
   const phone = await phoneContext.newPage();
@@ -959,6 +977,7 @@ export async function pairTablet(page: Page, backend: HouseholdBackend) {
     await expect(
       phone.getByRole("heading", { name: "¿Vincular esta tablet a Hogar de prueba?" }),
     ).toBeVisible({ timeout: 30_000 });
+    if (beforeApproval) await beforeApproval(phone);
     await phone.getByRole("button", { name: "Vincular tablet", exact: true }).click();
     await expect(
       phone.getByRole("heading", { name: "Tablet autorizada", exact: true }),

@@ -47,6 +47,7 @@ test("household setup keeps its PIN out of the account password form and submits
   );
   await page.getByLabel("Nombre del hogar", { exact: true }).fill("Familia de prueba");
   await page.getByLabel("Tu nombre", { exact: true }).fill("Ana");
+  await page.getByText("Configurar PIN de tablet ahora", { exact: true }).click();
   await choosePin(page, "Tu PIN (4 números)", "2468");
   expect(backend.setupRequests).toHaveLength(0);
   await expect(page.locator("input[type=password], input[autocomplete=new-password]")).toHaveCount(

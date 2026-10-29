@@ -301,7 +301,7 @@ export function SetupHousehold({
     try {
       e.preventDefault();
       if (busy || view === "choose") return;
-      if (pin.length !== 4) {
+      if (pin && pin.length !== 4) {
         toast.error("El PIN debe tener 4 números");
         return;
       }
@@ -434,7 +434,12 @@ export function SetupHousehold({
             />
           </label>
         )}
-        <PinEditor label="Tu PIN (4 números)" value={pin} onChange={setPin} disabled={busy} />
+        <details className="text-sm">
+          <summary className="cursor-pointer py-2 font-medium">
+            Configurar PIN de tablet ahora
+          </summary>
+          <PinEditor label="Tu PIN (4 números)" value={pin} onChange={setPin} disabled={busy} />
+        </details>
         <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl">
           {view === "create" ? "Crear hogar" : "Unirme"}
         </Button>

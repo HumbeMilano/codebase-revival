@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import qrcode from "qrcode-generator";
+import { MemberPinForm } from "./MemberPinSettings";
 import { CheckCircle2, Copy, LoaderCircle, QrCode, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -312,7 +313,9 @@ function PairingLogin() {
 }
 
 function PhoneApproval({ request }: { request: { id: string; approvalSecret: string } }) {
-  const [status, setStatus] = useState<"loading" | "login" | "ready" | "error" | "done">("loading");
+  const [status, setStatus] = useState<"loading" | "login" | "pin" | "ready" | "error" | "done">(
+    "loading",
+  );
   const [preview, setPreview] = useState<z.infer<typeof previewSchema> | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -342,7 +345,9 @@ function PhoneApproval({ request }: { request: { id: string; approvalSecret: str
       const parsed = previewSchema.parse(result.data);
       if (version === revision.current) {
         setPreview(parsed);
-        setStatus(parsed.status === "approved" ? "done" : "ready");
+        setStatus(
+          parsed.status === "approved" ? "done" : parsed.requires_pin_setup ? "pin" : "ready",
+        );
       }
     } catch {
       if (version === revision.current) {
@@ -415,6 +420,16 @@ function PhoneApproval({ request }: { request: { id: string; approvalSecret: str
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
+      )}
+      {status === "pin" && (
+        <div className="space-y-3 text-left">
+          <p className="text-sm">Elige tu PIN para entrar en esta tablet.</p>
+          <MemberPinForm
+            key={userId.current}
+            accountId={userId.current}
+            onSaved={() => void load()}
+          />
+        </div>
       )}
       {status === "ready" && (
         <Button
