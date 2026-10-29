@@ -1,0 +1,243 @@
+{
+  "date": "2026-10-29",
+  "source_commit": "54c2450d1f40f61b9418fe416e19ec0f2c4c6eec",
+  "scope": "Published production assets with synthetic Auth and household HTTP; public landing inspected without household writes.",
+  "technical_scenarios_passed": 8,
+  "projects": ["mobile", "desktop"],
+  "review_runtime_seconds": 17.1,
+  "runtime_is_not_participant_task_time": true,
+  "observation_files": 10,
+  "observations": [
+    {
+      "scenario": "review-empty-dashboard-and-30e1d-efault-first-use-experience-desktop",
+      "capture": "empty-dashboard.json",
+      "observed": {
+        "cards": [
+          {
+            "id": "tasks",
+            "text": "Tareas de hoy0pendientes",
+            "top": 104,
+            "height": 458
+          },
+          {
+            "id": "specific-note",
+            "text": "Nota específicaCrear nota",
+            "top": 104,
+            "height": 616
+          },
+          {
+            "id": "shopping",
+            "text": "Lista de comprasGroceriesSin productos",
+            "top": 104,
+            "height": 458
+          },
+          {
+            "id": "notes",
+            "text": "NotasCrear nota",
+            "top": 736,
+            "height": 300
+          },
+          {
+            "id": "finance",
+            "text": "Fondo comúnDisponible$0.00Aportado$0.00Pagado$0.00",
+            "top": 1052,
+            "height": 300
+          },
+          {
+            "id": "calendar",
+            "text": "Próximos eventosSin próximos eventos",
+            "top": 578,
+            "height": 300
+          }
+        ],
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "fullDocumentHeight": 1420,
+        "allDataSynthetic": true
+      }
+    },
+    {
+      "scenario": "review-empty-dashboard-and-30e1d-efault-first-use-experience-desktop",
+      "capture": "task-form.json",
+      "observed": {
+        "text": "Nueva tarea\n\nAsigna una persona y una fecha real.\n\nTarea\nPersona\nAna\nNico\nFecha\nGuardar\nClose",
+        "fields": ["Tarea", "PersonaAnaNico", "Fecha"],
+        "recurrenceControlPresent": 0
+      }
+    },
+    {
+      "scenario": "review-empty-dashboard-and-30e1d-efault-first-use-experience-mobile",
+      "capture": "empty-dashboard.json",
+      "observed": {
+        "cards": [
+          {
+            "id": "tasks",
+            "text": "Tareas de hoy0",
+            "top": 162.59375,
+            "height": 110
+          },
+          {
+            "id": "shopping-summary",
+            "text": "Resumen de compras1",
+            "top": 162.59375,
+            "height": 110
+          },
+          {
+            "id": "shopping",
+            "text": "Lista de comprasGroceriesSin productos",
+            "top": 282.59375,
+            "height": 230
+          },
+          {
+            "id": "calendar",
+            "text": "Próximos eventosSin próximos eventos",
+            "top": 522.59375,
+            "height": 230
+          },
+          {
+            "id": "notes",
+            "text": "NotasCrear nota",
+            "top": 762.59375,
+            "height": 230
+          },
+          {
+            "id": "month-calendar",
+            "text": "Calendariooctubre de 2026LMXJVSD2829301234567891011121314151617181920212223242526272829303112345678",
+            "top": 1002.59375,
+            "height": 470
+          }
+        ],
+        "viewport": {
+          "width": 412,
+          "height": 839
+        },
+        "fullDocumentHeight": 1629,
+        "allDataSynthetic": true
+      }
+    },
+    {
+      "scenario": "review-empty-dashboard-and-30e1d-efault-first-use-experience-mobile",
+      "capture": "task-form.json",
+      "observed": {
+        "text": "Nueva tarea\n\nAsigna una persona y una fecha real.\n\nTarea\nPersona\nAna\nNico\nFecha\nGuardar\nClose",
+        "fields": ["Tarea", "PersonaAnaNico", "Fecha"],
+        "recurrenceControlPresent": 0
+      }
+    },
+    {
+      "scenario": "review-first-account-reach-749c7-before-creating-a-household-desktop",
+      "capture": "first-use.json",
+      "observed": {
+        "choiceCopy": "Acceso a tu cuenta\n\n[cuenta sintética]\n\nEsta cuenta no tiene un hogar vinculado. Si ya formabas parte de uno, pide que revisen el vínculo de tu cuenta con ese hogar antes de crear otro.\n\nTengo una invitación\nCrear un nuevo hogarCerrar sesión",
+        "requiredFields": ["Nombre del hogar", "Tu nombre"],
+        "pinRequiredByProduct": true,
+        "accountAndHouseholdWrites": 0,
+        "allDataSynthetic": true
+      }
+    },
+    {
+      "scenario": "review-first-account-reach-749c7-before-creating-a-household-mobile",
+      "capture": "first-use.json",
+      "observed": {
+        "choiceCopy": "Acceso a tu cuenta\n\n[cuenta sintética]\n\nEsta cuenta no tiene un hogar vinculado. Si ya formabas parte de uno, pide que revisen el vínculo de tu cuenta con ese hogar antes de crear otro.\n\nTengo una invitación\nCrear un nuevo hogarCerrar sesión",
+        "requiredFields": ["Nombre del hogar", "Tu nombre"],
+        "pinRequiredByProduct": true,
+        "accountAndHouseholdWrites": 0,
+        "allDataSynthetic": true
+      }
+    },
+    {
+      "scenario": "review-landing-primary-fre-e7979-eads-to-the-pricing-section-desktop",
+      "capture": "landing.json",
+      "observed": {
+        "primaryCtaText": "Conoce el plan gratis\n→",
+        "primaryCtaDestination": "#plans",
+        "applicationLinks": [
+          {
+            "text": "Abrir app →",
+            "href": "https://app.skendal.com"
+          },
+          {
+            "text": "Vincular una tablet →",
+            "href": "https://app.skendal.com/vincular"
+          },
+          {
+            "text": "Abrir app",
+            "href": "https://app.skendal.com"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "review-landing-primary-fre-e7979-eads-to-the-pricing-section-mobile",
+      "capture": "landing.json",
+      "observed": {
+        "primaryCtaText": "Conoce el plan gratis\n→",
+        "primaryCtaDestination": "#plans",
+        "applicationLinks": [
+          {
+            "text": "Abrir app →",
+            "href": "https://app.skendal.com"
+          },
+          {
+            "text": "Vincular una tablet →",
+            "href": "https://app.skendal.com/vincular"
+          },
+          {
+            "text": "Abrir app",
+            "href": "https://app.skendal.com"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "review-refresh-after-secti-885e8-on-returns-to-the-dashboard-desktop",
+      "capture": "navigation.json",
+      "observed": {
+        "initialUrl": "https://app.skendal.com/",
+        "notesUrl": "https://app.skendal.com/",
+        "sameUrl": true,
+        "returnedToHomeAfterRefresh": true,
+        "allDataSynthetic": true
+      }
+    },
+    {
+      "scenario": "review-refresh-after-secti-885e8-on-returns-to-the-dashboard-mobile",
+      "capture": "navigation.json",
+      "observed": {
+        "initialUrl": "https://app.skendal.com/",
+        "notesUrl": "https://app.skendal.com/",
+        "sameUrl": true,
+        "returnedToHomeAfterRefresh": true,
+        "allDataSynthetic": true
+      }
+    }
+  ],
+  "code_findings": {
+    "recurring_chores_and_events": "No recurrence model or form control found; recurring finance bills are separate.",
+    "closed_app_reminder_delivery": "No push subscription, push handler or scheduled reminder delivery found.",
+    "calendar_import_export": "No ICS or external calendar integration found.",
+    "estimated_payments": "billStatus autoPay may be paid based on due date; monthSummary includes it in paid/available.",
+    "session_resilience": "PR #10 remains open; current reload catch invalidates the household context.",
+    "language_and_brand": "App primarily Spanish; invitation Worker still uses HomeHub branding."
+  },
+  "limitations": [
+    "No participant interviews or household retention study.",
+    "Physical native autofill/install and administrative recovery email not tested in this audit.",
+    "Synthetic HTTP does not verify live Auth/RLS or prove demand."
+  ],
+  "production_account_writes": false,
+  "emails_sent": false,
+  "billing_changes": false,
+  "real_households_contacted": 0,
+  "official_sources": [
+    "https://www.cozi.com/feature-overview/",
+    "https://www.cozi.com/using-cozi-with-other-calendars/",
+    "https://www.familywall.com/",
+    "https://www.anylist.com/",
+    "https://supabase.com/pricing",
+    "https://stripe.com/pricing"
+  ]
+}
