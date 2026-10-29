@@ -8,6 +8,12 @@ La agenda mensual, notas y el resto del catálogo siguen disponibles en Personal
 
 La selección móvil solo se aplica al estado inicial sin preferencias guardadas. Los diseños existentes conservan dimensiones, orden y referencias; Restablecer diseño es una acción explícita. Tablets y escritorio conservan su diseño inicial. La navegación por URL de #51 sigue manteniendo sección, referencias, Atrás y recarga.
 
+## Guardado local antes de recargar
+
+La batería completa encontró una recarga inmediatamente después de pulsar Añadir, antes de que IndexedDB confirmara el producto. El producto se muestra y el campo se vacía después del commit. La regresión espera esa confirmación visible; una prueba adicional bloquea una transacción local de verdad y comprueba la cancelación de la recarga, la conservación de la siguiente entrada y el posterior guardado/recarga sin red.
+
+Solo una edición local aún sin confirmar registra el aviso nativo de salida. La cola ya durable puede seguir pendiente de sincronización sin producir ese aviso ni un cartel de funcionamiento. El navegador y el sistema operativo pueden terminar un proceso sin emitir `beforeunload`; no se promete conservar una escritura que todavía no se confirmó. El texto escrito para el siguiente producto no se borra al terminar el anterior.
+
 ## Evidencia y límites
 
 La regresión examina hogares vacíos/con datos y adultos/adolescentes a 320, 390, 412, 768 y 1024 CSS px, con Chromium de escritorio y emulación móvil. Comprueba ausencia de desbordamiento horizontal, la acción inicial con teclado, nombres accesibles y ausencia de lecturas financieras sin permiso. Las pruebas existentes verifican guardado, orden, los doce tamaños y la interacción en compras/calendario.

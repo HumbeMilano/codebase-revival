@@ -38,6 +38,8 @@ test("independent lists persist and remain editable after an offline reload", as
   await expect(dialog).toHaveCount(0);
   await page.getByLabel("Producto", { exact: true }).fill("Pasaporte");
   await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pasaporte", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Producto", { exact: true })).toHaveValue("");
   await page.reload();
   await expect(page.getByRole("heading", { name: "Compras", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Abrir lista Viajes", exact: true }).click();
@@ -68,6 +70,81 @@ test("independent lists persist and remain editable after an offline reload", as
       .getByRole("region", { name: "Lista School", exact: true })
       .getByRole("button", { name: "Botella", exact: true }),
   ).toBeVisible();
+  expect(backend.unexpectedRequests).toEqual([]);
+});
+
+test("a reload during a pending local shopping write can be cancelled without losing the next typed product", async ({
+  page,
+  context,
+}) => {
+  const backend = new HouseholdBackend();
+  await backend.install(page);
+  await signIn(page);
+  await section(page, "Compras");
+  await expect(page.getByRole("region", { name: "Lista Groceries", exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller)
+      await new Promise<void>((resolve) => {
+        navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), {
+          once: true,
+        });
+      });
+  });
+  await context.setOffline(true);
+  // Hold a real competing IndexedDB transaction, as another tab may do. The
+  // edit cannot commit until released; no timeout/sleep supplies the outcome.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open("homehub-shopping-v1", 1);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const connection = open.result;
+          const transaction = connection.transaction("lists", "readwrite");
+          const store = transaction.objectStore("lists");
+          let held = true;
+          (window as unknown as { releaseShoppingWrite: () => void }).releaseShoppingWrite = () => {
+            held = false;
+          };
+          const keepAlive = () => {
+            const request = store.get("test-write-barrier");
+            request.onsuccess = () => {
+              if (held) keepAlive();
+            };
+          };
+          transaction.oncomplete = () => connection.close();
+          keepAlive();
+          resolve();
+        };
+      }),
+  );
+  await page.getByLabel("Producto", { exact: true }).fill("Pasaporte");
+  await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
+  await expect(page.locator('form[aria-busy="true"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pasaporte", exact: true })).toHaveCount(0);
+  await page.getByLabel("Producto", { exact: true }).fill("Protector solar");
+  const prompt = page.waitForEvent("dialog");
+  const navigation = page.evaluate(() => window.location.reload()).catch(() => null);
+  const dialog = await prompt;
+  expect(dialog.type()).toBe("beforeunload");
+  await dialog.dismiss();
+  await navigation;
+  await expect(page.getByLabel("Producto", { exact: true })).toHaveValue("Protector solar");
+  await page.evaluate(() =>
+    (window as unknown as { releaseShoppingWrite: () => void }).releaseShoppingWrite(),
+  );
+  await expect(page.getByRole("button", { name: "Pasaporte", exact: true })).toBeVisible();
+  await expect(page.locator('form[aria-busy="true"]')).toHaveCount(0);
+  await expect(page.getByLabel("Producto", { exact: true })).toHaveValue("Protector solar");
+  expect(backend.rows["shopping_items"]).toHaveLength(0);
+  await page.getByLabel("Producto", { exact: true }).fill("");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Pasaporte", exact: true })).toBeVisible();
+  await context.setOffline(false);
+  await section(page, "Compras");
+  await expect.poll(() => backend.rows["shopping_items"]?.length).toBe(1);
+  expect(backend.rows["shopping_items"]![0]!["name"]).toBe("Pasaporte");
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
