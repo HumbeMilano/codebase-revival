@@ -17,3 +17,9 @@ La aplicación incorpora el diseño revisado, tarjetas informativas, edición la
 La disposición inicial y «Restablecer diseño» usan las seis tarjetas y dimensiones del archivo aprobado. No se copian las referencias ficticias del prototipo ni se sustituyen preferencias ya guardadas. El formato 3 contiene únicamente tipos, claves, tamaños y referencias; los formatos 1 y 2 se cargan conservando el primer widget de cada tipo y sus elecciones. Las antiguas claves locales se conservan y las nuevas escrituras usan `homehub-dashboard-device:v3`. Las preferencias por cuenta siguen usando RLS, revisiones y reintentos idempotentes. Ningún diseño concede acceso a finanzas; los widgets y sus datos se ocultan también si la autorización vence durante la edición.
 
 El laboratorio sigue siendo independiente y sus comentarios no modifican las preferencias ni los registros del hogar.
+
+## Selecciones independientes (29 de octubre de 2026)
+
+La nueva petición del propietario sustituye en producción la regla de uno por tipo para los widgets configurables. Se permite uno por cada nota específica, lista o miembro; el mismo tipo no puede repetir la misma selección. Los tipos genéricos siguen siendo únicos. El formato 4 conserva las claves, tamaños, posiciones y selecciones anteriores y escribe las preferencias locales nuevas en `homehub-dashboard-device:v4`, sin borrar las claves antiguas. Véase [reglas, compatibilidad y verificación](configurable-widgets.md) y [tarea M1 #54](https://github.com/HumbeMilano/codebase-revival/issues/54).
+
+La versión histórica del laboratorio conserva su formato independiente; no se importa sobre las preferencias del hogar.

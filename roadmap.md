@@ -30,6 +30,7 @@ P0 bloquea la finalización del hito. P1 requiere resolverse o diferirse explíc
 | 1     | Confiabilidad de sesión y guardados; adaptar el PR #10   | P0        | [#36](https://github.com/HumbeMilano/codebase-revival/issues/36) |
 | 2     | Primer resultado útil sin asistencia                     | P0        | [#37](https://github.com/HumbeMilano/codebase-revival/issues/37) |
 | 3     | Inicio móvil y navegación estable al recargar o volver   | P0        | [#38](https://github.com/HumbeMilano/codebase-revival/issues/38) |
+| 3a    | Widgets por nota, miembro o lista, sin repetir selección | P1        | [#54](https://github.com/HumbeMilano/codebase-revival/issues/54) |
 | 4     | Rutinas/tareas y eventos recurrentes                     | P0        | [#39](https://github.com/HumbeMilano/codebase-revival/issues/39) |
 | 5     | Avisos útiles fuera de la app                            | P0        | [#40](https://github.com/HumbeMilano/codebase-revival/issues/40) |
 | 6     | Finanzas que separan estimaciones y confirmaciones       | P0        | [#43](https://github.com/HumbeMilano/codebase-revival/issues/43) |
@@ -43,6 +44,8 @@ P0 bloquea la finalización del hito. P1 requiere resolverse o diferirse explíc
 | 14    | Posicionamiento, landing y demostración de valor         | P1        | [#49](https://github.com/HumbeMilano/codebase-revival/issues/49) |
 
 Los contratos y el trabajo operativo pueden avanzar mientras se corrige el producto. Su apertura depende de empresa y decisiones del propietario, sin fechas de lanzamiento inventadas.
+
+La petición del propietario del 29 de octubre (#54) se atiende antes de las rutinas. Permite varias notas específicas, listas y resúmenes/tareas de miembros si la selección es distinta; no amplía el catálogo. La misma persona puede tener un resumen y un widget de tareas, porque son tipos diferentes. Los widgets sin selección siguen siendo únicos. Los detalles y la compatibilidad están en [widgets configurables](docs/configurable-widgets.md).
 
 ## Cómo seguimos el hito
 

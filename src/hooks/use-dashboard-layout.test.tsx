@@ -11,7 +11,7 @@ import {
 import { useDashboardLayout } from "./use-dashboard-layout";
 
 const chosen: DashboardLayout = {
-  version: 3,
+  version: 4,
   widgets: [{ id: "notes", key: "notes", size: "wide" }],
 };
 const row = (user_id: string, revision: number, layout = chosen) => ({ user_id, revision, layout });
@@ -184,6 +184,53 @@ describe("dashboard persistence", () => {
     expect(result.current.revision).toBe(0);
     expect(result.current.layout).toEqual(defaultDashboardLayout());
     expect(result.current.error).not.toBe("");
+  });
+
+  it("upgrades v3 tablet references without rewriting the old storage or accepting its late changes", async () => {
+    const server = backend();
+    const scope: DashboardScope = { kind: "device", householdId: "home", memberId: "adult" };
+    const oldKey = "homehub-dashboard-device:v3:home:adult";
+    const noteId = "10000000-0000-4000-8000-000000000011";
+    const original = {
+      revision: 7,
+      layout: {
+        version: 3,
+        widgets: [{ id: "specific-note", key: "old-note", size: "column", noteId }],
+      },
+    };
+    localStorage.setItem(oldKey, JSON.stringify(original));
+    const { result } = renderHook(() => useDashboardLayout(scope, server.client));
+    await waitFor(() => expect(result.current.revision).toBe(7));
+    expect(result.current.layout.version).toBe(4);
+    expect(result.current.layout.widgets).toEqual(original.layout.widgets);
+    const multiple: DashboardLayout = {
+      version: 4,
+      widgets: [
+        ...result.current.layout.widgets,
+        {
+          id: "specific-note",
+          key: "second-note",
+          size: "wide",
+          noteId: "10000000-0000-4000-8000-000000000012",
+        },
+      ],
+    };
+    await act(async () => {
+      expect(await result.current.save(multiple, 7)).not.toBeNull();
+    });
+    expect(result.current.revision).toBe(8);
+    expect(JSON.parse(localStorage.getItem(oldKey)!)).toEqual(original);
+    expect(JSON.parse(localStorage.getItem(dashboardScopeKey(scope))!).layout).toEqual(multiple);
+    localStorage.setItem(
+      oldKey,
+      JSON.stringify({ revision: 8, layout: { version: 3, widgets: [] } }),
+    );
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", { key: oldKey }));
+    });
+    expect(result.current.layout).toEqual(multiple);
+    expect(server.from).not.toHaveBeenCalled();
+    expect(server.rpc).not.toHaveBeenCalled();
   });
 
   it("rejects a stale tablet editor instead of overwriting a newer window", async () => {

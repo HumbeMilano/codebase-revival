@@ -45,12 +45,15 @@ const state = (): HubState => ({
   setContributions: vi.fn(),
 });
 const originalMembers = [...MEMBERS];
+const originalHousehold = { ...HOUSEHOLD };
 beforeEach(() => {
+  HOUSEHOLD.id = "10000000-0000-4000-8000-000000000001";
   setMembers([{ key: "ana", name: "Ana", role: "admin" }]);
   vi.mocked(useDashboardLayout).mockReturnValue(preference());
 });
 afterEach(() => {
   cleanup();
+  Object.assign(HOUSEHOLD, originalHousehold);
   MEMBERS.splice(0, MEMBERS.length, ...originalMembers);
   vi.clearAllMocks();
 });
@@ -114,7 +117,7 @@ describe("dashboard permissions and editing", () => {
 
   it("keeps an empty layout usable and cancelling a reset makes no write", async () => {
     const prefs = preference();
-    prefs.layout = { version: 3, widgets: [] };
+    prefs.layout = { version: 4, widgets: [] };
     prefs.reload.mockResolvedValue({ layout: prefs.layout, revision: 0 });
     vi.mocked(useDashboardLayout).mockReturnValue(prefs);
     render(
@@ -166,7 +169,7 @@ it("removes financial surfaces immediately when the tablet grant expires during 
 
 it("does not substitute an ordinary note when no note is pinned", () => {
   const prefs = preference();
-  prefs.layout = { version: 3, widgets: [{ id: "pinned-note", key: "pinned", size: "compact" }] };
+  prefs.layout = { version: 4, widgets: [{ id: "pinned-note", key: "pinned", size: "compact" }] };
   vi.mocked(useDashboardLayout).mockReturnValue(prefs);
   const s = state();
   s.notes = [
@@ -203,7 +206,7 @@ it.each(["small", "wide", "full"] as const)(
       { id: "second", title: "Escuela", body: "Llevar libros", memberId: "ana", pinned: false },
     ];
     prefs.layout = {
-      version: 3,
+      version: 4,
       widgets: [
         { id: "notes", key: "notes", size },
         { id: "pinned-note", key: "pinned", size },
@@ -251,7 +254,7 @@ it.each(["small", "wide", "full"] as const)(
 it("starts a real new note from empty note widgets without changing layout preferences", () => {
   const prefs = preference();
   prefs.layout = {
-    version: 3,
+    version: 4,
     widgets: [
       { id: "notes", key: "notes", size: "wide" },
       { id: "specific-note", key: "specific", size: "compact" },
@@ -286,7 +289,7 @@ it("marks only the chosen shopping list and evaluates repeated taps against curr
   const prefs = preference();
   const listId = "10000000-0000-4000-8000-000000000091";
   prefs.layout = {
-    version: 3,
+    version: 4,
     widgets: [{ id: "shopping", key: "shopping", size: "wide", listId }],
   };
   vi.mocked(useDashboardLayout).mockReturnValue(prefs);
@@ -329,7 +332,7 @@ it("marks only the chosen shopping list and evaluates repeated taps against curr
 
 it("shows actual shopping sync conflicts with a route to resolve them", () => {
   const prefs = preference();
-  prefs.layout = { version: 3, widgets: [{ id: "shopping", key: "shopping", size: "wide" }] };
+  prefs.layout = { version: 4, widgets: [{ id: "shopping", key: "shopping", size: "wide" }] };
   vi.mocked(useDashboardLayout).mockReturnValue(prefs);
   const s = state();
   s.shoppingSync = { householdId: HOUSEHOLD.id, error: "", conflict: true } as NonNullable<
@@ -342,4 +345,44 @@ it("shows actual shopping sync conflicts with a route to resolve them", () => {
   expect(screen.getByRole("alert")).toHaveTextContent("La lista cambió en otro dispositivo.");
   fireEvent.click(screen.getByRole("button", { name: "Revisar compras" }));
   expect(go).toHaveBeenCalledWith("shopping");
+});
+
+it("distinguishes controls for different notes with the same title and removes only the chosen key", async () => {
+  const first = "10000000-0000-4000-8000-000000000081";
+  const second = "10000000-0000-4000-8000-000000000082";
+  const prefs = preference();
+  prefs.layout = {
+    version: 4,
+    widgets: [
+      { id: "specific-note", key: "first", size: "wide", noteId: first },
+      { id: "specific-note", key: "second", size: "column", noteId: second },
+    ],
+  };
+  vi.mocked(useDashboardLayout).mockReturnValue(prefs);
+  const s = state();
+  s.notes = [
+    { id: first, title: "Recordatorio", body: "Primera nota", pinned: false, memberId: "ana" },
+    { id: second, title: "Recordatorio", body: "Segunda nota", pinned: false, memberId: "ana" },
+  ];
+  render(
+    <Dashboard
+      s={s}
+      compact
+      scope={scope}
+      user={adult}
+      now={null}
+      go={vi.fn()}
+      onCreate={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Personalizar" }));
+  expect(
+    screen.getByRole("button", { name: "Configurar nota específica · recordatorio (1)" }),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ocultar nota específica · recordatorio (2)" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Guardar inicio" }));
+  await waitFor(() => expect(prefs.save).toHaveBeenCalledOnce());
+  expect(prefs.save.mock.calls[0]![0].widgets).toEqual([prefs.layout.widgets[0]]);
 });

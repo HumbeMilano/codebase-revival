@@ -7,6 +7,11 @@ import { useDashboardLayout } from "@/hooks/use-dashboard-layout";
 import { useToday } from "@/hooks/use-today";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
+  dashboardLayoutSchema,
+  dashboardWidgetIdentity,
+  MAX_DASHBOARD_WIDGETS,
+  widgetReferenceField,
+  widgetReferenceId,
   defaultDashboardLayout,
   defaultMobileDashboardLayout,
   sameDashboardLayout,
@@ -37,7 +42,7 @@ import type { HubState } from "./Screens";
 const CalendarDay = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyCalendar })));
 
 type Section = "chores" | "shopping" | "calendar" | "notes" | "finance";
-type Choice = { id: string; name: string };
+type Choice = { id: string; name: string; disabled?: boolean };
 const sortedSizes = [...WIDGET_SIZES].sort(
   (a, b) =>
     widgetDimensions[a][0] - widgetDimensions[b][0] ||
@@ -48,11 +53,13 @@ function ReferenceSelect({
   value,
   choices,
   onChange,
+  emptyDisabled = false,
 }: {
   label: string;
   value: string | undefined;
   choices: Choice[];
   onChange: (value: string | undefined) => void;
+  emptyDisabled?: boolean;
 }) {
   return (
     <label className="block text-sm font-bold">
@@ -63,12 +70,14 @@ function ReferenceSelect({
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || undefined)}
       >
-        <option value="">Elegir {label.toLocaleLowerCase("es")}</option>
+        <option value="" disabled={emptyDisabled}>
+          Elegir {label.toLocaleLowerCase("es")}
+        </option>
         {value && !choices.some((choice) => choice.id === value) && (
           <option value={value}>Ya no está disponible</option>
         )}
         {choices.map((choice) => (
-          <option key={choice.id} value={choice.id}>
+          <option key={choice.id} value={choice.id} disabled={choice.disabled}>
             {choice.name}
           </option>
         ))}
@@ -144,6 +153,58 @@ export function Dashboard({
       : id === "specific-note"
         ? { noteId: value }
         : { memberId: value };
+  const resolved = (entry: DashboardWidget): DashboardWidget =>
+    entry.id === "shopping" && !entry.listId && lists.length === 1
+      ? { ...entry, listId: lists[0]!.id }
+      : entry;
+  const normalize = (layout: DashboardLayout): DashboardLayout => ({
+    ...layout,
+    widgets: layout.widgets.map(resolved),
+  });
+  const duplicate = (entry: DashboardWidget, except?: string) =>
+    (editor?.layout.widgets ?? source.widgets).some(
+      (old) =>
+        old.key !== except &&
+        dashboardWidgetIdentity(resolved(old)) === dashboardWidgetIdentity(resolved(entry)),
+    );
+  const available = (id: WidgetId, except?: string) =>
+    choices(id).map((choice) => ({
+      ...choice,
+      disabled: duplicate(
+        { id, key: "candidate", size: "compact", ...reference(id, choice.id) },
+        except,
+      ),
+    }));
+  const placeholder = (id: WidgetId) =>
+    editor?.layout.widgets.find((entry) => entry.id === id && !widgetReferenceId(resolved(entry)));
+  const canAdd = (id: WidgetId) => {
+    if (!editor || !allowed(id)) return false;
+    if (editor.layout.widgets.length >= MAX_DASHBOARD_WIDGETS && !placeholder(id)) return false;
+    return widgetReferenceField(id) && choices(id).length
+      ? available(id).some((choice) => !choice.disabled)
+      : !editor.layout.widgets.some((entry) => entry.id === id);
+  };
+  const instanceTitle = (entry: DashboardWidget) => {
+    const same = visible.widgets.filter((candidate) => candidate.id === entry.id);
+    const title = describeWidget(entry.id).title;
+    if (same.length < 2) return title;
+    const selected = choices(entry.id).find(
+      (choice) => choice.id === widgetReferenceId(resolved(entry)),
+    );
+    if (!selected)
+      return `${title} · No disponible ${same.findIndex((candidate) => candidate.key === entry.key) + 1}`;
+    const namesakes = same.filter((candidate) =>
+      choices(candidate.id).some(
+        (choice) =>
+          choice.id === widgetReferenceId(resolved(candidate)) && choice.name === selected.name,
+      ),
+    );
+    const suffix =
+      namesakes.length > 1
+        ? ` (${namesakes.findIndex((candidate) => candidate.key === entry.key) + 1})`
+        : "";
+    return `${title} · ${selected.name}${suffix}`;
+  };
   const open = () => {
     setCalendarDay(null);
     if (!editor && !preference.loading)
@@ -169,30 +230,36 @@ export function Dashboard({
       return { ...current, layout: { ...layout, widgets } };
     });
   const add = (id: WidgetId, value?: string) => {
-    if (!editor || !allowed(id) || editor.layout.widgets.some((widget) => widget.id === id)) return;
+    if (!editor || !canAdd(id)) return;
     if (value && !choices(id).some((choice) => choice.id === value)) return;
-    updateDraft({
-      ...visible,
-      widgets: [
-        ...visible.widgets,
-        {
-          id,
-          key: crypto.randomUUID(),
-          size: id === "month-calendar" ? "square" : "compact",
-          ...(value ? reference(id, value) : {}),
-        },
-      ],
-    });
+    const vacant = widgetReferenceField(id) ? placeholder(id) : undefined;
+    const entry: DashboardWidget = {
+      ...(vacant ?? {
+        id,
+        key: crypto.randomUUID(),
+        size: id === "month-calendar" ? "square" : "compact",
+      }),
+      ...(value ? reference(id, value) : {}),
+    };
+    if (duplicate(entry, vacant?.key)) return;
+    updateDraft(
+      normalize({
+        ...visible,
+        widgets: vacant
+          ? visible.widgets.map((old) => (old.key === vacant.key ? entry : old))
+          : [...visible.widgets, entry],
+      }),
+    );
     setSelecting(null);
   };
   const beginAdd = (id: WidgetId) => {
-    const options = choices(id);
+    const options = available(id).filter((choice) => !choice.disabled);
     if (options.length > 1) setSelecting(id);
     else add(id, options[0]?.id);
   };
   const save = async () => {
     if (!editor) return;
-    const saved = await preference.save(editor.layout, editor.revision);
+    const saved = await preference.save(normalize(editor.layout), editor.revision);
     if (saved) {
       close();
       toast.success(
@@ -223,14 +290,24 @@ export function Dashboard({
     go(widgetSection(entry.id));
   };
   const widget = visible.widgets.find((entry) => entry.key === configuration);
-  const change = (value: Partial<DashboardWidget>) =>
-    widget &&
-    updateDraft({
-      ...visible,
-      widgets: visible.widgets.map((entry) =>
-        entry.key === widget.key ? { ...entry, ...value } : entry,
-      ),
+  const change = (value: Partial<DashboardWidget>) => {
+    if (!widget || !editor) return;
+    const candidate = { ...widget, ...value };
+    const proposed = normalize({
+      ...editor.layout,
+      widgets: editor.layout.widgets.map((entry) => (entry.key === widget.key ? candidate : entry)),
     });
+    if (!dashboardLayoutSchema.safeParse(proposed).success) {
+      toast.info("Ya tienes este widget para esa selección.");
+      return;
+    }
+    updateDraft(
+      normalize({
+        ...visible,
+        widgets: visible.widgets.map((entry) => (entry.key === widget.key ? candidate : entry)),
+      }),
+    );
+  };
   return (
     <div
       className={cn("dashboard-home space-y-4 pb-5 md:space-y-6", editor && "dashboard-editing")}
@@ -341,6 +418,7 @@ export function Dashboard({
             disabled={preference.saving || !!preference.error}
             onChange={updateDraft}
             describe={describeWidget}
+            label={instanceTitle}
             onConfigure={setConfiguration}
             onOpen={browseWidget}
           >
@@ -421,7 +499,8 @@ export function Dashboard({
                 <ReferenceSelect
                   label="Miembro"
                   value={widget.memberId}
-                  choices={MEMBERS}
+                  choices={available(widget.id, widget.key)}
+                  emptyDisabled={duplicate({ ...widget, memberId: undefined }, widget.key)}
                   onChange={(memberId) => change({ memberId })}
                 />
               )}
@@ -429,15 +508,19 @@ export function Dashboard({
                 <ReferenceSelect
                   label="Nota"
                   value={widget.noteId}
-                  choices={choices(widget.id)}
+                  choices={available(widget.id, widget.key)}
+                  emptyDisabled={duplicate({ ...widget, noteId: undefined }, widget.key)}
                   onChange={(noteId) => change({ noteId })}
                 />
               )}
               {widget.id === "shopping" && (
                 <ReferenceSelect
                   label="Lista"
-                  value={widget.listId}
-                  choices={choices(widget.id)}
+                  value={resolved(widget).listId}
+                  choices={available(widget.id, widget.key)}
+                  emptyDisabled={visible.widgets.some(
+                    (entry) => entry.id === "shopping" && entry.key !== widget.key,
+                  )}
                   onChange={(listId) => change({ listId })}
                 />
               )}
@@ -500,12 +583,13 @@ export function Dashboard({
           </DialogHeader>
           {selecting ? (
             <div className="grid gap-2">
-              {choices(selecting).map((choice) => (
+              {available(selecting).map((choice) => (
                 <Button
                   type="button"
                   variant="outline"
                   className="min-h-12 justify-start rounded-xl"
                   key={choice.id}
+                  disabled={choice.disabled}
                   onClick={() => add(selecting, choice.id)}
                 >
                   {choice.name}
@@ -540,7 +624,7 @@ export function Dashboard({
                   (id) => allowed(id) && (group === "Todos" || widgetCatalogue[id].group === group),
                 ).map((id) => {
                   const { title, Icon, tone } = describeWidget(id),
-                    added = editor?.layout.widgets.some((entry) => entry.id === id);
+                    added = !canAdd(id);
                   return (
                     <button
                       type="button"

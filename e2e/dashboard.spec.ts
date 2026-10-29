@@ -125,7 +125,7 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   await page.getByRole("button", { name: "Guardar inicio", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.locator('[data-widget="shopping"]')).toHaveCount(0);
-  const key = `homehub-dashboard-device:v3:${HOME_ID}:m_nico`;
+  const key = `homehub-dashboard-device:v4:${HOME_ID}:m_nico`;
   expect(await page.evaluate((key) => localStorage.getItem(key), key)).not.toBeNull();
   await page.getByRole("button", { name: "Bloquear tablet", exact: true }).click();
   await unlock("1234");
