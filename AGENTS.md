@@ -13,6 +13,8 @@
 
 ## Application and state
 
+- Product-readiness work is tracked in [M1 #34](https://github.com/HumbeMilano/codebase-revival/issues/34), with the current diagnosis in `docs/product-readiness.md` and sequence in `roadmap.md`. Link changes to the relevant task and close it only with its acceptance evidence. Separate code/browser fixtures, published checks, physical-device confirmation and real-household validation. Do not describe the tracking issue as a native GitHub Milestone or mark adoption hypotheses as validated.
+
 - The approved public brand is Skendal: direction B, cobalt #344ED8, coral #FF8A70, lavender #E8DDF5, warm paper #FAF7F2; symbol is the house with three organized interior panels. Marketing sources are in `branding/`, static pages in `site/`; keep English and Spanish versions complete and describe actual language/paid-plan availability honestly. The current application is still Spanish. Do not advertise an English app or active charges until those flows exist.
 - Build website content with `bun run build:site`; export original social PNGs and sharing cards with `bun run export:brand` using the installed Chromium. Marketing previews use explicitly illustrative households; never use private owner photos or household data. `/kit/` is a public, unindexed template editor, not a private admin panel. Draft edits stay in the local browser, use textContent, and are separate from downloadable original PNGs. Preparing assets does not authorize posting to social accounts.
 
