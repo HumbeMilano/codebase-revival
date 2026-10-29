@@ -100,7 +100,7 @@ test("shopping survives an offline reload and synchronizes each change once on r
   ).toHaveAttribute("aria-pressed", "true");
   expect(backend.writeRequests).toBe(before);
   await context.setOffline(false);
-  await expect(page.getByText("Hola, Ana", { exact: true }).first()).toBeVisible();
+  await section(page, "Compras");
   await expect.poll(() => backend.rows["shopping_items"]?.[0]?.["done"]).toBe(true);
   expect(backend.rows["shopping_items"]).toHaveLength(1);
   expect(backend.unexpectedRequests).toEqual([]);

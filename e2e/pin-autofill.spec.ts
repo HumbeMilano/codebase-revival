@@ -38,11 +38,9 @@ test("household setup keeps its PIN out of the account password form and submits
     email: "ana@example.invalid",
     password: "real-account-password",
   });
-  await expect(
-    page.getByRole("heading", { name: "Acceso a tu cuenta", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu hogar", exact: true })).toBeVisible();
   await expect(page.getByLabel("Nombre del hogar", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Crear un nuevo hogar", exact: true }).click();
+  await page.getByRole("button", { name: "Crear hogar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Tu hogar", exact: true })).toBeVisible();
   await expect(page.locator("input[type=password], input[autocomplete=new-password]")).toHaveCount(
     0,

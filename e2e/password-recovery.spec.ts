@@ -216,11 +216,10 @@ test("recovery without a household explains the missing link and requires explic
   await page.getByLabel("Repetir contraseña", { exact: true }).fill("a-new-test-password");
   await page.getByRole("button", { name: "Guardar contraseña", exact: true }).click();
   await page.getByRole("link", { name: "Continuar a Skendal", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Acceso a tu cuenta", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu hogar", exact: true })).toBeVisible();
   await expect(page.getByText("ana@example.invalid", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Esta cuenta no tiene un hogar vinculado/)).toBeVisible();
+  await page.getByText("¿Ya pertenecías a un hogar?", { exact: true }).click();
+  await expect(page.getByText(/Si tu cuenta se desvinculó/)).toBeVisible();
   await expect(page.getByLabel("Nombre del hogar", { exact: true })).toHaveCount(0);
   expect(backend.setupRequests).toEqual([]);
   expect(backend.leaveRequests).toBe(0);
@@ -317,9 +316,7 @@ test("profile logout preserves membership while unlinking requires its own confi
   await expect(dialog.getByRole("checkbox")).not.toBeChecked();
   await dialog.getByRole("checkbox").check();
   await dialog.getByRole("button", { name: "Desvincular mi cuenta", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Acceso a tu cuenta", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu hogar", exact: true })).toBeVisible();
   expect(backend.leaveRequests).toBe(1);
   expect(backend.members.map((member) => member.key)).toEqual(["m_ana", "m_nico"]);
   expect(backend.unexpectedRequests).toEqual([]);

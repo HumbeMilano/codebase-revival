@@ -340,20 +340,23 @@ export function SetupHousehold({
     return (
       <Shell compact={compact}>
         <section className="space-y-5 rounded-3xl bg-card p-6 shadow-card">
-          <h1 className="font-display text-3xl font-extrabold tracking-[-0.04em]">
-            Acceso a tu cuenta
-          </h1>
+          <h1 className="font-display text-3xl font-extrabold tracking-[-0.04em]">Tu hogar</h1>
           <p className="break-words text-sm font-semibold">{email}</p>
-          <p className="text-sm text-muted-foreground">
-            Esta cuenta no tiene un hogar vinculado. Si ya formabas parte de uno, pide que revisen
-            el vínculo de tu cuenta con ese hogar antes de crear otro.
-          </p>
-          <Button className="w-full" onClick={() => setView("join")}>
+          <Button className="w-full" onClick={() => setView("create")}>
+            <Home /> Crear hogar
+          </Button>
+          <Button variant="outline" className="w-full" onClick={() => setView("join")}>
             <KeyRound /> Tengo una invitación
           </Button>
-          <Button variant="outline" className="w-full" onClick={() => setView("create")}>
-            <Home /> Crear un nuevo hogar
-          </Button>
+          <details className="text-sm text-muted-foreground">
+            <summary className="cursor-pointer py-2 font-medium">
+              ¿Ya pertenecías a un hogar?
+            </summary>
+            <p className="pt-2">
+              Comprueba el correo con el que entraste. Si tu cuenta se desvinculó, pide a un adulto
+              del hogar que revise tu acceso antes de crear otro.
+            </p>
+          </details>
           <button
             type="button"
             disabled={busy}

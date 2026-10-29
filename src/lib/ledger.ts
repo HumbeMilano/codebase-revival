@@ -45,15 +45,27 @@ export function effectiveDueDay(dueDay: number, mk: string): number {
   return Math.min(Math.max(1, dueDay), new Date(year!, month!, 0).getDate());
 }
 
-/** Explicit status wins; automatic status is an estimate based on the due date. */
-export function billStatus(b: LedgerBill, mk: string, today: Date): "paid" | "pending" {
+export type BillStatus = "paid" | "pending" | "estimated";
+export function billStatusLabel(status: BillStatus, feminine = false) {
+  return status === "estimated"
+    ? "Pago estimado"
+    : status === "paid"
+      ? feminine
+        ? "Pagada"
+        : "Pagado"
+      : "Pendiente";
+}
+
+/** Only an explicit monthly confirmation is a recorded payment. Scheduling can
+ * estimate a debit, but must never change confirmed balances or history. */
+export function billStatus(b: LedgerBill, mk: string, today: Date): BillStatus {
   const explicit = b.overrides[mk]?.status;
   if (explicit) return explicit;
   if (!b.autoPay) return "pending";
   const todayKey = monthKey(today.getFullYear(), today.getMonth());
-  if (mk < todayKey) return "paid";
+  if (mk < todayKey) return "estimated";
   if (mk > todayKey) return "pending";
-  return today.getDate() >= effectiveDueDay(b.dueDay, mk) ? "paid" : "pending";
+  return today.getDate() >= effectiveDueDay(b.dueDay, mk) ? "estimated" : "pending";
 }
 
 export function billsForMonth(bills: LedgerBill[], mk: string) {
@@ -64,6 +76,7 @@ export interface PersonSummary {
   personId: string;
   assigned: number;
   paid: number;
+  estimated: number;
   pending: number;
   contributed: number;
   available: number; // aportó − lo que ya se pagó de su parte
@@ -89,6 +102,7 @@ export function monthSummary(
       personId: id,
       assigned: 0,
       paid: 0,
+      estimated: 0,
       pending: 0,
       contributed: 0,
       available: 0,
@@ -98,13 +112,16 @@ export function monthSummary(
 
   let total = 0,
     paid = 0,
+    estimated = 0,
     pendingCount = 0;
   for (const b of billsForMonth(bills, mk)) {
     const amt = billAmount(b, mk);
-    const isPaid = billStatus(b, mk, today) === "paid";
+    const status = billStatus(b, mk, today);
+    const isPaid = status === "paid";
     total += amt;
     if (isPaid) paid += amt;
     else pendingCount++;
+    if (status === "estimated") estimated += amt;
     for (const [pid, share] of Object.entries(splitBill(amt, b.splits))) {
       const p = persons[pid];
       if (!p) continue;
@@ -112,6 +129,7 @@ export function monthSummary(
       p.billCount++;
       if (isPaid) p.paid += share;
       else p.pending += share;
+      if (status === "estimated") p.estimated += share;
     }
   }
   let contributed = 0;
@@ -125,6 +143,7 @@ export function monthSummary(
     ...p,
     assigned: round(p.assigned),
     paid: round(p.paid),
+    estimated: round(p.estimated),
     pending: round(p.pending),
     contributed: round(p.contributed),
     available: round(p.contributed - p.paid),
@@ -133,6 +152,7 @@ export function monthSummary(
   return {
     total: round(total),
     paid: round(paid),
+    estimated: round(estimated),
     pending: round(total - paid),
     pendingCount,
     contributed: round(contributed),

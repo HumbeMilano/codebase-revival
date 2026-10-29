@@ -1,4 +1,11 @@
-import { billAmount, billStatus, billsForMonth, effectiveDueDay, type LedgerBill } from "./ledger";
+import {
+  billAmount,
+  billStatus,
+  billsForMonth,
+  effectiveDueDay,
+  type LedgerBill,
+  type BillStatus,
+} from "./ledger";
 import { dateKey, type FamilyEvent } from "@/components/hub/planner-data";
 
 export type CalendarBill = {
@@ -11,7 +18,7 @@ export type CalendarBill = {
   time: string;
   memberIds: string[];
   amount: number;
-  status: "paid" | "pending";
+  status: BillStatus;
 };
 export type CalendarItem = FamilyEvent | CalendarBill;
 export function calendarBills(bills: LedgerBill[], month: string, now: Date): CalendarBill[] {

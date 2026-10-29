@@ -47,7 +47,7 @@ test("independent lists persist and remain editable after an offline reload", as
     "true",
   );
   await context.setOffline(false);
-  await expect(page.getByText("Hola, Ana", { exact: true }).first()).toBeVisible();
+  await section(page, "Compras");
   await expect
     .poll(
       () => backend.rows["shopping_items"]?.find((row) => row["name"] === "Pasaporte")?.["done"],

@@ -74,7 +74,7 @@ test("a real viewport can create household records and reload confirmed data", a
   await expect(dialog).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByText("Hola, Ana", { exact: true }).first()).toBeVisible({
+  await expect(page.getByRole("button", { name: "Nueva factura", exact: true })).toBeVisible({
     timeout: 30000,
   });
   await section(page, "Tareas");
