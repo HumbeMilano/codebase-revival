@@ -75,16 +75,46 @@ export const widgetSchema = z
       (!w.noteId || w.id === "specific-note") &&
       (!w.listId || w.id === "shopping"),
   );
+export const MAX_DASHBOARD_WIDGETS = 100;
+export const widgetReferenceField = (id: WidgetId) =>
+  id === "specific-note"
+    ? "noteId"
+    : id === "shopping"
+      ? "listId"
+      : id === "member-summary" || id === "member-tasks"
+        ? "memberId"
+        : undefined;
+type WidgetReference = Pick<z.output<typeof widgetSchema>, "id" | "memberId" | "noteId" | "listId">;
+export function widgetReferenceId(widget: WidgetReference) {
+  const field = widgetReferenceField(widget.id);
+  const reference = field ? widget[field] : undefined;
+  return field === "noteId" || field === "listId" ? reference?.toLowerCase() : reference;
+}
+export const dashboardWidgetIdentity = (widget: WidgetReference) =>
+  JSON.stringify([widget.id, widgetReferenceId(widget) ?? null]);
+const uniqueWidgets = (widgets: z.output<typeof widgetSchema>[]) =>
+  new Set(widgets.map((widget) => widget.key)).size === widgets.length &&
+  new Set(widgets.map(dashboardWidgetIdentity)).size === widgets.length &&
+  // A legacy implicit list may resolve to the only current list. Bind it to a
+  // concrete list before allowing another shopping card; SQL enforces this too.
+  (!widgets.some((widget) => widget.id === "shopping" && !widget.listId) ||
+    widgets.filter((widget) => widget.id === "shopping").length === 1);
 const currentLayout = z
+  .object({
+    version: z.literal(4),
+    widgets: z.array(widgetSchema).max(MAX_DASHBOARD_WIDGETS).refine(uniqueWidgets),
+  })
+  .strict();
+const reviewedLayout = z
   .object({
     version: z.literal(3),
     widgets: z
       .array(widgetSchema)
       .max(WIDGET_IDS.length)
       .refine(
-        (xs) =>
-          new Set(xs.map((w) => w.key)).size === xs.length &&
-          new Set(xs.map((w) => w.id)).size === xs.length,
+        (widgets) =>
+          new Set(widgets.map((widget) => widget.key)).size === widgets.length &&
+          new Set(widgets.map((widget) => widget.id)).size === widgets.length,
       ),
   })
   .strict();
@@ -131,18 +161,24 @@ const legacyLayout = z
   })
   .strict();
 export const dashboardLayoutSchema = z
-  .union([currentLayout, previousLayout, legacyLayout])
+  .union([currentLayout, reviewedLayout, previousLayout, legacyLayout])
   .transform((layout): z.infer<typeof currentLayout> => {
     const seen = new Set<string>();
     return {
-      version: 3,
+      version: 4,
       widgets: layout.widgets
         .filter((widget) => {
-          if (seen.has(widget.id)) return false;
-          seen.add(widget.id);
+          const identity = dashboardWidgetIdentity(widget);
+          if (seen.has(identity)) return false;
+          seen.add(identity);
           return true;
         })
-        .map((w) => ({ ...w, key: "key" in w ? w.key : w.id })),
+        .map((w) => {
+          const widget = { ...w, key: "key" in w ? w.key : w.id };
+          const field = widgetReferenceField(widget.id);
+          const reference = widgetReferenceId(widget);
+          return field && reference ? { ...widget, [field]: reference } : widget;
+        }),
     };
   });
 export type DashboardLayout = z.output<typeof dashboardLayoutSchema>;
@@ -156,7 +192,7 @@ export type DashboardScope =
   | { kind: "account"; accountId: string }
   | { kind: "device"; householdId: string; memberId: string };
 export const defaultDashboardLayout = (): DashboardLayout => ({
-  version: 3,
+  version: 4,
   widgets: [
     { id: "tasks", key: "tasks", size: "tall" },
     { id: "specific-note", key: "specific-note", size: "column" },
@@ -167,7 +203,7 @@ export const defaultDashboardLayout = (): DashboardLayout => ({
   ],
 });
 export const defaultMobileDashboardLayout = (): DashboardLayout => ({
-  version: 3,
+  version: 4,
   widgets: [
     { id: "tasks", key: "tasks", size: "banner" },
     { id: "shopping", key: "shopping", size: "panorama" },
@@ -182,7 +218,7 @@ export const initialDashboardSnapshot = (): DashboardSnapshot => ({
 export const dashboardScopeKey = (scope: DashboardScope) =>
   scope.kind === "account"
     ? `account:${scope.accountId}`
-    : `homehub-dashboard-device:v3:${scope.householdId}:${scope.memberId}`;
+    : `homehub-dashboard-device:v4:${scope.householdId}:${scope.memberId}`;
 export function moveDashboardWidget(
   layout: DashboardLayout,
   key: string,

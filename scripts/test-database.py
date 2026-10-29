@@ -325,7 +325,7 @@ def run():
     check('dashboard revision advances once', json.loads(save_layout(empty_layout, 1, user=USER_A))['revision'], 2)
     save_layout(layout, 1, user=USER_A, fail='Dashboard changed')
     check('stale dashboard save preserves confirmed layout', json.loads(sql(f"SELECT layout FROM dashboard_preferences WHERE user_id='{USER_A}';", user=USER_A)), empty_layout)
-    for invalid_layout in [None, [], {}, {'version': 4, 'widgets': []}, {'version': 1, 'widgets': None},
+    for invalid_layout in [None, [], {}, {'version': 5, 'widgets': []}, {'version': 1, 'widgets': None},
                            {'version': 1, 'widgets': [{'id': 'unknown', 'size': 'compact'}]},
                            {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'giant'}]},
                            {'version': 1, 'widgets': [{'id': 'tasks', 'size': 'wide'}] * 2},
@@ -763,12 +763,61 @@ def run():
     sql(f"SELECT record_stripe_sandbox_event('{test_gateway}','{j(live_event)}');",device='',fail='Only supported sandbox events')
     check('sandbox ledger is inaccessible to ordinary accounts',sql("SELECT has_table_privilege('authenticated','homehub_private.stripe_sandbox_events','SELECT');"),'f')
     check('public catalogue exposes the editable monthly and annual prices',json.loads(sql('SELECT business_catalog();',device=''))['plans'][1]['annual_amount_cents'],4000)
+    test_configurable_widget_instances()
     test_deferred_tablet_pin()
     test_member_account_changes()
     test_member_account_restoration()
     test_household_avatars()
     test_legal_subscriptions(test_gateway,master)
     print(f'\n{COUNT} database checks passed (plus negative permission/validation assertions).', flush=True)
+
+
+def test_configurable_widget_instances():
+    owner = str(uuid.uuid4())
+    other = str(uuid.uuid4())
+    sql(f"INSERT INTO auth.users(id,email,email_confirmed_at) VALUES('{owner}','widgets-owner@example.invalid',now()),('{other}','widgets-other@example.invalid',now());")
+    widgets = []
+    for kind, field in [('specific-note','noteId'),('shopping','listId'),('member-summary','memberId'),('member-tasks','memberId')]:
+        for index in range(2):
+            reference = f'm_person_{index}' if field == 'memberId' else str(uuid.uuid4())
+            widgets.append({'id':kind,'key':f'{kind}-{index}','size':'wide',field:reference})
+    layout = {'version':4,'widgets':widgets}
+    valid = lambda body: sql(f"SELECT valid_dashboard_layout('{j(body)}'::jsonb);",user=owner)
+    save = lambda body, revision, **kwargs: sql(f"SELECT row_to_json(saved) FROM save_dashboard_layout('{j(body)}'::jsonb,{revision}) saved;",user=owner,**kwargs)
+    check('v4 accepts separate selections and the same member across different widget types',valid(layout),'t')
+    check('v4 configured instances save without changing order, keys or references',json.loads(save(layout,0))['layout'],layout)
+    check('v4 exact retry advances the revision only once',json.loads(save(layout,0))['revision'],1)
+    for widget in widgets[::2]:
+        duplicate = {**layout,'widgets':widgets+[{**widget,'key':'duplicate-selection'}]}
+        check(f"v4 rejects duplicate {widget['id']} selections even with another key",valid(duplicate),'f')
+        save(duplicate,1,fail='Invalid dashboard layout')
+    check('rejected duplicate selections preserve the confirmed layout and revision',json.loads(sql(f"SELECT jsonb_build_array(layout,revision) FROM dashboard_preferences WHERE user_id='{owner}';",user=owner)),[layout,1])
+    uuid_ref = 'a1000000-0000-4000-8000-000000000001'
+    casing = {'version':4,'widgets':[{'id':'specific-note','key':'a','size':'wide','noteId':uuid_ref},{'id':'specific-note','key':'b','size':'wide','noteId':uuid_ref.upper()}]}
+    check('v4 UUID references compare without case',valid(casing),'f')
+    case_members = {'version':4,'widgets':[{'id':'member-tasks','key':'a','size':'wide','memberId':'m_A'},{'id':'member-tasks','key':'b','size':'wide','memberId':'m_a'}]}
+    check('v4 member keys retain case-sensitive identities',valid(case_members),'t')
+    for body in [
+        {'version':4,'widgets':[{'id':'notes','key':'a','size':'wide'},{'id':'notes','key':'b','size':'wide'}]},
+        {'version':4,'widgets':[{'id':'shopping','key':'a','size':'wide'},{'id':'shopping','key':'b','size':'wide','listId':uuid_ref}]},
+        {'version':4,'widgets':[{'id':'specific-note','key':'a','size':'wide'},{'id':'specific-note','key':'b','size':'wide'}]},
+        {'version':4,'widgets':[widgets[0],{**widgets[1],'key':widgets[0]['key']}]},
+        {'version':4,'widgets':[{**widgets[0],'body':'private note content'}]},
+        {'version':4,'widgets':[{**widgets[0],'noteId':None}]},
+        {'version':4,'widgets':[{**widgets[0],'listId':uuid_ref}]},
+    ]:
+        save(body,1,fail='Invalid dashboard layout')
+    hundred = {'version':4,'widgets':[{'id':'member-tasks','key':f'key-{i}','size':'small','memberId':f'm_{i}'} for i in range(100)]}
+    check('v4 technical limit permits 100 distinct referenced instances',valid(hundred),'t')
+    check('v4 technical limit rejects the 101st instance',valid({**hundred,'widgets':hundred['widgets']+[{'id':'notes','key':'extra','size':'small'}]}),'f')
+    for version in [1,2,3]:
+        check(f'v4 validator keeps legacy document version {version}',valid({'version':version,'widgets':[] }),'t')
+    check('v4 validator preserves JSON numeric version equivalence',sql("SELECT valid_dashboard_layout('{\"version\":1.0,\"widgets\":[]}') AND valid_dashboard_layout('{\"version\":4.0,\"widgets\":[]}');",user=owner),'t')
+    check('v3 still rejects multiple instances of a type',valid({'version':3,'widgets':widgets[:2]}),'f')
+    check('v4 references remain private between accounts',sql(f"SELECT count(*) FROM dashboard_preferences WHERE user_id='{owner}';",user=other),'0')
+    check('v4 preferences cannot be changed by another account',sql(f"WITH changed AS(UPDATE dashboard_preferences SET layout='{{\"version\":4,\"widgets\":[]}}' WHERE user_id='{owner}' RETURNING user_id) SELECT count(*) FROM changed;",user=other),'0')
+    check('v4 validator stays immutable and uses invoker privileges',sql("SELECT provolatile='i' AND NOT prosecdef FROM pg_proc WHERE oid='public.valid_dashboard_layout(jsonb)'::regprocedure;"),'t')
+    check('v4 does not grant anonymous validation or preference writes',sql("SELECT has_function_privilege('anon','public.valid_dashboard_layout(jsonb)','EXECUTE') OR has_table_privilege('anon','public.dashboard_preferences','UPDATE');"),'f')
 
 
 def test_household_avatars():

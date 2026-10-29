@@ -85,7 +85,7 @@ test("choosing a shopping list, financial progress and expanded catalogue persis
   catalog = page.getByRole("dialog", { name: "Añadir widgets", exact: true });
   await expect(
     catalog.getByRole("button", { name: "Añadir lista de compras", exact: true }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await catalog.getByRole("button", { name: "Añadir resumen de miembro", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Elegir miembro", exact: true })
@@ -149,7 +149,7 @@ test("choosing a shopping list, financial progress and expanded catalogue persis
     version: number;
     widgets: Record<string, unknown>[];
   };
-  expect(saved.version).toBe(3);
+  expect(saved.version).toBe(4);
   expect(saved.widgets.find((w) => w["id"] === "shopping")?.["listId"]).toBe(school);
   expect(JSON.stringify(saved)).not.toMatch(/Pencils|School|Internet|amount/);
   expect(backend.unexpectedRequests).toEqual([]);

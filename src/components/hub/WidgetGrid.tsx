@@ -33,6 +33,7 @@ type Props = {
   disabled: boolean;
   onChange: (layout: DashboardLayout) => void;
   describe: (id: WidgetId) => { title: string; tone: string };
+  label?: (widget: DashboardWidget) => string;
   onConfigure: (key: string) => void;
   onOpen?: (widget: DashboardWidget) => void;
   children: (widget: DashboardWidget) => React.ReactNode;
@@ -46,6 +47,7 @@ export function WidgetGrid({
   disabled,
   onChange,
   describe,
+  label,
   children,
   onConfigure,
   onOpen,
@@ -329,7 +331,8 @@ export function WidgetGrid({
         }}
       >
         {layout.widgets.map((widget) => {
-          const { title, tone } = describe(widget.id);
+          const { tone } = describe(widget.id);
+          const title = label?.(widget) ?? describe(widget.id).title;
           return (
             <section
               key={widget.key}
