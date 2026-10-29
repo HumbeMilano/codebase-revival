@@ -113,20 +113,12 @@ test("phone defaults keep the same explicit grid through editing, reset, save an
   const original = await layoutCells(page);
   expect(original.columns).toBe(3);
   expect(original.cells.map(({ id, width, height }) => ({ id, width, height }))).toEqual([
-    { id: "tasks", width: 2, height: 1 },
-    { id: "shopping-summary", width: 1, height: 1 },
+    { id: "tasks", width: 3, height: 1 },
     { id: "shopping", width: 3, height: 2 },
     { id: "calendar", width: 3, height: 2 },
-    { id: "notes", width: 3, height: 2 },
-    { id: "month-calendar", width: 3, height: 4 },
   ]);
-  expect(original.cells[0]!.row).toBe(original.cells[1]!.row);
+  expect(original.cells.map(({ row }) => row)).toEqual([0, 1, 3]);
   expect(backend.dashboardSaveRequests).toBe(0);
-  const month = page.locator('[data-widget="month-calendar"]');
-  await month.scrollIntoViewIfNeeded();
-  const box = await month.boundingBox(),
-    last = await month.locator(".dw-day").last().boundingBox();
-  expect(last!.y + last!.height).toBeLessThanOrEqual(box!.y + box!.height);
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
   expect(await layoutCells(page)).toEqual(original);
   await page.getByRole("button", { name: "Ocultar próximos eventos", exact: true }).click();

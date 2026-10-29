@@ -998,6 +998,10 @@ select.planner-field {
   -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
 }
+.dw-tiny-value.dw-task-title {
+  font-size: 22px;
+  line-height: 1.15;
+}
 .dw-tiny-value.dw-money {
   font-size: clamp(18px, 10cqi, 32px);
 }
