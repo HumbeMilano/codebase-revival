@@ -149,11 +149,19 @@ export function useOfflineShopping(
     },
     [scope, sync],
   );
+  const snapshotRevision = useCallback(async () => {
+    if (!scope) return undefined;
+    // An unavailable cache must not prevent opening an online household.
+    return readShopping(scope).then(
+      (value) => value.localRevision ?? 0,
+      () => undefined,
+    );
+  }, [scope]);
   const replace = useCallback(
-    async (items: ShopItem[], lists?: ShoppingList[]) => {
+    async (items: ShopItem[], lists?: ShoppingList[], expectedRevision?: number) => {
       if (!scope) return;
       try {
-        const next = await acceptShoppingSnapshot(scope, items, lists);
+        const next = await acceptShoppingSnapshot(scope, items, lists, expectedRevision);
         if (currentScope.current === scope) setRecord(next);
         if (next.queue.length) void sync();
       } catch {
@@ -232,6 +240,7 @@ export function useOfflineShopping(
     setItems,
     setLists,
     replace,
+    snapshotRevision,
     pending: record?.queue.length ?? 0,
     conflict: record?.conflict ?? false,
     syncing,

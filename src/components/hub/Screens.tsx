@@ -109,7 +109,7 @@ export function useHubState({
   shoppingContext?: ShoppingContext | null;
 } = {}): HubState {
   const shopping = useOfflineShopping(shoppingContext, db());
-  const { replace: replaceOfflineShopping } = shopping;
+  const { replace: replaceOfflineShopping, snapshotRevision } = shopping;
   const [binding] = useState(() => bindHubPersistence());
   const guard = useRef<SyncGuard>({ revision: 0, pending: 0, queue: Promise.resolve() }).current;
   const [events, setEvents, setEventsRaw, eventStatus] = usePersistedCollection<FamilyEvent[]>(
@@ -177,12 +177,15 @@ export function useHubState({
         withFinances === finances.current &&
         (!withFinances || !isDeviceMode() || hasFinanceToken());
       try {
+        const shoppingRevision = shoppingContext ? await snapshotRevision() : undefined;
+        if (!currentRequest()) return;
         const data = await binding.load({ includeFinances: withFinances });
         if (!currentRequest()) return;
         setEventsRaw(data.events);
         setNotesRaw(data.notes);
         setChoresRaw(data.chores);
-        if (shoppingContext) await replaceOfflineShopping(data.items, data.shoppingLists);
+        if (shoppingContext)
+          await replaceOfflineShopping(data.items, data.shoppingLists, shoppingRevision);
         else setItemsRaw(data.items);
         if (!currentRequest()) return;
         setShoppingListsRaw(data.shoppingLists);
@@ -326,6 +329,7 @@ export function useHubState({
     setContributionsRaw,
     shoppingContext,
     replaceOfflineShopping,
+    snapshotRevision,
   ]);
   useEffect(() => {
     if (!includeFinances) {

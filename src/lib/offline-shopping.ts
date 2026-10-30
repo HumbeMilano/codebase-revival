@@ -24,6 +24,8 @@ type ListChange = {
 type Mutation = { id: string; changes: Change[]; listChanges?: ListChange[]; createdAt: number };
 export interface ShoppingRecord {
   scope: string;
+  /** Changes whenever a committed local snapshot, edit or sync receipt replaces this record. */
+  localRevision?: number;
   base: ShopItem[];
   local: ShopItem[];
   queue: Mutation[];
@@ -280,6 +282,7 @@ export async function enqueueShopping(
       if (!changes.length) return { result: record };
       const next = {
         ...record,
+        localRevision: (record.localRevision ?? 0) + 1,
         local: apply(record.local, changes),
         queue: [...record.queue, { id: crypto.randomUUID(), changes, createdAt: Date.now() }],
       };
@@ -291,12 +294,18 @@ export async function acceptShoppingSnapshot(
   scope: string,
   items: ShopItem[],
   lists?: ShoppingList[],
+  expectedRevision?: number,
 ): Promise<ShoppingRecord> {
   return transaction("lists", scope, (value) => {
     const record = (value as ShoppingRecord | undefined) ?? blank(scope);
-    if (record.queue.length) return { result: record };
+    if (
+      record.queue.length ||
+      (expectedRevision !== undefined && expectedRevision !== (record.localRevision ?? 0))
+    )
+      return { result: record };
     const next = {
       ...record,
+      localRevision: (record.localRevision ?? 0) + 1,
       base: items,
       local: items,
       conflict: false,
@@ -385,6 +394,7 @@ export async function enqueueShoppingLists(
       if (!changes.length) return { result: record };
       const next = {
         ...record,
+        localRevision: (record.localRevision ?? 0) + 1,
         lists: applyLists(lists, changes),
         baseLists: record.baseLists ?? lists,
         queue: [
@@ -500,7 +510,18 @@ export function flushShopping(
           (value, entry) => applyLists(value, entry.listChanges ?? []),
           baseLists,
         );
-        return { value: { ...current, base, local, queue, baseLists, lists }, result: undefined };
+        return {
+          value: {
+            ...current,
+            localRevision: (current.localRevision ?? 0) + 1,
+            base,
+            local,
+            queue,
+            baseLists,
+            lists,
+          },
+          result: undefined,
+        };
       });
     }
   };
@@ -581,6 +602,7 @@ export async function resolveShoppingConflict(
     const listEdits = listChanges(serverLists, desiredLists);
     const next: ShoppingRecord = {
       scope,
+      localRevision: (record.localRevision ?? 0) + 1,
       base: remote,
       local: desired,
       conflict: false,

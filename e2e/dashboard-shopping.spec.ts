@@ -124,8 +124,51 @@ test("a Home shopping check is durable offline and syncs once after an offline r
       .getByRole("region", { name: "Lista School", exact: true })
       .getByRole("button", { name: "Pan", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  // Force the reconnect read to finish after the outbox receipt. A slow GET
+  // captured before that receipt must not overwrite the acknowledged check.
+  const stale = structuredClone(backend.rows["shopping_items"]);
+  let reading!: () => void, release!: () => void;
+  const started = new Promise<void>((resolve) => {
+    reading = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/rest\/v1\/rpc\/sync_shopping$/, async (route) => {
+    await started;
+    await route.fallback();
+  });
+  await page.route(/\/rest\/v1\/shopping_items(?:\?|$)/, async (route) => {
+    reading();
+    await waiting;
+    await route.fulfill({ json: stale, headers: { "Content-Range": "0-1/2" } });
+  });
   await context.setOffline(false);
   await expect(page.getByRole("button", { name: "Volver a conectar", exact: true })).toHaveCount(0);
+  await expect
+    .poll(() => backend.rows["shopping_items"]!.find((row) => row["id"] === schoolPan)?.["done"])
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          new Promise<boolean>((resolve, reject) => {
+            const request = indexedDB.open("homehub-shopping-v1", 1);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+              const connection = request.result;
+              const read = connection.transaction("lists").objectStore("lists").getAll();
+              read.onerror = () => reject(read.error);
+              read.onsuccess = () => {
+                resolve(read.result.length === 1 && read.result[0].queue.length === 0);
+                connection.close();
+              };
+            };
+          }),
+      ),
+    )
+    .toBe(true);
+  release();
   await expect(page.getByRole("region", { name: "Lista School", exact: true })).toBeVisible();
   await expect.poll(() => new URL(page.url()).searchParams.get("record")).toBe(school);
   await section(page, "Inicio");
