@@ -15,6 +15,119 @@ afterEach(() => {
 });
 
 describe("functional planner", () => {
+  it("does not close the next note when an earlier save finishes after navigation", async () => {
+    const notes = [
+      { id: "a", title: "First", body: "First body", memberId: "ana", pinned: false },
+      { id: "b", title: "Second", body: "Second body", memberId: "ana", pinned: false },
+    ];
+    let finish!: (value: boolean) => void;
+    const save = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const onNoteChange = vi.fn();
+    const { rerender } = render(
+      <FamilyNotes
+        compact
+        notes={notes}
+        setNotes={save}
+        user={user}
+        initialNoteId="a"
+        onNoteChange={onNoteChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    rerender(
+      <FamilyNotes
+        compact
+        notes={notes}
+        setNotes={save}
+        user={user}
+        initialNoteId="b"
+        onNoteChange={onNoteChange}
+      />,
+    );
+    expect(screen.getByLabelText("Contenido")).toHaveValue("Second body");
+    finish(true);
+    await waitFor(() => expect(screen.getByLabelText("Contenido")).toHaveValue("Second body"));
+    expect(onNoteChange).not.toHaveBeenCalled();
+  });
+  it("preserves an open note draft during a data refresh and closes it when its route clears", () => {
+    const note = { id: "a", title: "First", body: "Original", memberId: "ana", pinned: false };
+    const save = vi.fn();
+    const change = vi.fn();
+    const { rerender } = render(
+      <FamilyNotes
+        compact
+        notes={[note]}
+        setNotes={save}
+        user={user}
+        initialNoteId="a"
+        onNoteChange={change}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Contenido"), { target: { value: "Unsaved" } });
+    rerender(
+      <FamilyNotes
+        compact
+        notes={[{ ...note }]}
+        setNotes={save}
+        user={user}
+        initialNoteId="a"
+        onNoteChange={change}
+      />,
+    );
+    expect(screen.getByLabelText("Contenido")).toHaveValue("Unsaved");
+    rerender(
+      <FamilyNotes compact notes={[note]} setNotes={save} user={user} onNoteChange={change} />,
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+  });
+  it("a late event save cannot close a different event opened by browser navigation", async () => {
+    const events = [
+      { id: "a", title: "First", date: "2028-06-09", time: "10:00", note: "", memberId: "ana" },
+      { id: "b", title: "Second", date: "2028-07-10", time: "11:00", note: "", memberId: "ana" },
+    ];
+    let finish!: (value: boolean) => void;
+    const save = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const change = vi.fn();
+    const { rerender } = render(
+      <FamilyCalendar
+        compact
+        events={events}
+        setEvents={save}
+        user={user}
+        initialEventId="a"
+        onEventChange={change}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    rerender(
+      <FamilyCalendar
+        compact
+        events={events}
+        setEvents={save}
+        user={user}
+        initialEventId="b"
+        onEventChange={change}
+      />,
+    );
+    await waitFor(() => expect(screen.getByLabelText("Título")).toHaveValue("Second"));
+    finish(true);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled());
+    expect(screen.getByLabelText("Título")).toHaveValue("Second");
+    expect(change).not.toHaveBeenCalled();
+  });
   it("opens a selected future event in its own month without changing the original", () => {
     const event = {
       id: "future",

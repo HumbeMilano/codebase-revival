@@ -1,6 +1,8 @@
-# Inicio móvil del hogar nuevo
+# Inicio móvil del hogar
 
 Seguimiento: [#38](https://github.com/HumbeMilano/codebase-revival/issues/38), dentro de [M1 #34](https://github.com/HumbeMilano/codebase-revival/issues/34).
+
+Desde el 30 de octubre, todas las cuentas personales en teléfono muestran una cabecera del día, también si ya tienen un diseño guardado. Resume tareas pendientes, productos de listas activas y agenda autorizada; sus accesos abren formularios o destinos reales. Una próxima entrada enlaza a la fecha o registro correspondiente. Esta cabecera se oculta durante la edición y no altera la cuadrícula ni añade widgets. Las tablets compartidas conservan su disposición. Véanse [capturas y navegación](mobile-visible-polish.md).
 
 El diseño inicial de una cuenta personal en teléfono da prioridad a tres widgets existentes: tareas de hoy, su lista y próximos eventos. Tareas muestra la siguiente pendiente en el formato ancho; las versiones pequeñas conservan el contador. Un hogar vacío ofrece acciones para añadir una tarea, productos o un evento mediante sus formularios reales.
 
