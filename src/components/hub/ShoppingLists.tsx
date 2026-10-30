@@ -27,27 +27,38 @@ export function Shopping({
   s,
   createRequest = 0,
   initialListId,
+  onListChange,
 }: {
   s: ShoppingState;
   compact: boolean;
   createRequest?: number;
   initialListId?: string | undefined;
+  onListChange?: (id: string | undefined, replace?: boolean) => void;
 }) {
   const householdId = s.shoppingSync?.householdId ?? HOUSEHOLD.id;
   const lists = s.shoppingLists?.length ? s.shoppingLists : [defaultShoppingList(householdId)];
   const [selected, setSelected] = useState(initialListId ?? householdId);
-  const list =
-    lists.find((row) => row.id === selected && !row.archived) ??
-    lists.find((row) => !row.archived)!;
+  const selection = onListChange ? initialListId : selected;
+  const list = selection
+    ? lists.find((row) => row.id === selection && !row.archived)
+    : lists.find((row) => !row.archived);
   const listId = list?.id ?? householdId;
   const items = s.items.filter((item) => shoppingListId(item, householdId) === listId);
   const activeLists = lists.filter((row) => !row.archived);
   const archived = lists.filter((row) => row.archived);
   const [showArchive, setShowArchive] = useState(false);
   const [editor, setEditor] = useState<{ id: string | null; name: string } | null>(null);
-  const [name, setName] = useState("");
+  const [entry, setEntry] = useState({ listId, name: "" });
+  const name = entry.listId === listId ? entry.name : "";
+  const setName = (name: string) => setEntry({ listId, name });
   const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const select = (id: string | undefined, replace = false) => {
+    setEntry({ listId: id ?? householdId, name: "" });
+    setShowArchive(false);
+    if (onListChange) onListChange(id, replace);
+    else setSelected(id ?? householdId);
+  };
   useEffect(() => {
     if (createRequest) input.current?.focus();
   }, [createRequest]);
@@ -71,8 +82,7 @@ export function Shopping({
     setBusy(false);
     if (saved) {
       setEditor(null);
-      setSelected(id);
-      setName("");
+      select(id);
     }
   };
   const archive = async (row: ShoppingList, archived: boolean) => {
@@ -83,13 +93,14 @@ export function Shopping({
     );
     setBusy(false);
     if (saved && !archived) {
-      setSelected(row.id);
-      setShowArchive(false);
+      select(row.id);
+    } else if (saved && row.id === listId) {
+      select(undefined, true);
     }
   };
   const add = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (busy || !name.trim()) return;
+    if (busy || !list || !name.trim()) return;
     if (
       items.some((row) => row.name.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase())
     ) {
@@ -107,8 +118,12 @@ export function Shopping({
     const saved = await s.setItems((rows) => addShoppingItem(rows, item));
     setBusy(false);
     if (saved) {
-      setName((current) => (current === submittedName ? "" : current));
-      input.current?.focus();
+      setEntry((current) =>
+        current.listId === listId && current.name === submittedName
+          ? { ...current, name: "" }
+          : current,
+      );
+      if (input.current?.dataset["listId"] === listId) input.current.focus();
     }
   };
   const remove = async (item: ShopItem) => {
@@ -154,15 +169,14 @@ export function Shopping({
               key={row.id}
               aria-label={`Abrir lista ${row.name}`}
               aria-pressed={row.id === listId}
+              disabled={s.shoppingSync?.loading}
               className={cn(
                 "min-w-0 rounded-2xl border-2 p-4 text-left transition duration-200 motion-reduce:transition-none",
                 row.id === listId ? "border-foreground bg-card shadow-card" : "border-transparent",
                 ["bg-accent", "bg-lilac", "bg-success", "bg-sky"][index % 4],
               )}
               onClick={() => {
-                setSelected(row.id);
-                setName("");
-                setShowArchive(false);
+                select(row.id);
               }}
             >
               <ListChecks className="mb-3 size-5" />
@@ -216,114 +230,130 @@ export function Shopping({
           )}
         </section>
       )}
-      <section
-        className="space-y-4 rounded-3xl bg-card p-4 shadow-card sm:p-6"
-        aria-label={`Lista ${list?.name ?? "Groceries"}`}
-      >
-        <header className="flex items-center gap-2">
-          <h3 className="min-w-0 flex-1 break-words font-display text-xl font-bold">
-            {list?.name}
-          </h3>
+      {sync?.loading && <p role="status">Cargando tus listas…</p>}
+      {!sync?.loading && !list && (
+        <section className="rounded-3xl bg-card p-6 shadow-card" aria-label="Lista no disponible">
+          <h3 className="font-display text-lg font-bold">Esta lista no está disponible</h3>
           <Button
-            size="icon"
-            variant="ghost"
-            aria-label="Renombrar lista"
-            disabled={!s.setShoppingLists || busy}
-            onClick={() => setEditor({ id: listId, name: list?.name ?? "" })}
+            className="mt-4 rounded-full"
+            variant="outline"
+            onClick={() => select(undefined, true)}
           >
-            <Pencil className="size-4" />
+            Ver listas
           </Button>
-          {listId !== householdId && (
+        </section>
+      )}
+      {!sync?.loading && list && (
+        <section
+          className="space-y-4 rounded-3xl bg-card p-4 shadow-card sm:p-6"
+          aria-label={`Lista ${list?.name ?? "Groceries"}`}
+        >
+          <header className="flex items-center gap-2">
+            <h3 className="min-w-0 flex-1 break-words font-display text-xl font-bold">
+              {list?.name}
+            </h3>
             <Button
               size="icon"
               variant="ghost"
-              aria-label="Archivar lista"
-              disabled={busy}
-              onClick={() => {
-                if (list) void archive(list, true);
-              }}
+              aria-label="Renombrar lista"
+              disabled={!s.setShoppingLists || busy}
+              onClick={() => setEditor({ id: listId, name: list?.name ?? "" })}
             >
-              <Archive className="size-4" />
+              <Pencil className="size-4" />
             </Button>
-          )}
-        </header>
-        <form
-          onSubmit={(event) => void add(event)}
-          aria-busy={busy}
-          className="flex items-center gap-2 rounded-2xl bg-secondary p-2 pl-4"
-        >
-          <input
-            ref={input}
-            id="shopping-product"
-            maxLength={150}
-            aria-label="Producto"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Añadir producto"
-            className="min-w-0 flex-1 bg-transparent text-base outline-none"
-          />
-          <NativeInputShortcut targetId="shopping-product" />
-          <Button
-            type="submit"
-            size="icon"
-            aria-label="Añadir producto"
-            disabled={busy || !name.trim()}
-            className="size-11 shrink-0 rounded-xl"
+            {listId !== householdId && (
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Archivar lista"
+                disabled={busy}
+                onClick={() => {
+                  if (list) void archive(list, true);
+                }}
+              >
+                <Archive className="size-4" />
+              </Button>
+            )}
+          </header>
+          <form
+            onSubmit={(event) => void add(event)}
+            aria-busy={busy}
+            className="flex items-center gap-2 rounded-2xl bg-secondary p-2 pl-4"
           >
-            <Plus />
-          </Button>
-        </form>
-        <ul className="divide-y divide-border">
-          {[...items]
-            .sort((a, b) => Number(a.done) - Number(b.done))
-            .map((item) => (
-              <li key={item.id} className="flex items-center gap-2 py-1">
-                <Button
-                  variant="ghost"
-                  aria-label={item.name}
-                  aria-pressed={item.done}
-                  onClick={() =>
-                    void s.setItems((rows) =>
-                      rows.map((row) => (row.id === item.id ? { ...row, done: !row.done } : row)),
-                    )
-                  }
-                  className="h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-3 text-left"
-                >
-                  <span
-                    className={cn(
-                      "grid size-6 shrink-0 place-items-center rounded-full border-2",
-                      item.done ? "border-success-strong bg-success" : "border-foreground/25",
-                    )}
+            <input
+              ref={input}
+              data-list-id={listId}
+              id="shopping-product"
+              maxLength={150}
+              aria-label="Producto"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Añadir producto"
+              className="min-w-0 flex-1 bg-transparent text-base outline-none"
+            />
+            <NativeInputShortcut targetId="shopping-product" />
+            <Button
+              type="submit"
+              size="icon"
+              aria-label="Añadir producto"
+              disabled={busy || !name.trim()}
+              className="size-11 shrink-0 rounded-xl"
+            >
+              <Plus />
+            </Button>
+          </form>
+          <ul className="divide-y divide-border">
+            {[...items]
+              .sort((a, b) => Number(a.done) - Number(b.done))
+              .map((item) => (
+                <li key={item.id} className="flex items-center gap-2 py-1">
+                  <Button
+                    variant="ghost"
+                    aria-label={item.name}
+                    aria-pressed={item.done}
+                    onClick={() =>
+                      void s.setItems((rows) =>
+                        rows.map((row) => (row.id === item.id ? { ...row, done: !row.done } : row)),
+                      )
+                    }
+                    className="h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-3 text-left"
                   >
-                    {item.done && <Check />}
-                  </span>
-                  <span
-                    className={cn(
-                      "min-w-0 break-words text-base",
-                      item.done && "text-muted-foreground line-through",
-                    )}
+                    <span
+                      className={cn(
+                        "grid size-6 shrink-0 place-items-center rounded-full border-2",
+                        item.done ? "border-success-strong bg-success" : "border-foreground/25",
+                      )}
+                    >
+                      {item.done && <Check />}
+                    </span>
+                    <span
+                      className={cn(
+                        "min-w-0 break-words text-base",
+                        item.done && "text-muted-foreground line-through",
+                      )}
+                    >
+                      {item.name}
+                    </span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Eliminar ${item.name}`}
+                    onClick={() => void remove(item)}
                   >
-                    {item.name}
-                  </span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Eliminar ${item.name}`}
-                  onClick={() => void remove(item)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </li>
-            ))}
-        </ul>
-        {!items.length && (
-          <div className="py-8 text-center">
-            <ListChecks className="mx-auto mb-3 size-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Esta lista está vacía.</p>
-          </div>
-        )}
-      </section>
+                    <Trash2 className="size-4" />
+                  </Button>
+                </li>
+              ))}
+          </ul>
+          {!items.length && (
+            <div className="py-8 text-center">
+              <ListChecks className="mx-auto mb-3 size-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Esta lista está vacía.</p>
+            </div>
+          )}
+        </section>
+      )}
       {!!archived.length && (
         <Button
           variant="ghost"

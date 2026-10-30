@@ -796,6 +796,7 @@ function HubShell({
                       compact={compact}
                       createRequest={create?.tab === "shopping" ? create.id : 0}
                       initialListId={record?.tab === "shopping" ? record.id : undefined}
+                      onListChange={(id, replace) => visit("shopping", id, replace)}
                     />
                   )}
                   {tab === "finance" && financialAccess && (
@@ -816,6 +817,7 @@ function HubShell({
                       compact={compact}
                       createRequest={create?.tab === "calendar" ? create.id : 0}
                       initialEventId={record?.tab === "calendar" ? record.id : undefined}
+                      onEventChange={(id, replace) => visit("calendar", id, replace)}
                     />
                   )}
                   {tab === "notes" && (
@@ -826,6 +828,7 @@ function HubShell({
                       compact={compact}
                       createRequest={create?.tab === "notes" ? create.id : 0}
                       initialNoteId={record?.tab === "notes" ? record.id : undefined}
+                      onNoteChange={(id, replace) => visit("notes", id, replace)}
                     />
                   )}
                   {tab === "photos" && canManage && <HouseholdPhotos />}

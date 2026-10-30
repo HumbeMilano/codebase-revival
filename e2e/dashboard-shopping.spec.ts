@@ -125,7 +125,11 @@ test("a Home shopping check is durable offline and syncs once after an offline r
       .getByRole("button", { name: "Pan", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await context.setOffline(false);
-  await expect(page.getByText("Hola, Ana", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Volver a conectar", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Lista School", exact: true })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("record")).toBe(school);
+  await section(page, "Inicio");
+  await expect(product).toHaveAttribute("aria-checked", "true");
   await expect
     .poll(() => backend.rows["shopping_items"]!.find((row) => row["id"] === schoolPan)?.["done"])
     .toBe(true);

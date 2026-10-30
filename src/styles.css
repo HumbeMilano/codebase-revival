@@ -1632,3 +1632,103 @@ select.planner-field {
   min-width: 0;
   overflow-wrap: break-word;
 }
+
+.home-day-summary {
+  --day-cobalt: oklch(0.49 0.218 270);
+  display: grid;
+  gap: 10px;
+}
+.home-day-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.home-day-action {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  min-width: 0;
+  min-height: 118px;
+  gap: 5px;
+  padding: 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  text-align: left;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+.home-day-action > svg {
+  width: 21px;
+  height: 21px;
+  margin-bottom: 3px;
+}
+.home-day-action strong {
+  font-size: 15px;
+  line-height: 1.2;
+}
+.home-day-action > span {
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.home-day-tasks {
+  color: oklch(0.99 0 0);
+  background: var(--day-cobalt);
+  border-color: transparent;
+}
+.home-day-shopping {
+  background: var(--card);
+}
+.home-day-agenda {
+  background: color-mix(in oklch, var(--lilac), var(--card) 55%);
+}
+.home-next-entry {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 19px;
+  background: var(--card);
+  font-size: 14px;
+}
+.home-next-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--secondary);
+}
+.home-next-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.home-next-meta {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.home-day-action:focus-visible,
+.home-next-entry:focus-visible {
+  outline: 3px solid var(--day-cobalt);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .home-day-action:active {
+    transform: scale(0.97);
+  }
+}
+@media (max-width: 359px) {
+  .home-day-actions {
+    gap: 6px;
+  }
+  .home-day-action {
+    border-radius: 18px;
+    padding: 12px 10px;
+  }
+}

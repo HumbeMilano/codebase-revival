@@ -53,6 +53,7 @@ export function FamilyCalendar({
   compact,
   createRequest,
   initialEventId,
+  onEventChange,
   bills = [],
   setBills,
   financialAccess = false,
@@ -65,6 +66,7 @@ export function FamilyCalendar({
   compact: boolean;
   createRequest?: number;
   initialEventId?: string | undefined;
+  onEventChange?: (id: string | undefined, replace?: boolean) => void;
   bills?: LedgerBill[];
   setBills?: PersistedSetter<LedgerBill[]>;
   financialAccess?: boolean;
@@ -97,6 +99,27 @@ export function FamilyCalendar({
   }, [financialAccess]);
   const [allDay, setAllDay] = useState(() => !events.find((e) => e.id === initialEventId)?.time);
   const [saving, setSaving] = useState(false);
+  const requested = useRef(initialEventId);
+  const navigationVersion = useRef(0);
+  useEffect(() => {
+    if (requested.current === initialEventId) return;
+    requested.current = initialEventId;
+    navigationVersion.current++;
+    const date = calendarDateFromId(initialEventId, events, financialAccess ? bills : [], now);
+    const parsed = parseDate(date);
+    const event = events.find((entry) => entry.id === initialEventId);
+    setSelected(date);
+    setMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+    setDraft(event ? { ...event } : null);
+    setAllDay(!event?.time);
+    setBillDetail(financialAccess && initialEventId?.startsWith("bill:") ? initialEventId : null);
+    setBillEditor(null);
+  }, [initialEventId, events, bills, financialAccess, now]);
+  const closeEntry = (date = selected) => {
+    setDraft(null);
+    setBillDetail(null);
+    onEventChange?.(`date:${date}`, true);
+  };
   const openedRequest = useRef(0);
   const newEntry = () => {
     setAllDay(true);
@@ -145,6 +168,7 @@ export function FamilyCalendar({
     const date = new Date(month.getFullYear(), month.getMonth() + delta, 1);
     setMonth(date);
     setSelected(dateKey(date));
+    onEventChange?.(`date:${dateKey(date)}`);
   };
   const complete = async (e: FamilyEvent) => {
     if (saving) return;
@@ -207,7 +231,13 @@ export function FamilyCalendar({
                 </span>
               </div>
               {entry.kind === "bill" ? (
-                <button className="w-full text-left" onClick={() => setBillDetail(entry.id)}>
+                <button
+                  className="w-full text-left"
+                  onClick={() => {
+                    setBillDetail(entry.id);
+                    onEventChange?.(entry.id);
+                  }}
+                >
                   <span className="flex justify-between gap-3 font-display text-lg font-bold">
                     <span className="break-words">{entry.title}</span>
                     <span>{money(entry.amount)}</span>
@@ -246,6 +276,7 @@ export function FamilyCalendar({
                       onClick={() => {
                         setAllDay(!entry.time);
                         setDraft({ ...entry });
+                        onEventChange?.(entry.id);
                       }}
                     >
                       <Pencil className="size-4" />
@@ -280,6 +311,18 @@ export function FamilyCalendar({
   );
   return (
     <div className="space-y-5">
+      {onEventChange &&
+        initialEventId &&
+        !initialEventId.startsWith("date:") &&
+        !events.some((event) => event.id === initialEventId) &&
+        !(financialAccess && detail) && (
+          <section aria-label="Fecha no disponible" className="rounded-3xl bg-card p-6 shadow-card">
+            <h2 className="font-display text-lg font-bold">Esta entrada no está disponible</h2>
+            <Button className="mt-4 rounded-full" variant="outline" onClick={() => closeEntry()}>
+              Ver agenda
+            </Button>
+          </section>
+        )}
       {!dayDialog && (
         <>
           <div className="flex flex-wrap items-center gap-2">
@@ -364,7 +407,10 @@ export function FamilyCalendar({
                       aria-label={`Día ${i + 1}`}
                       aria-pressed={key === selected}
                       aria-current={key === dateKey(now) ? "date" : undefined}
-                      onClick={() => setSelected(key)}
+                      onClick={() => {
+                        setSelected(key);
+                        onEventChange?.(`date:${key}`);
+                      }}
                       className={cn(
                         "relative flex aspect-square min-h-10 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-transparent text-sm font-semibold",
                         key === selected
@@ -421,7 +467,7 @@ export function FamilyCalendar({
                 : "Nuevo evento"
           }
           close={() => {
-            if (!saving) setDraft(null);
+            if (!saving) closeEntry();
           }}
         >
           <form
@@ -438,6 +484,7 @@ export function FamilyCalendar({
                 return;
               }
               setSaving(true);
+              const version = navigationVersion.current;
               try {
                 const value = {
                   ...draft,
@@ -450,11 +497,11 @@ export function FamilyCalendar({
                 const confirmed = await setEvents((xs) =>
                   draft.id ? xs.map((x) => (x.id === draft.id ? value : x)) : [...xs, value],
                 );
-                if (confirmed) {
+                if (confirmed && version === navigationVersion.current) {
                   setSelected(value.date);
                   const d = parseDate(value.date);
                   setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
-                  setDraft(null);
+                  closeEntry(value.date);
                 }
               } finally {
                 setSaving(false);
@@ -589,12 +636,7 @@ export function FamilyCalendar({
               />
             </div>
             <div className="planner-actions flex justify-end gap-2 border-t pt-3">
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={saving}
-                onClick={() => setDraft(null)}
-              >
+              <Button type="button" variant="ghost" disabled={saving} onClick={() => closeEntry()}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={saving}>
@@ -608,7 +650,7 @@ export function FamilyCalendar({
         <Editor
           title={detail.title}
           close={() => {
-            if (!saving) setBillDetail(null);
+            if (!saving) closeEntry();
           }}
         >
           <div className="space-y-5">
@@ -675,19 +717,25 @@ export function FamilyCalendar({
             initial={billEditor === "new" ? undefined : billEditor}
             defaultDay={parseDate(selected).getDate()}
             onClose={() => {
-              if (!saving) setBillEditor(null);
+              if (!saving) {
+                setBillEditor(null);
+                closeEntry();
+              }
             }}
             onSave={async (bill) => {
               setSaving(true);
+              const version = navigationVersion.current;
               try {
                 const saved = await setBills((xs) =>
                   xs.some((b) => b.id === bill.id)
                     ? xs.map((b) => (b.id === bill.id ? bill : b))
                     : [...xs, bill],
                 );
-                if (saved) {
+                if (saved && version === navigationVersion.current) {
                   setBillEditor(null);
-                  setSelected(`${mk}-${String(Math.min(bill.dueDay, days)).padStart(2, "0")}`);
+                  const date = `${mk}-${String(Math.min(bill.dueDay, days)).padStart(2, "0")}`;
+                  setSelected(date);
+                  closeEntry(date);
                 }
                 return saved;
               } finally {
@@ -708,6 +756,7 @@ export function FamilyNotes({
   compact,
   createRequest,
   initialNoteId,
+  onNoteChange,
 }: {
   notes: FamilyNote[];
   setNotes: Setter<FamilyNote>;
@@ -715,18 +764,36 @@ export function FamilyNotes({
   compact: boolean;
   createRequest?: number;
   initialNoteId?: string | undefined;
+  onNoteChange?: (id: string | undefined, replace?: boolean) => void;
 }) {
   const [draft, setDraft] = useState<FamilyNote | null>(() => {
+    if (onNoteChange) return null;
     const note = notes.find((entry) => entry.id === initialNoteId);
     return note ? { ...note } : null;
   });
-  const [saving, setSaving] = useState(false);
+  const selectedNote = notes.find((entry) => entry.id === initialNoteId);
+  const active = onNoteChange && initialNoteId ? selectedNote : draft;
+  const close = () => {
+    setDraft(null);
+    onNoteChange?.(undefined, true);
+  };
+  const open = (note: FamilyNote) => {
+    if (onNoteChange) {
+      setDraft(null);
+      onNoteChange(note.id);
+    } else setDraft({ ...note });
+  };
+  const createNote = () => {
+    setDraft({ id: "", title: "", body: "", memberId: user.id, pinned: false });
+    onNoteChange?.(undefined, true);
+  };
   const openedRequest = useRef(0);
   useEffect(() => {
     if (!createRequest || createRequest === openedRequest.current) return;
     openedRequest.current = createRequest;
     setDraft({ id: "", title: "", body: "", memberId: user.id, pinned: false });
-  }, [createRequest, user.id]);
+    if (initialNoteId) onNoteChange?.(undefined, true);
+  }, [createRequest, user.id, initialNoteId, onNoteChange]);
   const [search, setSearch] = useState("");
   const list = notes
     .filter((n) => `${n.title} ${n.body}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
@@ -747,13 +814,7 @@ export function FamilyNotes({
           onChange={(e) => setSearch(e.target.value)}
           className={cn(field, "flex-1")}
         />
-        <Button
-          aria-label="Nueva nota"
-          onClick={() =>
-            setDraft({ id: "", title: "", body: "", memberId: user.id, pinned: false })
-          }
-          className="rounded-full"
-        >
+        <Button aria-label="Nueva nota" onClick={createNote} className="rounded-full">
           <Plus /> Nota
         </Button>
       </div>
@@ -762,12 +823,7 @@ export function FamilyNotes({
           <h2 className="font-display text-2xl font-bold">
             {notes.length ? "Sin resultados" : "Notas del hogar"}
           </h2>
-          <Button
-            variant="link"
-            onClick={() =>
-              setDraft({ id: "", title: "", body: "", memberId: user.id, pinned: false })
-            }
-          >
+          <Button variant="link" onClick={createNote}>
             Crear nota
           </Button>
         </div>
@@ -803,7 +859,7 @@ export function FamilyNotes({
                   variant="ghost"
                   size="icon"
                   aria-label={`Editar ${note.title}`}
-                  onClick={() => setDraft({ ...note })}
+                  onClick={() => open(note)}
                 >
                   <Pencil />
                 </Button>
@@ -822,75 +878,106 @@ export function FamilyNotes({
           </article>
         ))}
       </div>
-      {draft && (
-        <Editor title={draft.id ? "Editar nota" : "Nueva nota"} close={() => setDraft(null)}>
-          <form
-            className="space-y-3"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!draft.title.trim() || saving) return;
-              if (!MEMBERS.some((member) => member.id === draft.memberId)) {
-                toast.error("Elige una persona del hogar");
-                return;
-              }
-              setSaving(true);
-              const saved = {
-                ...draft,
-                id: draft.id || crypto.randomUUID(),
-                title: draft.title.trim(),
-              };
-              const confirmed = await setNotes((xs) =>
-                draft.id ? xs.map((n) => (n.id === draft.id ? saved : n)) : [...xs, saved],
-              );
-              setSaving(false);
-              if (confirmed) setDraft(null);
-            }}
-          >
-            <div>
-              <label className="block text-sm font-semibold" htmlFor="draft-title">
-                Título
-              </label>
-              <div className="flex items-center gap-1">
-                <input
-                  id="draft-title"
-                  autoFocus
-                  required
-                  maxLength={200}
-                  value={draft.title}
-                  onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                  className={cn(field, "min-w-0 flex-1")}
-                />
-                <NativeInputShortcut targetId="draft-title" />
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between">
-                <label htmlFor="note-body" className="text-sm font-semibold">
-                  Contenido
-                </label>
-                <NativeInputShortcut targetId="note-body" />
-              </div>
-              <textarea
-                id="note-body"
-                aria-label="Contenido"
-                rows={6}
-                maxLength={20000}
-                value={draft.body}
-                onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-                className={field}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Guardando…" : "Guardar"}
-              </Button>
-            </div>
-          </form>
-        </Editor>
+      {onNoteChange && initialNoteId && !selectedNote && (
+        <section aria-label="Nota no disponible" className="rounded-3xl bg-card p-6 shadow-card">
+          <h2 className="font-display text-lg font-bold">Esta nota no está disponible</h2>
+          <Button className="mt-4 rounded-full" variant="outline" onClick={close}>
+            Ver notas
+          </Button>
+        </section>
+      )}
+      {active && (
+        <NoteEditor key={active.id || "new"} initial={active} setNotes={setNotes} onClose={close} />
       )}
     </div>
+  );
+}
+
+function NoteEditor({
+  initial,
+  setNotes,
+  onClose,
+}: {
+  initial: FamilyNote;
+  setNotes: Setter<FamilyNote>;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(() => ({ ...initial }));
+  const [saving, setSaving] = useState(false);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  return (
+    <Editor title={draft.id ? "Editar nota" : "Nueva nota"} close={onClose}>
+      <form
+        className="space-y-3"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!draft.title.trim() || saving) return;
+          if (!MEMBERS.some((member) => member.id === draft.memberId)) {
+            toast.error("Elige una persona del hogar");
+            return;
+          }
+          setSaving(true);
+          const saved = {
+            ...draft,
+            id: draft.id || crypto.randomUUID(),
+            title: draft.title.trim(),
+          };
+          const confirmed = await setNotes((xs) =>
+            draft.id ? xs.map((n) => (n.id === draft.id ? saved : n)) : [...xs, saved],
+          );
+          setSaving(false);
+          if (confirmed && mounted.current) onClose();
+        }}
+      >
+        <div>
+          <label className="block text-sm font-semibold" htmlFor="draft-title">
+            Título
+          </label>
+          <div className="flex items-center gap-1">
+            <input
+              id="draft-title"
+              autoFocus
+              required
+              maxLength={200}
+              value={draft.title}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              className={cn(field, "min-w-0 flex-1")}
+            />
+            <NativeInputShortcut targetId="draft-title" />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between">
+            <label htmlFor="note-body" className="text-sm font-semibold">
+              Contenido
+            </label>
+            <NativeInputShortcut targetId="note-body" />
+          </div>
+          <textarea
+            id="note-body"
+            aria-label="Contenido"
+            rows={6}
+            maxLength={20000}
+            value={draft.body}
+            onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+            className={field}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Guardando…" : "Guardar"}
+          </Button>
+        </div>
+      </form>
+    </Editor>
   );
 }

@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { MEMBERS, type Member } from "./data";
 import { WidgetGrid } from "./WidgetGrid";
 import { DashboardWidgetContent } from "./DashboardWidgets";
+import { MobileDaySummary } from "./MobileDaySummary";
 import { describeWidget, widgetCatalogue } from "./widget-catalogue";
 import type { HubState } from "./Screens";
 
@@ -323,15 +324,25 @@ export function Dashboard({
           <Button
             variant="outline"
             aria-label="Personalizar"
-            className="h-10 rounded-full bg-card sm:h-11"
+            className={cn("h-10 shrink-0 rounded-full bg-card sm:h-11", phone && "size-10 p-0")}
             disabled={preference.loading}
             onClick={open}
           >
             <SlidersHorizontal className="size-4" />
-            <span className="hidden min-[380px]:inline">Personalizar</span>
+            <span className={phone ? "sr-only" : "hidden min-[380px]:inline"}>Personalizar</span>
           </Button>
         )}
       </div>
+      {phone && !editor && (
+        <MobileDaySummary
+          s={displayState}
+          now={now}
+          go={go}
+          onCreate={onCreate}
+          onOpenRecord={onOpenRecord}
+          financialAccess={financialAccess}
+        />
+      )}
       {editor && (
         <section aria-label="Personalizar inicio" className="widget-edit-rail">
           <Button

@@ -80,7 +80,10 @@ test("dashboard notes open the selected editor, save across widgets and survive 
   await editor.getByLabel("Título", { exact: true }).fill("Escuela de Ana");
   await editor.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(editor).toHaveCount(0);
+  await expect.poll(() => new URL(page.url()).searchParams.get("record")).toBeNull();
   await page.reload();
+  await expect(editor).toHaveCount(0);
+  await page.getByRole("button", { name: "Editar Escuela de Ana", exact: true }).click();
   await expect(editor.getByLabel("Título", { exact: true })).toHaveValue("Escuela de Ana");
   await editor.getByRole("button", { name: "Cancelar", exact: true }).click();
   await section(page, "Inicio");

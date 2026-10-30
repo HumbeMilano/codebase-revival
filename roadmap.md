@@ -1,6 +1,6 @@
 # Skendal — Hoja de ruta
 
-Actualizada el 29 de octubre de 2026. Seguimiento activo: [M1 · Skendal v1: útil, confiable y listo para el público](https://github.com/HumbeMilano/codebase-revival/issues/34).
+Actualizada el 30 de octubre de 2026. Seguimiento activo: [M1 · Skendal v1: útil, confiable y listo para el público](https://github.com/HumbeMilano/codebase-revival/issues/34).
 
 ## Resultado que buscamos
 
@@ -45,7 +45,9 @@ P0 bloquea la finalización del hito. P1 requiere resolverse o diferirse explíc
 
 Los contratos y el trabajo operativo pueden avanzar mientras se corrige el producto. Su apertura depende de empresa y decisiones del propietario, sin fechas de lanzamiento inventadas.
 
-La petición del propietario del 29 de octubre (#54) se atiende antes de las rutinas. Permite varias notas específicas, listas y resúmenes/tareas de miembros si la selección es distinta; no amplía el catálogo. La misma persona puede tener un resumen y un widget de tareas, porque son tipos diferentes. Los widgets sin selección siguen siendo únicos. Los detalles y la compatibilidad están en [widgets configurables](docs/configurable-widgets.md).
+La petición del propietario del 29 de octubre (#54) quedó publicada antes de las rutinas. Permite varias notas específicas, listas y resúmenes/tareas de miembros si la selección es distinta; no amplía el catálogo. La misma persona puede tener un resumen y un widget de tareas, porque son tipos diferentes. Los widgets sin selección siguen siendo únicos. Los detalles y la compatibilidad están en [widgets configurables](docs/configurable-widgets.md).
+
+La siguiente entrega de #37/#38 hace visible la cabecera del día también con diseños ya guardados y conecta la selección interna de notas, listas y calendario con su URL, incluido el regreso a la misma lista tras una recarga sin red. Las [capturas comparadas y reglas](docs/mobile-visible-polish.md) documentan el cambio; las pruebas físicas y de comprensión siguen abiertas.
 
 ## Cómo seguimos el hito
 
