@@ -59,7 +59,7 @@ afterEach(() => {
 });
 
 describe("dashboard permissions and editing", () => {
-  it("hides financial widgets from children and from tablet adult PINs without an adult grant", () => {
+  it("hides account-child finance and masks tablet cards until an adult grant is available", () => {
     const prefs = preference();
     prefs.layout.widgets.push(
       { id: "next-bill", key: "next", size: "compact" },
@@ -83,7 +83,12 @@ describe("dashboard permissions and editing", () => {
       expect(screen.queryByRole("region", { name })).not.toBeInTheDocument();
     const tablet: DashboardScope = { kind: "device", householdId: "home", memberId: "ana" };
     rerender(<Dashboard {...props} scope={tablet} user={adult} />);
-    expect(screen.queryByRole("region", { name: "Fondo común" })).not.toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("region", { name: "Fondo común" })
+        .querySelector('[data-finance-masked="true"]'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("$42.25")).not.toBeInTheDocument();
     rerender(<Dashboard {...props} scope={tablet} user={adult} adultAuthorized />);
     expect(screen.getByRole("region", { name: "Fondo común" })).toBeInTheDocument();
     expect(screen.getAllByText("$42.25").length).toBeGreaterThan(0);
@@ -142,7 +147,7 @@ describe("dashboard permissions and editing", () => {
   });
 });
 
-it("removes financial surfaces immediately when the tablet grant expires during editing", async () => {
+it("masks financial values and retains their cards when the tablet grant expires during editing", async () => {
   const prefs = preference();
   vi.mocked(useDashboardLayout).mockReturnValue(prefs);
   const props = {
@@ -158,13 +163,48 @@ it("removes financial surfaces immediately when the tablet grant expires during 
   fireEvent.click(screen.getByRole("button", { name: "Personalizar" }));
   await screen.findByRole("region", { name: "Personalizar inicio" });
   rerender(<Dashboard {...props} adultAuthorized={false} />);
-  expect(screen.queryByRole("region", { name: "Fondo común" })).not.toBeInTheDocument();
+  expect(
+    screen
+      .getByRole("region", { name: "Fondo común" })
+      .querySelector('[data-finance-masked="true"]'),
+  ).toBeInTheDocument();
   expect(screen.queryByText("$42.25")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Guardar inicio" }));
   await waitFor(() => expect(prefs.save).toHaveBeenCalledOnce());
   expect(
     prefs.save.mock.calls[0]![0].widgets.some((widget: { id: string }) => widget.id === "finance"),
   ).toBe(true);
+});
+
+it("requests PIN in place from a masked tablet card and waits for its fresh data", () => {
+  const prefs = preference();
+  vi.mocked(useDashboardLayout).mockReturnValue(prefs);
+  const onRequestFinance = vi.fn(),
+    go = vi.fn();
+  const s = state();
+  const props = {
+    s,
+    compact: true,
+    scope: { kind: "device", householdId: "home", memberId: "ana" } as const,
+    user: adult,
+    now: new Date("2026-10-23T12:00:00"),
+    go,
+    onCreate: vi.fn(),
+    onRequestFinance,
+  };
+  const { rerender } = render(<Dashboard {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "Mostrar importes de fondo común" }));
+  expect(onRequestFinance).toHaveBeenCalledOnce();
+  expect(go).not.toHaveBeenCalled();
+  expect(screen.queryByText("$42.25")).not.toBeInTheDocument();
+  rerender(<Dashboard {...props} s={{ ...s, financesLoading: true }} adultAuthorized />);
+  expect(
+    screen.getByRole("button", { name: "Actualizando importes de fondo común" }),
+  ).toBeDisabled();
+  expect(screen.queryByText("$42.25")).not.toBeInTheDocument();
+  rerender(<Dashboard {...props} s={{ ...s, financesLoading: false }} adultAuthorized />);
+  expect(screen.getAllByText("$42.25").length).toBeGreaterThan(0);
+  expect(prefs.save).not.toHaveBeenCalled();
 });
 
 it("does not substitute an ordinary note when no note is pinned", () => {

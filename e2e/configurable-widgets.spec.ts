@@ -274,7 +274,7 @@ test("legacy implicit shopping binds its only list and cannot add it a second ti
   expect(backend.unexpectedRequests).toEqual([]);
 });
 
-test("all financial instances stay hidden on child tablets with separate local preferences", async ({
+test("all financial instances stay masked on child tablets with separate local preferences", async ({
   page,
 }) => {
   const backend = new HouseholdBackend();
@@ -305,7 +305,11 @@ test("all financial instances stay hidden on child tablets with separate local p
   await openTabletPin(page);
   await enterPin(page, "5678");
   await expect(card(page, "child-tasks")).toBeVisible();
-  await expect(page.locator('[data-widget="member-summary"]')).toHaveCount(0);
+  await expect(page.locator('[data-widget="member-summary"]')).toHaveCount(2);
+  await expect(
+    page.locator('[data-widget="member-summary"] [data-finance-masked="true"]'),
+  ).toHaveCount(2);
+  await expect(page.locator('[data-widget="member-summary"]').first()).not.toContainText("$0.00");
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
   await page.getByRole("button", { name: "Widgets", exact: true }).click();
   await expect(

@@ -17,7 +17,7 @@ import {
 } from "./data";
 import { bindHubPersistence, HOUSEHOLD_ID } from "@/lib/hub-db";
 import { supabase } from "@/integrations/supabase/client";
-import { isDeviceMode } from "@/lib/db";
+import { hasFinanceToken, isDeviceMode } from "@/lib/db";
 import {
   usePersistedCollection,
   type PersistedSetter,
@@ -73,6 +73,7 @@ export function Card({
 
 export interface HubState {
   loading: boolean;
+  financesLoading?: boolean;
   error: string | null;
   saving: boolean;
   lastSavedAt: number | null;
@@ -147,6 +148,7 @@ export function useHubState({
   const [contributions, setContributions, setContributionsRaw, contributionStatus] =
     usePersistedCollection<Contribution[]>([], binding.syncContributions, guard, saveError);
   const [loading, setLoading] = useState(true);
+  const [financialLoaded, setFinancialLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const finances = useRef(includeFinances);
   const previousFinanceAccess = useRef(includeFinances);
@@ -166,25 +168,27 @@ export function useHubState({
       if (!active || guard.pending || navigator.onLine === false) return;
       const revision = guard.revision,
         id = ++request,
-        withFinances = finances.current;
+        withFinances = finances.current && (!isDeviceMode() || hasFinanceToken());
+      const currentRequest = () =>
+        active &&
+        !guard.pending &&
+        revision === guard.revision &&
+        id === request &&
+        withFinances === finances.current &&
+        (!withFinances || !isDeviceMode() || hasFinanceToken());
       try {
         const data = await binding.load({ includeFinances: withFinances });
-        if (
-          !active ||
-          guard.pending ||
-          revision !== guard.revision ||
-          id !== request ||
-          withFinances !== finances.current
-        )
-          return;
+        if (!currentRequest()) return;
         setEventsRaw(data.events);
         setNotesRaw(data.notes);
         setChoresRaw(data.chores);
         if (shoppingContext) await replaceOfflineShopping(data.items, data.shoppingLists);
         else setItemsRaw(data.items);
+        if (!currentRequest()) return;
         setShoppingListsRaw(data.shoppingLists);
         setBillsRaw(data.bills);
         setContributionsRaw(data.contributions);
+        if (withFinances) setFinancialLoaded(true);
         failures = 0;
         setError(null);
       } catch {
@@ -325,6 +329,7 @@ export function useHubState({
   ]);
   useEffect(() => {
     if (!includeFinances) {
+      setFinancialLoaded(false);
       setBillsRaw([]);
       setContributionsRaw([]);
     }
@@ -346,6 +351,7 @@ export function useHubState({
   const writeError = statuses.find((status) => status.error)?.error;
   return {
     loading,
+    financesLoading: includeFinances && !financialLoaded,
     error: error ?? (writeError ? persistenceErrorMessage(writeError) : null),
     saving: statuses.some((status) => status.pending > 0),
     lastSavedAt,

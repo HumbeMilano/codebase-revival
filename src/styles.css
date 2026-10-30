@@ -1713,6 +1713,72 @@ select.planner-field {
   color: var(--muted-foreground);
   font-size: 11px;
 }
+.dw-finance-mask {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+.dw-finance-mask .dw-header {
+  margin-bottom: 0;
+}
+.dw-finance-mask-member {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  font-size: 14px;
+}
+.dw-finance-mask-value {
+  display: block;
+  margin-block: auto;
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: 800;
+  letter-spacing: 3px;
+}
+.dw-finance-reveal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 36px;
+  margin-top: auto;
+  padding: 7px;
+  border: 1px solid currentColor;
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.dw-finance-reveal:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.dw-finance-reveal:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.dw-finance-mask-short {
+  gap: 3px;
+}
+.dw-finance-mask-short .dw-header > svg {
+  display: none;
+}
+.dashboard-widget .dw-finance-mask-short .dw-header h3 {
+  font-size: 11px;
+  line-height: 1.1;
+}
+.dw-finance-mask-short .dw-finance-reveal {
+  justify-content: space-between;
+  min-height: 26px;
+  padding: 3px 6px;
+  border-radius: 8px;
+}
+.dw-finance-mask-dots {
+  font-size: 17px;
+  letter-spacing: 2px;
+  line-height: 1;
+}
 .home-day-action:focus-visible,
 .home-next-entry:focus-visible {
   outline: 3px solid var(--day-cobalt);
