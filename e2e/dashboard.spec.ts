@@ -115,7 +115,7 @@ test("shared tablet layouts stay separate for each PIN member without personal a
     await expect(page.getByRole("button", { name: "Personalizar", exact: true })).toBeEnabled();
   };
   await unlock("5678");
-  await expect(page.locator('[data-widget="finance"]')).toHaveCount(0);
+  await expect(page.locator('[data-widget="finance"] [data-finance-masked="true"]')).toHaveCount(1);
   await page.getByRole("button", { name: "Personalizar", exact: true }).click();
   const editor = page.getByRole("region", { name: "Personalizar inicio", exact: true });
   await expect(page.getByRole("button", { name: "Añadir fondo común", exact: true })).toHaveCount(
@@ -135,7 +135,7 @@ test("shared tablet layouts stay separate for each PIN member without personal a
   await page.getByRole("button", { name: "Bloquear tablet", exact: true }).click();
   await unlock("5678");
   await expect(page.locator('[data-widget="shopping"]')).toHaveCount(0);
-  await expect(page.locator('[data-widget="finance"]')).toHaveCount(0);
+  await expect(page.locator('[data-widget="finance"] [data-finance-masked="true"]')).toHaveCount(1);
   expect(backend.dashboardDeviceReads).toBe(0);
   expect(backend.dashboardSaveRequests).toBe(0);
   expect(backend.financialReadsWithoutGrant).toBe(0);

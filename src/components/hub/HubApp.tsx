@@ -558,7 +558,7 @@ function HubShell({
   const tab = search.section ?? "home";
   const [financeUnlocked, setFinanceUnlocked] = useState(hasFinanceToken);
   const [quick, setQuick] = useState(false);
-  const [askAdmin, setAskAdmin] = useState(false);
+  const [askAdmin, setAskAdmin] = useState<"home" | "finance" | null>(null);
   const [more, setMore] = useState(false);
   const [create, setCreate] = useState<{ tab: Tab; id: number } | null>(null);
   const record = search.record ? { tab, id: search.record } : null;
@@ -591,10 +591,17 @@ function HubShell({
   useEffect(() => {
     const changed = () => setFinanceUnlocked(hasFinanceToken());
     window.addEventListener("homehub-finance-access", changed);
-    return () => window.removeEventListener("homehub-finance-access", changed);
+    window.addEventListener("focus", changed);
+    document.addEventListener("visibilitychange", changed);
+    return () => {
+      window.removeEventListener("homehub-finance-access", changed);
+      window.removeEventListener("focus", changed);
+      document.removeEventListener("visibilitychange", changed);
+    };
   }, []);
+  const financialGrant = financeUnlocked && hasFinanceToken();
   const financialAccess =
-    canViewFinances(user?.role, financeUnlocked) && (mode === "account" || financeUnlocked);
+    canViewFinances(user?.role, financialGrant) && (mode === "account" || financialGrant);
   const canManage = mode === "account" && user?.role === "admin";
   const s = useHubState({ includeFinances: financialAccess, onContextRefresh, shoppingContext });
   const visibleTabs = TABS.filter(
@@ -613,7 +620,7 @@ function HubShell({
     setMore(false);
     setCreate(null);
     if (next === "finance" && !financialAccess) {
-      setAskAdmin(true);
+      setAskAdmin("finance");
       return;
     }
     visit(next, reference);
@@ -777,6 +784,7 @@ function HubShell({
                       now={now}
                       go={go}
                       onCreate={quickAdd}
+                      onRequestFinance={() => setAskAdmin("home")}
                       onOpenRecord={(next, id) => {
                         go(next, id);
                       }}
@@ -799,18 +807,24 @@ function HubShell({
                       onListChange={(id, replace) => visit("shopping", id, replace)}
                     />
                   )}
-                  {tab === "finance" && financialAccess && (
-                    <Finance
-                      f={s}
-                      compact={compact}
-                      createRequest={create?.tab === "finance" ? create.id : 0}
-                    />
-                  )}
+                  {tab === "finance" &&
+                    financialAccess &&
+                    (s.financesLoading ? (
+                      <p role="status" className="py-12 text-center text-muted-foreground">
+                        Actualizando importes…
+                      </p>
+                    ) : (
+                      <Finance
+                        f={s}
+                        compact={compact}
+                        createRequest={create?.tab === "finance" ? create.id : 0}
+                      />
+                    ))}
                   {tab === "calendar" && (
                     <FamilyCalendar
                       events={s.events}
                       setEvents={s.setEvents}
-                      bills={financialAccess ? s.bills : []}
+                      bills={financialAccess && !s.financesLoading ? s.bills : []}
                       setBills={s.setBills}
                       financialAccess={financialAccess}
                       user={user}
@@ -954,11 +968,11 @@ function HubShell({
         <PinPad
           adminOnly
           title="Finanzas: PIN de un adulto"
-          onCancel={() => setAskAdmin(false)}
+          onCancel={() => setAskAdmin(null)}
           onSuccess={() => {
-            setAskAdmin(false);
+            setAskAdmin(null);
             setFinanceUnlocked(hasFinanceToken());
-            visit("finance");
+            if (askAdmin === "finance") visit("finance");
           }}
         />
       )}

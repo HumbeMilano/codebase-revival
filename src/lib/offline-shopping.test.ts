@@ -100,6 +100,57 @@ describe("durable shopping outbox", () => {
     expect(second._changes[0].values).toEqual({ done: true });
     expect((await readShopping(key)).local[0]).toMatchObject({ done: true, revision: 2 });
   });
+  it("does not let a read started before a sync receipt undo the confirmed check", async () => {
+    const key = scope(),
+      milk = item();
+    await acceptShoppingSnapshot(key, [milk]);
+    await enqueueShopping(key, (rows) => rows.map((row) => ({ ...row, done: true })));
+    const reading = (await readShopping(key)).localRevision;
+    await flushShopping(
+      key,
+      key.split(":")[1]!,
+      client(
+        vi.fn<typeof fetch>().mockResolvedValue(response([{ ...milk, done: true, revision: 2 }])),
+      ),
+    );
+    const late = await acceptShoppingSnapshot(key, [milk], undefined, reading);
+    expect(late.queue).toEqual([]);
+    expect(late.local).toEqual([{ ...milk, done: true, revision: 2 }]);
+    // A later, genuinely fresh household read can still show another person's edit.
+    const fresh = await acceptShoppingSnapshot(
+      key,
+      [{ ...milk, revision: 3 }],
+      undefined,
+      late.localRevision,
+    );
+    expect(fresh.local).toEqual([{ ...milk, revision: 3 }]);
+  });
+  it("rejects a whole stale snapshot after confirmed insertion, deletion and list changes", async () => {
+    const key = scope(),
+      milk = item(),
+      bread = item("Pan"),
+      home = defaultShoppingList(key.split(":")[1]!);
+    await acceptShoppingSnapshot(key, [milk], [home]);
+    const reading = (await readShopping(key)).localRevision;
+    await enqueueShopping(key, () => [bread]);
+    await enqueueShoppingLists(key, (lists) => lists.map((list) => ({ ...list, name: "Casa" })));
+    await flushShopping(
+      key,
+      key.split(":")[1]!,
+      client(
+        vi
+          .fn<typeof fetch>()
+          .mockResolvedValueOnce(response([bread]))
+          .mockResolvedValueOnce(
+            response({ items: [], lists: [{ ...home, name: "Casa", revision: 2 }] }),
+          ),
+      ),
+    );
+    const late = await acceptShoppingSnapshot(key, [milk], [home], reading);
+    expect(late.queue).toEqual([]);
+    expect(late.local).toEqual([bread]);
+    expect(late.lists).toEqual([{ ...home, name: "Casa", revision: 2 }]);
+  });
   it("keeps conflicting changes until an explicit choice, preserving unrelated server products", async () => {
     const key = scope(),
       milk = item(),

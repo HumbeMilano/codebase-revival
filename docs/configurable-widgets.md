@@ -25,6 +25,8 @@ El máximo técnico de 100 instancias acota la validación y el documento; no mo
 ## Verificación
 
 - Las pruebas de esquema y hook comprueban selecciones distintas/duplicadas, normalización UUID, límites, compatibilidad, revisiones y aislamiento de almacenamiento.
-- `e2e/configurable-widgets.spec.ts` comprueba añadir, reconfigurar, redimensionar, mover, quitar, guardar/recargar, abrir la nota correcta, marcar productos de la lista elegida y ocultar todas las instancias financieras a un miembro sin permiso, con datos sintéticos en móvil y escritorio.
+- `e2e/configurable-widgets.spec.ts` comprueba añadir, reconfigurar, redimensionar, mover, quitar, guardar/recargar, abrir la nota correcta, marcar productos de la lista elegida y enmascarar todas las instancias financieras de una tablet sin permiso, con datos sintéticos en móvil y escritorio.
 - `scripts/test-database.py` aplica todas las migraciones en PostgreSQL desechable y comprueba las mismas restricciones, permisos, reintentos y conservación del diseño tras un rechazo.
 - Los resultados de CI, migración y publicación se registran en #54. Las pruebas de navegador con backend simulado no acreditan gestos físicos ni uso de un hogar real.
+
+La petición posterior del propietario conserva las tarjetas financieras de tablet con máscara al vencer el permiso; véase [privacidad financiera en tablet](tablet-finance-privacy.md). El acceso financiero sigue dependiendo del PIN adulto verificado en el servidor.

@@ -37,6 +37,7 @@ import { MEMBERS, type Member } from "./data";
 import { WidgetGrid } from "./WidgetGrid";
 import { DashboardWidgetContent } from "./DashboardWidgets";
 import { MobileDaySummary } from "./MobileDaySummary";
+import { MaskedFinancialWidget } from "./MaskedFinancialWidget";
 import { describeWidget, widgetCatalogue } from "./widget-catalogue";
 import type { HubState } from "./Screens";
 
@@ -94,6 +95,7 @@ export function Dashboard({
   go,
   onCreate,
   onOpenRecord,
+  onRequestFinance,
   now: clock,
   adultAuthorized = false,
 }: {
@@ -104,6 +106,7 @@ export function Dashboard({
   go: (section: Section) => void;
   onCreate: (section: Section) => void;
   onOpenRecord?: (section: "calendar" | "notes" | "shopping", id: string) => void;
+  onRequestFinance?: () => void;
   now: Date | null;
   adultAuthorized?: boolean;
 }) {
@@ -120,8 +123,10 @@ export function Dashboard({
   const [configuration, setConfiguration] = useState<string | null>(null);
   const financialAccess =
     canViewFinances(user.role, adultAuthorized) && (scope.kind === "account" || adultAuthorized);
-  const displayState = financialAccess ? s : { ...s, bills: [], contributions: [] };
+  const displayState =
+    financialAccess && !s.financesLoading ? s : { ...s, bills: [], contributions: [] };
   const allowed = (id: WidgetId) => !isFinancialWidget(id) || financialAccess;
+  const displayed = (id: WidgetId) => allowed(id) || scope.kind === "device";
   const baseLayout = useMemo(
     () =>
       phone &&
@@ -135,9 +140,11 @@ export function Dashboard({
   const visible = useMemo(
     () => ({
       ...source,
-      widgets: source.widgets.filter((widget) => !isFinancialWidget(widget.id) || financialAccess),
+      widgets: source.widgets.filter(
+        (widget) => !isFinancialWidget(widget.id) || financialAccess || scope.kind === "device",
+      ),
     }),
-    [source, financialAccess],
+    [source, financialAccess, scope.kind],
   );
   const lists = dashboardLists(s);
   const choices = (id: WidgetId): Choice[] =>
@@ -217,14 +224,14 @@ export function Dashboard({
     setSelecting(null);
     setConfiguration(null);
   };
-  // Keep inaccessible preferences at their original positions, including when a grant expires mid-edit.
+  // Preserve genuinely hidden preferences; masked tablet cards remain visible and editable.
   const updateDraft = (layout: DashboardLayout) =>
     setEditor((current) => {
       if (!current) return null;
-      const queue = layout.widgets.filter((widget) => allowed(widget.id));
+      const queue = layout.widgets.filter((widget) => displayed(widget.id));
       const widgets: DashboardWidget[] = [];
       for (const old of current.layout.widgets) {
-        if (!allowed(old.id)) widgets.push(old);
+        if (!displayed(old.id)) widgets.push(old);
         else if (queue.length) widgets.push(queue.shift()!);
       }
       widgets.push(...queue);
@@ -274,6 +281,13 @@ export function Dashboard({
   };
   const browseWidget = (entry: DashboardWidget) => {
     if (editor || entry.id === "quick-add") return;
+    if (isFinancialWidget(entry.id)) {
+      if (!financialAccess) {
+        onRequestFinance?.();
+        return;
+      }
+      if (s.financesLoading) return;
+    }
     if (entry.id === "shopping") {
       browseShopping(dashboardList(s, entry)?.id);
       return;
@@ -433,29 +447,42 @@ export function Dashboard({
             onConfigure={setConfiguration}
             onOpen={browseWidget}
           >
-            {(entry) => (
-              <DashboardWidgetContent
-                widget={entry}
-                s={displayState}
-                now={now}
-                user={user}
-                configure={() => {
-                  open();
-                  setConfiguration(entry.key);
-                }}
-                onCreate={onCreate}
-                onBrowseShopping={browseShopping}
-                onBrowse={() => browseWidget(entry)}
-                onOpenDay={(date) => {
-                  if (!editor) setCalendarDay(date);
-                }}
-                onBrowseNotes={() => go("notes")}
-                onOpenNote={(id) => {
-                  if (onOpenRecord) onOpenRecord("notes", id);
-                  else go("notes");
-                }}
-              />
-            )}
+            {(entry) =>
+              isFinancialWidget(entry.id) && (!financialAccess || s.financesLoading) ? (
+                <MaskedFinancialWidget
+                  widget={entry}
+                  member={
+                    entry.id === "member-summary"
+                      ? MEMBERS.find((member) => member.id === entry.memberId)
+                      : undefined
+                  }
+                  loading={financialAccess && !!s.financesLoading}
+                  onUnlock={editor ? undefined : onRequestFinance}
+                />
+              ) : (
+                <DashboardWidgetContent
+                  widget={entry}
+                  s={displayState}
+                  now={now}
+                  user={user}
+                  configure={() => {
+                    open();
+                    setConfiguration(entry.key);
+                  }}
+                  onCreate={onCreate}
+                  onBrowseShopping={browseShopping}
+                  onBrowse={() => browseWidget(entry)}
+                  onOpenDay={(date) => {
+                    if (!editor) setCalendarDay(date);
+                  }}
+                  onBrowseNotes={() => go("notes")}
+                  onOpenNote={(id) => {
+                    if (onOpenRecord) onOpenRecord("notes", id);
+                    else go("notes");
+                  }}
+                />
+              )
+            }
           </WidgetGrid>
           {!visible.widgets.length && (
             <div className="rounded-3xl border border-dashed bg-card px-6 py-14 text-center">
