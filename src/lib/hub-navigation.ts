@@ -5,6 +5,7 @@ export const HUB_SECTIONS = [
   "finance",
   "calendar",
   "notes",
+  "recipes",
   "photos",
   "household",
   "profile",
@@ -43,7 +44,7 @@ export function hubSearch(search: Record<string, unknown>): HubSearch {
   const id =
     typeof record === "string" &&
     tab &&
-    ["notes", "shopping", "calendar"].includes(tab) &&
+    ["notes", "shopping", "calendar", "recipes"].includes(tab) &&
     validReference(record.toLowerCase(), tab)
       ? record.toLowerCase()
       : undefined;

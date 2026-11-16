@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
+  ChefHat,
   Delete,
   Lock,
   Pause,
@@ -26,6 +27,7 @@ import { useHouseholdPhotos } from "@/lib/household-photos";
 import { useKioskWeather } from "@/hooks/use-kiosk-weather";
 import { weatherDescription } from "@/lib/weather";
 import { useMemberAvatar } from "@/lib/member-avatars";
+const Recipes = lazy(() => import("./Recipes").then((m) => ({ default: m.Recipes })));
 
 export function useClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -377,7 +379,7 @@ export function Kiosk({
   timeFormat?: "12" | "24";
 }) {
   const now = useClock();
-  const [stage, setStage] = useState<"photos" | "info" | "pin">("photos");
+  const [stage, setStage] = useState<"photos" | "info" | "pin" | "recipes">("photos");
   const [interaction, setInteraction] = useState(0);
   const { photos, loading, error, refresh } = useHouseholdPhotos();
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -387,7 +389,7 @@ export function Kiosk({
     if (
       photos.length < 2 ||
       paused ||
-      stage === "pin" ||
+      ["pin", "recipes"].includes(stage) ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     )
       return;
@@ -463,7 +465,7 @@ export function Kiosk({
         className="kiosk-surface"
         aria-label={stage === "photos" ? "Mostrar información" : "Entrar con PIN"}
         onClick={() => setStage(stage === "photos" ? "info" : "pin")}
-        tabIndex={stage === "pin" ? -1 : 0}
+        tabIndex={stage === "pin" || stage === "recipes" ? -1 : 0}
       />
       {loading && !shown && (
         <LoaderCircle
@@ -479,6 +481,13 @@ export function Kiosk({
       >
         <div className="kiosk-info-top">
           <span className="kiosk-household">{HOUSEHOLD.name}</span>
+          <button
+            type="button"
+            className="kiosk-recipes-control"
+            onClick={() => setStage("recipes")}
+          >
+            <ChefHat aria-hidden="true" /> Recetas
+          </button>
           {photos.length > 1 && (
             <button
               type="button"
@@ -555,6 +564,31 @@ export function Kiosk({
         </button>
       )}
       {stage === "pin" && <PinPad onCancel={() => setStage("photos")} onSuccess={onUnlock} />}
+      {stage === "recipes" && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setStage("info");
+              setInteraction((value) => value + 1);
+            }
+          }}
+        >
+          <DialogContent
+            aria-describedby={undefined}
+            className="flex h-[94dvh] w-[calc(100%-1rem)] max-w-6xl flex-col overflow-hidden rounded-3xl bg-background p-4 sm:p-6"
+          >
+            <DialogTitle className="shrink-0 pr-8 font-display text-2xl font-bold">
+              Recetas
+            </DialogTitle>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <Suspense fallback={<p role="status">Abriendo recetas…</p>}>
+                <Recipes />
+              </Suspense>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

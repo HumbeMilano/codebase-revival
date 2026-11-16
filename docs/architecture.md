@@ -42,6 +42,7 @@ flowchart LR
 - Los manifests y service workers permiten instalar la app y el administrador de forma independiente. La caché conserva el shell y los archivos públicos, separados de los datos privados de cada hogar.
 - Compras utiliza IndexedDB y una cola durable por cuenta/hogar/miembro. Se guardan operaciones y se sincronizan con recibos idempotentes y revisión de conflictos. Otras secciones requieren conexión.
 - El orden de compras y las sugerencias se calculan en el dispositivo con productos de la lista seleccionada. Reutilizar un producto marcado lo deja pendiente con su ID y antigüedad originales.
+- Recetas ofrece consulta desde la tablet bloqueada y edición por cuentas adultas. Importa un formato JSON para ChatGPT después de revisión explícita; no utiliza inferencia de pago ni transfiere datos automáticamente. Detalles: [Recetas](recipes.md).
 
 ## Backend y seguridad
 
@@ -50,9 +51,9 @@ El proyecto activo de Supabase es **`skendal-homehub`**, referencia **`rwbeiestz
 Supabase proporciona:
 
 - Auth para las cuentas, confirmación y recuperación por correo y passkeys.
-- Postgres para hogares, miembros, tareas, listas/productos, agenda, notas, finanzas, preferencias y operaciones del negocio.
+- Postgres para hogares, miembros, tareas, listas/productos, agenda, notas, recetas, finanzas, preferencias y operaciones del negocio.
 - RLS y RPC para comprobar hogar, identidad, rol, suspensión y revisiones. Las operaciones de miembros y las finanzas se validan en el servidor.
-- Storage privado para imágenes. Las Edge Functions de fotos y avatares entregan acceso temporal después de validar el hogar.
+- Storage privado para imágenes. Las Edge Functions de fotos del hogar, fotos de recetas y avatares entregan acceso temporal después de validar el hogar.
 - Realtime para cuentas personales y refrescos limitados para tablets vinculadas.
 
 La tablet se vincula con un QR de la app aprobado por un adulto autenticado con passkey. Recibe un token revocable y usa PIN por miembro. La autorización financiera es temporal, vinculada a la sesión o dispositivo y conservada solo en memoria. Las contraseñas no son los PIN de la tablet.
