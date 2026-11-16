@@ -29,6 +29,7 @@ import { MEMBERS, type Member } from "./data";
 import { Avatar } from "./Kiosk";
 import { describeWidget } from "./widget-catalogue";
 import type { HubState } from "./Screens";
+import { ShoppingProductDialog } from "./ShoppingProductDialog";
 
 type Section = "chores" | "shopping" | "calendar" | "notes" | "finance";
 type Props = {
@@ -48,12 +49,16 @@ const money = (amount: number) =>
   amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const percentage = (done: number, total: number) => (total ? (done / total) * 100 : 0);
 
-function Header({ widget, onBrowse }: Pick<Props, "widget" | "onBrowse">) {
+function Header({
+  widget,
+  onBrowse,
+  action,
+}: Pick<Props, "widget" | "onBrowse"> & { action?: ReactNode }) {
   const { title, Icon } = describeWidget(widget.id);
   return (
     <header className="dw-header">
       <Icon aria-hidden="true" />
-      <h3>
+      <h3 className={action ? "min-w-0 flex-1" : undefined}>
         {widget.id === "quick-add" ? (
           title
         ) : (
@@ -70,6 +75,7 @@ function Header({ widget, onBrowse }: Pick<Props, "widget" | "onBrowse">) {
           </button>
         )}
       </h3>
+      {action}
     </header>
   );
 }
@@ -240,7 +246,8 @@ function TinyWidget({
   onBrowseNotes,
   onOpenNote,
   onBrowse,
-}: Props) {
+  shoppingAction,
+}: Props & { shoppingAction?: ReactNode }) {
   const chores = dashboardChores(s, now).filter(
     (c) => widget.id !== "my-tasks" || c.memberId === user.id,
   );
@@ -371,7 +378,7 @@ function TinyWidget({
       break;
   }
   return (
-    <div className="dw-tiny">
+    <div className={cn("dw-tiny", shoppingAction && "dw-tiny-shopping")}>
       <h3>
         {["notes", "specific-note", "pinned-note", "quick-add"].includes(widget.id) ? (
           title
@@ -387,6 +394,7 @@ function TinyWidget({
           </button>
         )}
       </h3>
+      {shoppingAction}
       <div
         className={cn(
           "dw-tiny-value",
@@ -454,7 +462,12 @@ export function DashboardWidgetContent(props: Props) {
         <Choose label="Elegir miembro" onClick={configure} />
       </>
     );
-  if (widgetDimensions[widget.size][1] === 1) return <TinyWidget {...props} />;
+  const shoppingAction =
+    widget.id === "shopping" && list ? (
+      <ShoppingProductDialog key={list.id} s={s} list={list} householdId={dashboardHousehold(s)} />
+    ) : undefined;
+  if (widgetDimensions[widget.size][1] === 1)
+    return <TinyWidget {...props} shoppingAction={shoppingAction} />;
   const chores = dashboardChores(s, now).filter((c) =>
     widget.id === "my-tasks"
       ? c.memberId === user.id
@@ -837,7 +850,7 @@ export function DashboardWidgetContent(props: Props) {
   }
   return (
     <>
-      <Header widget={widget} onBrowse={onBrowse} />
+      <Header widget={widget} onBrowse={onBrowse} action={shoppingAction} />
       <div className="dw-body">{content}</div>
     </>
   );

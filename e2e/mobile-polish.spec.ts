@@ -87,7 +87,7 @@ test("daily actions open the exact agenda and real creation forms for an empty p
   await section(page, "Inicio");
   await day.getByRole("button", { name: "Abrir compras del día", exact: true }).click();
   expect(new URL(page.url()).searchParams.get("record")).toBe(HOME_ID);
-  await expect(page.getByRole("textbox", { name: "Producto", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Producto", exact: true })).toBeVisible();
   await section(page, "Inicio");
   await day.getByRole("button", { name: "Añadir fecha al calendario", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Nuevo evento", exact: true })).toBeVisible();
@@ -206,7 +206,7 @@ test("missing records never fall back to editing another record or an implicit l
   await expect(
     page.getByRole("region", { name: "Lista no disponible", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Producto", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Producto", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Ver listas", exact: true }).click();
   await expect(page.getByRole("region", { name: "Lista Groceries", exact: true })).toBeVisible();
   await page.goto(`/?section=notes&record=${missingRecordId}`);
@@ -235,7 +235,7 @@ test("the chosen list reopens from durable cache after a real offline reload and
   await signIn(page);
   await section(page, "Compras");
   await page.getByRole("button", { name: "Abrir lista School", exact: true }).click();
-  await page.getByRole("textbox", { name: "Producto", exact: true }).fill("Backpack");
+  await page.getByRole("combobox", { name: "Producto", exact: true }).fill("Backpack");
   await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
   await expect(page.getByRole("button", { name: "Backpack", exact: true })).toBeVisible();
   await page.evaluate(async () => {
@@ -261,7 +261,7 @@ test("the chosen list reopens from durable cache after a real offline reload and
   await expect(page.getByRole("region", { name: "Lista School", exact: true })).toContainText(
     "Pencils",
   );
-  await page.getByRole("textbox", { name: "Producto", exact: true }).fill("Eraser");
+  await page.getByRole("combobox", { name: "Producto", exact: true }).fill("Eraser");
   await page.getByRole("button", { name: "Añadir producto", exact: true }).click();
   await expect(page.getByRole("button", { name: "Eraser", exact: true })).toBeVisible();
   await page.reload();

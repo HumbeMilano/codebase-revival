@@ -1798,3 +1798,35 @@ select.planner-field {
     padding: 12px 10px;
   }
 }
+.dw-shopping-add {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: inherit;
+  background: rgb(255 255 255 / 25%);
+}
+.dw-shopping-add > svg {
+  width: 16px;
+  height: 16px;
+}
+.dw-shopping-add:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.dw-tiny-shopping {
+  position: relative;
+}
+.dw-tiny-shopping h3 {
+  padding-right: 30px;
+}
+.dw-tiny-shopping .dw-shopping-add {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 24px;
+}

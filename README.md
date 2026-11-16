@@ -6,6 +6,8 @@ El inicio ofrece 20 widgets, uno de cada tipo, con 12 tamaños desde «Personali
 
 La aplicación está publicada en `https://app.skendal.com` y su web de presentación para `https://skendal.com`, alojadas como archivos estáticos en Cloudflare. Consulta [Producción](docs/production.md) para las cuentas, el backend y la activación del correo. La aplicación no necesita servicios de Lovable. Se conserva su historial Git; no reescribas commits publicados ni hagas force push.
 
+El inventario de dominios, repositorio, proveedores, backend y proceso de publicación está en [Arquitectura de Skendal](docs/architecture.md).
+
 ## Desarrollo
 
 Requisitos: Node.js 22.12 o posterior, Bun 1.4.3 y un proyecto Supabase configurado.

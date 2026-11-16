@@ -34,7 +34,7 @@ it("keeps a new list draft when an earlier list's acknowledged add finishes", as
   const { rerender } = render(
     <Shopping compact s={s} initialListId={home} onListChange={changed} />,
   );
-  fireEvent.change(screen.getByRole("textbox", { name: "Producto" }), {
+  fireEvent.change(screen.getByRole("combobox", { name: "Producto" }), {
     target: { value: "Pencils" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Añadir producto" }));
@@ -44,10 +44,10 @@ it("keeps a new list draft when an earlier list's acknowledged add finishes", as
   fireEvent.click(screen.getByRole("button", { name: "Abrir lista School" }));
   expect(changed).toHaveBeenCalledWith(school, false);
   rerender(<Shopping compact s={s} initialListId={school} onListChange={changed} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "Producto" }), {
+  fireEvent.change(screen.getByRole("combobox", { name: "Producto" }), {
     target: { value: "Pencils" },
   });
   await act(async () => resolve(true));
-  expect(screen.getByRole("textbox", { name: "Producto" })).toHaveValue("Pencils");
+  expect(screen.getByRole("combobox", { name: "Producto" })).toHaveValue("Pencils");
   expect(screen.getByRole("region", { name: "Lista School" })).toBeInTheDocument();
 });
