@@ -5,6 +5,7 @@ import { calendarBills, upcomingCalendarItems } from "./calendar";
 import { isChoreArchived } from "./chore-archive";
 import { defaultShoppingList, shoppingListId } from "./offline-shopping";
 import type { DashboardWidget, WidgetId } from "./dashboard-layout";
+import { sortShoppingItems } from "./shopping";
 
 export const isFinancialWidget = (id: WidgetId) =>
   ["finance", "bills", "member-summary", "next-bill"].includes(id);
@@ -25,7 +26,9 @@ export function dashboardList(s: HubState, widget: DashboardWidget) {
       : undefined;
 }
 export function dashboardListItems(s: HubState, listId: string) {
-  return s.items.filter((item) => shoppingListId(item, dashboardHousehold(s)) === listId);
+  return sortShoppingItems(
+    s.items.filter((item) => shoppingListId(item, dashboardHousehold(s)) === listId),
+  );
 }
 export function dashboardChores(s: HubState, now: Date) {
   const today = dateKey(now);

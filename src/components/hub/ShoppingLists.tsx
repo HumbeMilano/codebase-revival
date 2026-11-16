@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -13,11 +13,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { addShoppingItem } from "@/lib/shopping";
+import { restoreShoppingItem, sortShoppingItems } from "@/lib/shopping";
 import { defaultShoppingList, shoppingListId } from "@/lib/offline-shopping";
 import type { HubState } from "./Screens";
 import { HOUSEHOLD, type ShopItem, type ShoppingList } from "./data";
-import { NativeInputShortcut } from "./NativeInputShortcut";
+import { ShoppingProductForm } from "./ShoppingProductForm";
 
 type ShoppingState = Pick<
   HubState,
@@ -43,25 +43,19 @@ export function Shopping({
     ? lists.find((row) => row.id === selection && !row.archived)
     : lists.find((row) => !row.archived);
   const listId = list?.id ?? householdId;
-  const items = s.items.filter((item) => shoppingListId(item, householdId) === listId);
+  const items = sortShoppingItems(
+    s.items.filter((item) => shoppingListId(item, householdId) === listId),
+  );
   const activeLists = lists.filter((row) => !row.archived);
   const archived = lists.filter((row) => row.archived);
   const [showArchive, setShowArchive] = useState(false);
   const [editor, setEditor] = useState<{ id: string | null; name: string } | null>(null);
-  const [entry, setEntry] = useState({ listId, name: "" });
-  const name = entry.listId === listId ? entry.name : "";
-  const setName = (name: string) => setEntry({ listId, name });
   const [busy, setBusy] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
   const select = (id: string | undefined, replace = false) => {
-    setEntry({ listId: id ?? householdId, name: "" });
     setShowArchive(false);
     if (onListChange) onListChange(id, replace);
     else setSelected(id ?? householdId);
   };
-  useEffect(() => {
-    if (createRequest) input.current?.focus();
-  }, [createRequest]);
   const saveList = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!editor || busy || !s.setShoppingLists || !editor.name.trim()) return;
@@ -98,34 +92,6 @@ export function Shopping({
       select(undefined, true);
     }
   };
-  const add = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (busy || !list || !name.trim()) return;
-    if (
-      items.some((row) => row.name.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase())
-    ) {
-      toast.info("Ese producto ya está en esta lista.");
-      return;
-    }
-    const submittedName = name;
-    const item: ShopItem = {
-      id: crypto.randomUUID(),
-      name: submittedName.trim(),
-      done: false,
-      listId,
-    };
-    setBusy(true);
-    const saved = await s.setItems((rows) => addShoppingItem(rows, item));
-    setBusy(false);
-    if (saved) {
-      setEntry((current) =>
-        current.listId === listId && current.name === submittedName
-          ? { ...current, name: "" }
-          : current,
-      );
-      if (input.current?.dataset["listId"] === listId) input.current.focus();
-    }
-  };
   const remove = async (item: ShopItem) => {
     if (!(await s.setItems((rows) => rows.filter((row) => row.id !== item.id)))) return;
     toast(`"${item.name}" eliminado`, {
@@ -133,12 +99,17 @@ export function Shopping({
         label: "Deshacer",
         onClick: () => {
           void s.setItems((rows) =>
-            addShoppingItem(rows, {
-              id: item.id,
-              name: item.name,
-              done: item.done,
-              listId: shoppingListId(item, householdId),
-            }),
+            restoreShoppingItem(
+              rows,
+              {
+                id: item.id,
+                name: item.name,
+                done: item.done,
+                listId: shoppingListId(item, householdId),
+                ...(item.position !== undefined ? { position: item.position } : {}),
+              },
+              householdId,
+            ),
           );
         },
       },
@@ -275,76 +246,57 @@ export function Shopping({
               </Button>
             )}
           </header>
-          <form
-            onSubmit={(event) => void add(event)}
-            aria-busy={busy}
-            className="flex items-center gap-2 rounded-2xl bg-secondary p-2 pl-4"
-          >
-            <input
-              ref={input}
-              data-list-id={listId}
-              id="shopping-product"
-              maxLength={150}
-              aria-label="Producto"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Añadir producto"
-              className="min-w-0 flex-1 bg-transparent text-base outline-none"
-            />
-            <NativeInputShortcut targetId="shopping-product" />
-            <Button
-              type="submit"
-              size="icon"
-              aria-label="Añadir producto"
-              disabled={busy || !name.trim()}
-              className="size-11 shrink-0 rounded-xl"
-            >
-              <Plus />
-            </Button>
-          </form>
+          <ShoppingProductForm
+            key={`${householdId}:${listId}`}
+            items={s.items}
+            setItems={s.setItems}
+            listId={listId}
+            householdId={householdId}
+            disabled={busy}
+            onBusyChange={setBusy}
+            focusRequest={createRequest}
+          />
           <ul className="divide-y divide-border">
-            {[...items]
-              .sort((a, b) => Number(a.done) - Number(b.done))
-              .map((item) => (
-                <li key={item.id} className="flex items-center gap-2 py-1">
-                  <Button
-                    variant="ghost"
-                    aria-label={item.name}
-                    aria-pressed={item.done}
-                    onClick={() =>
-                      void s.setItems((rows) =>
-                        rows.map((row) => (row.id === item.id ? { ...row, done: !row.done } : row)),
-                      )
-                    }
-                    className="h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-3 text-left"
+            {items.map((item) => (
+              <li key={item.id} className="flex items-center gap-2 py-1">
+                <Button
+                  variant="ghost"
+                  aria-label={item.name}
+                  aria-pressed={item.done}
+                  onClick={() =>
+                    void s.setItems((rows) =>
+                      rows.map((row) => (row.id === item.id ? { ...row, done: !row.done } : row)),
+                    )
+                  }
+                  className="h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-xl px-2 py-3 text-left"
+                >
+                  <span
+                    className={cn(
+                      "grid size-6 shrink-0 place-items-center rounded-full border-2",
+                      item.done ? "border-success-strong bg-success" : "border-foreground/25",
+                    )}
                   >
-                    <span
-                      className={cn(
-                        "grid size-6 shrink-0 place-items-center rounded-full border-2",
-                        item.done ? "border-success-strong bg-success" : "border-foreground/25",
-                      )}
-                    >
-                      {item.done && <Check />}
-                    </span>
-                    <span
-                      className={cn(
-                        "min-w-0 break-words text-base",
-                        item.done && "text-muted-foreground line-through",
-                      )}
-                    >
-                      {item.name}
-                    </span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Eliminar ${item.name}`}
-                    onClick={() => void remove(item)}
+                    {item.done && <Check />}
+                  </span>
+                  <span
+                    className={cn(
+                      "min-w-0 break-words text-base",
+                      item.done && "text-muted-foreground line-through",
+                    )}
                   >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </li>
-              ))}
+                    {item.name}
+                  </span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Eliminar ${item.name}`}
+                  onClick={() => void remove(item)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </li>
+            ))}
           </ul>
           {!items.length && (
             <div className="py-8 text-center">
