@@ -94,7 +94,7 @@ test("lists and widgets share pending-oldest order, progressively suggest and re
   const backend = seed();
   await backend.install(page);
   await signIn(page);
-  expect(await names(page)).toEqual(["Pan", "Huevos", "Picadillo"]);
+  await expect.poll(() => names(page)).toEqual(["Pan", "Huevos", "Picadillo"]);
   await section(page, "Compras");
   const list = page.getByRole("region", { name: "Lista Groceries", exact: true });
   const input = list.getByRole("combobox", { name: "Producto", exact: true });
@@ -122,12 +122,12 @@ test("lists and widgets share pending-oldest order, progressively suggest and re
   await expect(input).toHaveValue("");
   await expect.poll(() => backend.rows["shopping_items"]?.length).toBe(5);
   await section(page, "Inicio");
-  expect(await names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
+  await expect.poll(() => names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
   await homeWidget(page).getByRole("checkbox", { name: "Picadillo", exact: true }).click();
   await expect(
     homeWidget(page).getByRole("checkbox", { name: "Picadillo", exact: true }),
   ).toHaveAttribute("aria-checked", "true");
-  expect(await names(page)).toEqual(["Pan", "Huevos", "Cebolla", "Picadillo"]);
+  await expect.poll(() => names(page)).toEqual(["Pan", "Huevos", "Cebolla", "Picadillo"]);
   const dialog = await addFromWidget(page);
   const field = dialog.getByRole("combobox", { name: "Producto", exact: true });
   await field.fill("pi");
@@ -140,13 +140,13 @@ test("lists and widgets share pending-oldest order, progressively suggest and re
   await expect(field).toHaveValue("");
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  expect(await names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
+  await expect.poll(() => names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
   await expect(
     schoolWidget(page).getByRole("checkbox", { name: "Picadillo", exact: true }),
   ).toHaveAttribute("aria-checked", "true");
   await page.reload();
   await expect(homeWidget(page).getByRole("checkbox")).toHaveCount(4);
-  expect(await names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
+  await expect.poll(() => names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
   expect(backend.dashboardSaveRequests).toBe(0);
   expect(backend.rows["shopping_items"]).toHaveLength(5);
   expect(backend.unexpectedRequests).toEqual([]);
@@ -181,7 +181,7 @@ test("reusing and adding from the widget remain durable offline and sync once af
   await expect(input).toHaveValue("");
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  expect(await names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
+  await expect.poll(() => names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
   expect(backend.writeRequests).toBe(before);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Compras", exact: true })).toBeVisible();
@@ -203,7 +203,7 @@ test("reusing and adding from the widget remain durable offline and sync once af
     .toBe(false);
   await section(page, "Inicio");
   await expect(homeWidget(page).getByRole("checkbox")).toHaveCount(4);
-  expect(await names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
+  await expect.poll(() => names(page)).toEqual(["Picadillo", "Pan", "Huevos", "Cebolla"]);
   expect(backend.writeRequests).toBe(before + 2);
   expect(
     backend.rows["shopping_items"]!.find((row) => row["id"] === otherPicadillo)?.["done"],
