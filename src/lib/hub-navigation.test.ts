@@ -48,4 +48,14 @@ describe("household navigation references", () => {
       hubSearch({ section: "notes", record: upper, invite: "KeepCase", recovery: "1" }),
     ).toEqual({ section: "notes", record: upper.toLowerCase(), invite: "KeepCase", recovery: "1" });
   });
+  it("keeps recipe selection in URLs without accepting arbitrary titles or calendar references", () => {
+    expect(hubSearch({ section: "recipes", record: id })).toEqual({
+      section: "recipes",
+      record: id,
+    });
+    expect(hubSearch({ section: "recipes", record: "date:2026-11-16" })).toEqual({
+      section: "recipes",
+    });
+    expect(hubSearch({ section: "recipes", record: "Picadillo" })).toEqual({ section: "recipes" });
+  });
 });

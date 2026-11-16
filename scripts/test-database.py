@@ -241,6 +241,70 @@ def test_deferred_tablet_pin():
 
 
 
+def test_household_recipes():
+    owner, child, outsider = (str(uuid.uuid4()) for _ in range(3))
+    sql(f"INSERT INTO auth.users(id,email) VALUES('{owner}','recipe-owner@example.invalid'),('{child}','recipe-teen@example.invalid'),('{outsider}','recipe-outsider@example.invalid');")
+    hid = sql("SELECT create_household('Cookbook','Recipe adult','1357');", user=owner)
+    other = sql("SELECT create_household('Other cookbook','Outsider','2468');", user=outsider)
+    sql("SELECT create_member('Recipe teen','member','5678');", user=owner)
+    key = sql(f"SELECT key FROM members WHERE household_id='{hid}' AND name='Recipe teen';")
+    sql(f"INSERT INTO household_accounts(user_id,household_id,member_key) VALUES('{child}','{hid}','{key}');")
+    device = 'recipe-device-' + uuid.uuid4().hex
+    token_hash = hashlib.sha256(device.encode()).hexdigest()
+    sql(f"INSERT INTO devices(household_id,name,token_hash) VALUES('{hid}','Recipe tablet','{token_hash}');")
+    rid = str(uuid.uuid4())
+    content = {'version':1,'name':'Picadillo','description':'Household recipe','servings':4,'prep_minutes':10,'cook_minutes':20,'ingredients':[{'name':'Carne','quantity':'1/2','unit':'kg'}],'steps':['Cocinar la carne.'],'nutrition':{'calories_kcal':450,'protein_g':30},'source':''}
+    def save(payload, revision=0, actor=owner, fail=None):
+        return sql(f"SELECT save_recipe('{rid}',{revision},'{j(payload)}'::jsonb);", user=actor, fail=fail)
+    first = json.loads(save(content))
+    check('adult creates a recipe with serving nutrition and stable identity', (first['id'],first['household_id'],first['revision'],first['content']['nutrition']), (rid,hid,1,content['nutrition']))
+    check('lost recipe receipt retries do not duplicate or increment revision', json.loads(save(content))['revision'], 1)
+    check('household teenager can read recipes', sql(f"SELECT count(*) FROM recipes WHERE id='{rid}';", user=child), '1')
+    check('paired tablet reads recipes before any PIN or financial grant', sql(f"SELECT content->>'name' FROM recipes WHERE id='{rid}';", device=device), 'Picadillo')
+    check('unpaired anonymous browser reads no recipes', sql('SELECT count(*) FROM recipes;', device=''), '0')
+    check('another household reads no recipe content', sql(f"SELECT count(*) FROM recipes WHERE id='{rid}';", user=outsider), '0')
+    save(content, actor=child, fail='Only adults')
+    save(content, actor=outsider, fail='Recipe access denied')
+    sql(f"SELECT save_recipe('{rid}',1,'{j(content)}');", device=device, fail='permission denied')
+    sql(f"UPDATE recipes SET content='{j(content)}' WHERE id='{rid}';", user=owner, fail='permission denied')
+    for bad in [{**content,'servings':0},{**content,'servings':1.5},{**content,'steps':[]},{**content,'ingredients':[{'name':'','quantity':'1','unit':'g'}]},{**content,'nutrition':{'calories_kcal':-1,'protein_g':30}},{**content,'photo_url':'https://arbitrary.invalid/photo.jpg'}]:
+        save(bad, 1, fail='Invalid recipe content')
+    updated = {**content,'name':'Picadillo familiar'}
+    check('recipe updates preserve identity and increment their revision', json.loads(save(updated,1))['revision'], 2)
+    save({**updated,'description':'Stale edit'},1,fail='Recipe changed')
+    check('stale recipe writes preserve the confirmed content', sql(f"SELECT content->>'name' FROM recipes WHERE id='{rid}';", user=owner), 'Picadillo familiar')
+    paths = [f'{hid}/{rid}/{uuid.uuid4()}.jpg' for _ in range(5)]
+    sql(f"INSERT INTO storage.objects(bucket_id,name) VALUES('recipe-photos','{paths[0]}');", user=owner)
+    attached = sql(f"SELECT add_recipe_photo('{rid}','{paths[0]}');", user=owner)
+    check('lost photo registration reuses its original path and ID', sql(f"SELECT add_recipe_photo('{rid}','{paths[0]}');", user=owner), attached)
+    check('recipe storage bucket is private and size restricted', sql("SELECT public::text||':'||file_size_limit::text FROM storage.buckets WHERE id='recipe-photos';"), 'false:2097152')
+    check('paired tablets read scoped photo metadata for the signing function', sql(f"SELECT count(*) FROM recipe_photos WHERE recipe_id='{rid}';", device=device), '1')
+    check('other households cannot read recipe photo metadata', sql(f"SELECT count(*) FROM recipe_photos WHERE recipe_id='{rid}';", user=outsider), '0')
+    check('paired tablets cannot bypass the authorized signer with direct Storage reads', sql(f"SELECT count(*) FROM storage.objects WHERE bucket_id='recipe-photos' AND name='{paths[0]}';", device=device), '0')
+    for actor in [child, outsider]:
+        sql(f"INSERT INTO storage.objects(bucket_id,name) VALUES('recipe-photos','{paths[1]}');", user=actor, fail='row-level security')
+    sql("INSERT INTO storage.objects(bucket_id,name) VALUES('recipe-photos','not-a-valid-path.jpg');", user=owner, fail='row-level security')
+    sql(f"SELECT add_recipe_photo('{rid}','{paths[0]}');", device=device, fail='permission denied')
+    for path in paths[1:4]:
+        sql(f"INSERT INTO storage.objects(bucket_id,name) VALUES('recipe-photos','{path}'); SELECT add_recipe_photo('{rid}','{path}');", user=owner)
+    sql(f"INSERT INTO storage.objects(bucket_id,name) VALUES('recipe-photos','{paths[4]}');", user=owner)
+    sql(f"SELECT add_recipe_photo('{rid}','{paths[4]}');", user=owner, fail='At most 4 recipe photos')
+    check('retry remains idempotent at the per-recipe photo limit', sql(f"SELECT add_recipe_photo('{rid}','{paths[0]}');", user=owner), attached)
+    sql(f"SELECT archive_recipe('{rid}',1,true);",user=owner,fail='Recipe changed')
+    archived = json.loads(sql(f"SELECT archive_recipe('{rid}',2,true);",user=owner))
+    check('archiving retains the recipe and photos for the adult', (archived['archived'],sql(f"SELECT count(*) FROM recipe_photos WHERE recipe_id='{rid}';",user=owner)), (True,'4'))
+    check('archived recipes disappear from locked tablet access', sql(f"SELECT count(*) FROM recipes WHERE id='{rid}';",device=device), '0')
+    check('archived photo metadata also disappears from the signing scope', sql(f"SELECT count(*) FROM recipe_photos WHERE recipe_id='{rid}';",device=device), '0')
+    sql(f"SELECT archive_recipe('{rid}',3,false);",user=owner)
+    check('restoring a recipe preserves the same record and photo metadata', sql(f"SELECT count(*) FROM recipe_photos WHERE recipe_id='{rid}';",device=device), '4')
+    sql(f"UPDATE devices SET revoked=true WHERE token_hash='{token_hash}';")
+    check('revoked tablet loses recipe access', sql(f"SELECT count(*) FROM recipes WHERE id='{rid}';",device=device), '0')
+    sql(f"UPDATE households SET suspended=true WHERE id='{hid}';")
+    check('suspension hides cookbook data from personal accounts too',sql(f"SELECT count(*) FROM recipes WHERE id='{rid}';",user=owner),'0')
+    save(updated,4,fail='Household suspended')
+    check('recipe mutations never expose execute to anon',sql("SELECT has_function_privilege('anon','public.save_recipe(uuid,bigint,jsonb)','EXECUTE') OR has_function_privilege('anon','public.add_recipe_photo(uuid,text)','EXECUTE');"),'f')
+
+
 def run():
     started = execute(DOCKER + ['run', '--name', NAME, '--network', 'none', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', '-d', os.environ.get('HOMEHUB_TEST_POSTGRES_IMAGE', 'postgres:17-alpine')])
     assert started.returncode == 0, started.stderr
@@ -764,6 +828,7 @@ def run():
     check('sandbox ledger is inaccessible to ordinary accounts',sql("SELECT has_table_privilege('authenticated','homehub_private.stripe_sandbox_events','SELECT');"),'f')
     check('public catalogue exposes the editable monthly and annual prices',json.loads(sql('SELECT business_catalog();',device=''))['plans'][1]['annual_amount_cents'],4000)
     test_configurable_widget_instances()
+    test_household_recipes()
     test_deferred_tablet_pin()
     test_member_account_changes()
     test_member_account_restoration()

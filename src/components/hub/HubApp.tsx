@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   CalendarDays,
+  ChefHat,
   CheckSquare,
   Home,
   Images,
@@ -67,6 +68,7 @@ const Dashboard = lazy(() => import("./Dashboard").then((m) => ({ default: m.Das
 const Finance = lazy(() => import("./Finance").then((m) => ({ default: m.Finance })));
 const FamilyCalendar = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyCalendar })));
 const FamilyNotes = lazy(() => import("./Planner").then((m) => ({ default: m.FamilyNotes })));
+const Recipes = lazy(() => import("./Recipes").then((m) => ({ default: m.Recipes })));
 const PersonalProfile = lazy(() =>
   import("./PersonalProfile").then((m) => ({ default: m.PersonalProfile })),
 );
@@ -78,6 +80,7 @@ const TABS: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "finance", label: "Finanzas", icon: Wallet },
   { id: "calendar", label: "Calendario", icon: CalendarDays },
   { id: "notes", label: "Notas", icon: StickyNote },
+  { id: "recipes", label: "Recetas", icon: ChefHat },
   { id: "photos", label: "Fotos", icon: Images },
   { id: "household", label: "Hogar", icon: Users },
   { id: "profile", label: "Mi perfil", icon: UserRound },
@@ -846,6 +849,14 @@ function HubShell({
                     />
                   )}
                   {tab === "photos" && canManage && <HouseholdPhotos />}
+                  {tab === "recipes" && (
+                    <Recipes
+                      canEdit={canManage}
+                      createRequest={create?.tab === "recipes" ? create.id : 0}
+                      initialRecipeId={record?.tab === "recipes" ? record.id : undefined}
+                      onRecipeChange={(id, replace) => visit("recipes", id, replace)}
+                    />
+                  )}
                   {tab === "household" && canManage && (
                     <HouseholdSettings onMembersChanged={onContextRefresh} />
                   )}
@@ -923,8 +934,9 @@ function HubShell({
           <div className="grid grid-cols-2 gap-3">
             {TABS.filter(
               (t) =>
-                ["chores", "shopping", "calendar", "notes", "finance"].includes(t.id) &&
-                (t.id !== "finance" || financialAccess),
+                ["chores", "shopping", "calendar", "notes", "finance", "recipes"].includes(t.id) &&
+                (t.id !== "finance" || financialAccess) &&
+                (t.id !== "recipes" || canManage),
             ).map(({ id, label, icon: Icon }) => (
               <Button
                 key={id}
@@ -948,7 +960,15 @@ function HubShell({
           <div className="space-y-1">
             {visibleTabs
               .filter((t) =>
-                ["calendar", "notes", "photos", "finance", "household", "profile"].includes(t.id),
+                [
+                  "calendar",
+                  "notes",
+                  "recipes",
+                  "photos",
+                  "finance",
+                  "household",
+                  "profile",
+                ].includes(t.id),
               )
               .map(({ id, label, icon: Icon }) => (
                 <Button

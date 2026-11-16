@@ -39,6 +39,8 @@ export class HouseholdBackend {
       "shopping_lists",
       "events",
       "notes",
+      "recipes",
+      "recipe_photos",
       "bills",
       "bill_splits",
       "bill_overrides",
@@ -97,6 +99,11 @@ export class HouseholdBackend {
   photos: Row[] = [];
   photoCapacity = 30;
   photoObjects = new Map<string, Buffer>();
+  recipePhotoObjects = new Map<string, Buffer>();
+  recipePhotoUploads = 0;
+  loseNextRecipeReceipt = false;
+  loseNextRecipePhotoReceipt = false;
+  failNextRecipeSave = false;
   avatarObjects = new Map<string, Buffer>();
   profile: Row = { id: USER_ID, avatar_path: null, preferred_view: "auto", time_format: "24" };
   avatarSigningRequests = 0;
@@ -174,6 +181,39 @@ export class HouseholdBackend {
     await page.route("**/storage/v1/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
+      const recipeMarker = "/object/recipe-photos/";
+      if (request.method() === "POST" && url.pathname.includes(recipeMarker)) {
+        const path = decodeURIComponent(url.pathname.split(recipeMarker)[1]!);
+        this.recipePhotoUploads++;
+        if (this.recipePhotoObjects.has(path))
+          return route.fulfill({
+            status: 409,
+            json: { statusCode: "409", error: "Duplicate", message: "The resource already exists" },
+          });
+        const incoming = new Request(request.url(), {
+          method: "POST",
+          headers: request.headers(),
+          body: new Uint8Array(request.postDataBuffer()!),
+        });
+        const form = await incoming.formData();
+        const image = [...form.values()].find((v) => typeof v !== "string");
+        if (!image || typeof image === "string") throw Error("Recipe image expected");
+        this.recipePhotoObjects.set(path, Buffer.from(await image.arrayBuffer()));
+        return route.fulfill({ json: { Id: crypto.randomUUID(), Key: `recipe-photos/${path}` } });
+      }
+      if (request.method() === "GET" && url.pathname.includes("/object/info/recipe-photos/")) {
+        const path = decodeURIComponent(url.pathname.split("/object/info/recipe-photos/")[1]!);
+        return this.recipePhotoObjects.has(path)
+          ? route.fulfill({
+              json: { id: "recipe-photo", name: path, metadata: { mimetype: "image/jpeg" } },
+            })
+          : route.fulfill({ status: 404, json: { message: "Not found" } });
+      }
+      if (request.method() === "DELETE" && url.pathname.endsWith("/object/recipe-photos")) {
+        const paths = request.postDataJSON().prefixes as string[];
+        for (const p of paths) this.recipePhotoObjects.delete(p);
+        return route.fulfill({ json: paths.map((name) => ({ name })) });
+      }
       const avatar = "/object/personal-avatars/";
       if (request.method() === "POST" && url.pathname.includes(avatar)) {
         const path = decodeURIComponent(url.pathname.split(avatar)[1]!);
@@ -257,6 +297,31 @@ export class HouseholdBackend {
     await page.route("**/functions/v1/household-photos", (route) =>
       route.fulfill({ json: { photos: this.photos } }),
     );
+    await page.route("**/functions/v1/recipe-photos", (route) => {
+      const args = route.request().postDataJSON() as { recipe_ids: string[]; covers: boolean };
+      const isTablet = !!route.request().headers()["x-device-token"];
+      const seen = new Set<string>();
+      const photos = this.rows["recipe_photos"]!.filter((p) => {
+        const recipe = this.rows["recipes"]!.find((r) => r["id"] === p["recipe_id"]);
+        if (
+          !args.recipe_ids.includes(String(p["recipe_id"])) ||
+          !recipe ||
+          (isTablet && recipe["archived"])
+        )
+          return false;
+        if (args.covers && seen.has(String(p["recipe_id"]))) return false;
+        seen.add(String(p["recipe_id"]));
+        return true;
+      }).map((p) => ({ ...p, url: `https://recipes.fixture.invalid/${p["path"]}` }));
+      return route.fulfill({ json: { photos } });
+    });
+    await page.route("https://recipes.fixture.invalid/**", (route) => {
+      const path = decodeURIComponent(new URL(route.request().url()).pathname.slice(1));
+      const image = this.recipePhotoObjects.get(path);
+      return image
+        ? route.fulfill({ contentType: "image/jpeg", body: image })
+        : route.fulfill({ status: 404, body: "Missing recipe photo" });
+    });
     await page.route("**/functions/v1/member-avatars", (route) => {
       this.avatarSigningRequests++;
       return route.fulfill({
@@ -402,6 +467,8 @@ export class HouseholdBackend {
       return route.fulfill({ json: [], headers: { "Content-Range": "*/0" } });
     }
     let rows = [...(this.rows[endpoint] ?? [])];
+    if (endpoint === "recipes" && request.headers()["x-device-token"])
+      rows = rows.filter((r) => !r["archived"]);
     for (const [key, value] of url.searchParams) {
       if (value.startsWith("eq.")) rows = rows.filter((row) => String(row[key]) === value.slice(3));
       if (value.startsWith("in.(")) {
@@ -437,6 +504,84 @@ export class HouseholdBackend {
   ): Promise<{ status?: number; json?: unknown }> {
     const member = { key: memberKey, name: "Ana", role: "admin" };
     switch (name) {
+      case "save_recipe": {
+        if (
+          headers["x-device-token"] ||
+          this.members.find((m) => m.key === memberKey)?.role !== "admin"
+        )
+          return { status: 403, json: { code: "42501", message: "Adult account required" } };
+        if (this.failNextRecipeSave) {
+          this.failNextRecipeSave = false;
+          return { status: 503, json: { message: "Connection failed" } };
+        }
+        const rows = this.rows["recipes"]!;
+        let row = rows.find((r) => r["id"] === args["_id"]);
+        const same = row && JSON.stringify(row["content"]) === JSON.stringify(args["_content"]);
+        if (!same && Number(row?.["revision"] ?? 0) !== Number(args["_expected_revision"]))
+          return { status: 409, json: { code: "40001", message: "Recipe changed" } };
+        if (!same) {
+          if (!row) {
+            row = {
+              id: args["_id"],
+              household_id: HOME_ID,
+              archived: false,
+              created_at: new Date().toISOString(),
+            };
+            rows.push(row);
+          }
+          Object.assign(row, {
+            content: args["_content"],
+            revision: Number(row["revision"] ?? 0) + 1,
+            updated_at: new Date().toISOString(),
+          });
+        }
+        if (this.loseNextRecipeReceipt) {
+          this.loseNextRecipeReceipt = false;
+          return { status: 503, json: { message: "Response lost after commit" } };
+        }
+        return { json: row };
+      }
+      case "archive_recipe": {
+        if (
+          headers["x-device-token"] ||
+          this.members.find((m) => m.key === memberKey)?.role !== "admin"
+        )
+          return { status: 403, json: { code: "42501", message: "Adult account required" } };
+        const row = this.rows["recipes"]!.find((r) => r["id"] === args["_id"]);
+        if (!row || row["revision"] !== args["_expected_revision"])
+          return { status: 409, json: { code: "40001", message: "Recipe changed" } };
+        Object.assign(row, {
+          archived: args["_archived"],
+          revision: Number(row["revision"]) + 1,
+          updated_at: new Date().toISOString(),
+        });
+        return { json: row };
+      }
+      case "add_recipe_photo": {
+        const rows = this.rows["recipe_photos"]!;
+        let photo = rows.find((p) => p["path"] === args["_path"]);
+        if (!photo) {
+          photo = {
+            id: crypto.randomUUID(),
+            household_id: HOME_ID,
+            recipe_id: args["_recipe_id"],
+            path: args["_path"],
+            position: rows.filter((p) => p["recipe_id"] === args["_recipe_id"]).length,
+            created_at: new Date().toISOString(),
+          };
+          rows.push(photo);
+        }
+        if (this.loseNextRecipePhotoReceipt) {
+          this.loseNextRecipePhotoReceipt = false;
+          return { status: 503, json: { message: "Photo response lost after commit" } };
+        }
+        return { json: photo["id"] };
+      }
+      case "remove_recipe_photo":
+        this.rows["recipe_photos"] = this.rows["recipe_photos"]!.filter(
+          (p) => p["id"] !== args["_id"],
+        );
+        return { json: null };
       case "save_dashboard_layout": {
         this.dashboardSaveRequests++;
         if (headers["x-device-token"] || !headers["authorization"]?.startsWith("Bearer "))

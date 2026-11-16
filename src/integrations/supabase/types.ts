@@ -8,6 +8,48 @@ export type Database = {
   };
   public: {
     Tables: {
+      recipes: {
+        Row: {
+          id: string;
+          household_id: string;
+          content: Json;
+          archived: boolean;
+          revision: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          household_id: string;
+          content: Json;
+          archived?: boolean;
+          revision?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: { content?: Json; archived?: boolean; revision?: number; updated_at?: string };
+        Relationships: [];
+      };
+      recipe_photos: {
+        Row: {
+          id: string;
+          recipe_id: string;
+          household_id: string;
+          path: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          recipe_id: string;
+          household_id: string;
+          path: string;
+          position?: number;
+          created_at?: string;
+        };
+        Update: { position?: number };
+        Relationships: [];
+      };
       bill_overrides: {
         Row: {
           amount: number | null;
@@ -841,6 +883,17 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      save_recipe: {
+        Args: { _id: string; _expected_revision: number; _content: Json };
+        Returns: Json;
+      };
+      archive_recipe: {
+        Args: { _id: string; _expected_revision: number; _archived: boolean };
+        Returns: Json;
+      };
+      add_recipe_photo: { Args: { _recipe_id: string; _path: string }; Returns: string };
+      remove_recipe_photo: { Args: { _id: string }; Returns: undefined };
+      can_manage_recipe_photo: { Args: { _path: string }; Returns: boolean };
       my_pin_configured: { Args: Record<PropertyKey, never>; Returns: boolean };
       set_my_pin: { Args: { _pin: string; _account: string }; Returns: undefined };
       admin_business_legal: { Args: Record<string, never>; Returns: Json };
